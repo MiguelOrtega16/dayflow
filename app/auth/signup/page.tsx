@@ -1,0 +1,135 @@
+'use client'
+
+import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+
+export default function SignupPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [needsConfirmation, setNeedsConfirmation] = useState(false)
+  const router = useRouter()
+  const supabase = createClient()
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName },
+      },
+    })
+
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+    } else if (data.session) {
+      // Email confirmation disabled — user is immediately authenticated
+      router.push('/dashboard')
+      router.refresh()
+    } else {
+      // Fallback: Supabase requires email confirmation
+      setNeedsConfirmation(true)
+      setLoading(false)
+    }
+  }
+
+  if (needsConfirmation) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-8">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">📧</span>
+          </div>
+          <h2 className="text-2xl font-semibold mb-2">Revisa tu correo</h2>
+          <p className="text-muted-foreground mb-6">
+            Enviamos un enlace de confirmación a <strong>{email}</strong>.
+            Haz clic en él para activar tu cuenta.
+          </p>
+          <Link href="/auth/login" className="text-primary hover:underline">
+            Volver al inicio de sesión
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-8">
+      <div className="w-full max-w-md">
+        <div className="flex items-center gap-2 mb-8">
+          <span className="text-primary text-2xl">◈</span>
+          <span className="font-semibold text-2xl">DayFlow</span>
+        </div>
+
+        <h2 className="text-3xl font-semibold mb-2">Crea tu cuenta</h2>
+        <p className="text-muted-foreground mb-8">Empieza a organizar tu tiempo gratis</p>
+
+        {error && (
+          <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-3 mb-4 text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSignup} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Nombre completo</label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              placeholder="Tu nombre"
+              required
+              className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow placeholder:text-muted-foreground"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Correo electrónico</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="tu@correo.com"
+              required
+              className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow placeholder:text-muted-foreground"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Contraseña</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Mínimo 8 caracteres"
+              required
+              minLength={8}
+              className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow placeholder:text-muted-foreground"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+          </button>
+        </form>
+
+        <p className="text-center text-sm text-muted-foreground mt-6">
+          ¿Ya tienes cuenta?{' '}
+          <Link href="/auth/login" className="text-primary hover:underline font-medium">
+            Inicia sesión
+          </Link>
+        </p>
+      </div>
+    </div>
+  )
+}

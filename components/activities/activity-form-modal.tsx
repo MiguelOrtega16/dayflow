@@ -1,0 +1,654 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { format } from 'date-fns'
+import { X, Clock, Hash, Target, Upload, ImageIcon, Trash2, UserPlus, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { cn, CATEGORY_CONFIG, STATUS_CONFIG } from '@/lib/utils'
+import {
+  createActivity, updateActivity, createRecurringActivities, getGoals,
+  getActivityTitleSuggestions, getActivityInvitations, inviteToActivity,
+  cancelActivityInvitation, searchUsers, uploadEvidenceImage,
+} from '@/lib/api'
+import type {
+  Activity, ActivityStatus, ActivityCategory, RecurrenceType,
+  Profile, Goal, ActivityInvitation,
+} from '@/types'
+
+const EMOJIS = ['🎯', '✅', '📚', '💪', '🏃', '🧘', '💻', '🎨', '📝', '🔧', '🌱', '⭐', '🚀', '💡', '🎵', '🍎']
+
+interface ActivityFormModalProps {
+  date: Date
+  activity?: Activity | null
+  currentUser: Profile | null
+  onClose: () => void
+  onSaved: () => void
+}
+
+type Tab = 'basic' | 'recurrence'
+
+export function ActivityFormModal({ date, activity, currentUser, onClose, onSaved }: ActivityFormModalProps) {
+  const isEditing = !!activity
+
+  // Core fields
+  const [title, setTitle]             = useState(activity?.title || '')
+  const [description, setDescription] = useState(activity?.description || '')
+  const [selectedDate, setSelectedDate] = useState(activity?.date || format(date, 'yyyy-MM-dd'))
+  const [status, setStatus]           = useState<ActivityStatus>(activity?.status || 'todo')
+  const [category, setCategory]       = useState<ActivityCategory>(activity?.category || 'task')
+  const [goalId, setGoalId]           = useState<string>(activity?.goal_id || '')
+  const [emoji, setEmoji]             = useState(activity?.emoji || '')
+  const [startTime, setStartTime]     = useState(activity?.start_time || '')
+  const [endTime, setEndTime]         = useState(activity?.end_time || '')
+  const [isPublic, setIsPublic]       = useState(activity?.is_public ?? true)
+  const [completionPct, setCompletionPct] = useState(activity?.completion_percentage || 0)
+  const [tagsInput, setTagsInput]     = useState(activity?.tags?.join(', ') || '')
+  // Hidden but preserved on edit so existing priority/notes aren't lost
+  const existingPriority = activity?.priority || 'medium'
+  const existingNotes    = activity?.notes    || null
+
+  // Recurrence
+  const [recurrenceType, setRecurrenceType]     = useState<RecurrenceType>(activity?.recurrence_type || 'none')
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
+  const [recurrenceCount, setRecurrenceCount]   = useState(10)
+  const [daysOfWeek, setDaysOfWeek]             = useState<number[]>([])
+
+  // UI state
+  const [saving, setSaving]               = useState(false)
+  const [saveError, setSaveError]         = useState<string | null>(null)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [activeTab, setActiveTab]         = useState<Tab>('basic')
+  const [goals, setGoals]                 = useState<Goal[]>([])
+
+  // Title autocomplete
+  const [suggestions, setSuggestions]     = useState<string[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const suggestTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Evidence image
+  const [evidenceFile, setEvidenceFile]     = useState<File | null>(null)
+  const [evidencePreview, setEvidencePreview] = useState<string | null>(activity?.evidence_image_url || null)
+  const [removingEvidence, setRemovingEvidence] = useState(false)
+  const evidenceInputRef = useRef<HTMLInputElement>(null)
+
+  // Participants — existing invitations (edit) + pending to send after save (both modes)
+  const [invitations, setInvitations]         = useState<ActivityInvitation[]>([])
+  const [pendingInvitees, setPendingInvitees] = useState<Profile[]>([])
+  const [inviteSearch, setInviteSearch]       = useState('')
+  const [inviteResults, setInviteResults]     = useState<Profile[]>([])
+  const [inviting, setInviting]               = useState<string | null>(null)
+
+  useEffect(() => {
+    if (currentUser) getGoals(currentUser.id).then(setGoals).catch(() => {})
+    if (isEditing && activity?.id) getActivityInvitations(activity.id).then(setInvitations).catch(() => {})
+  }, [currentUser?.id, activity?.id])
+
+  // Title suggestions
+  useEffect(() => {
+    if (!currentUser || title.length < 2) { setSuggestions([]); setShowSuggestions(false); return }
+    if (suggestTimeout.current) clearTimeout(suggestTimeout.current)
+    suggestTimeout.current = setTimeout(() => {
+      getActivityTitleSuggestions(currentUser.id, title)
+        .then(r => { setSuggestions(r.filter(s => s.toLowerCase() !== title.toLowerCase())); setShowSuggestions(true) })
+        .catch(() => {})
+    }, 280)
+    return () => { if (suggestTimeout.current) clearTimeout(suggestTimeout.current) }
+  }, [title, currentUser?.id])
+
+  // Invite search
+  const alreadyInvitedIds = new Set([
+    ...invitations.map(i => i.invitee_id),
+    ...pendingInvitees.map(u => u.id),
+  ])
+  useEffect(() => {
+    if (!currentUser || inviteSearch.length < 2) { setInviteResults([]); return }
+    const t = setTimeout(() => {
+      searchUsers(inviteSearch, currentUser.id)
+        .then(r => setInviteResults((r || []).filter(u => !alreadyInvitedIds.has(u.id))))
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [inviteSearch, currentUser?.id, invitations.length, pendingInvitees.length])
+
+  const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault()
+    console.log('[ActivityForm] submit — title:', title, 'user:', currentUser?.id ?? 'NULL')
+
+    if (!title.trim()) { setSaveError('El título no puede estar vacío.'); return }
+    if (!currentUser)  { setSaveError('Sesión expirada. Recarga la página.'); return }
+
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean)
+
+      let evidenceUrl = activity?.evidence_image_url || null
+      if (evidenceFile && isEditing && activity?.id) {
+        evidenceUrl = await uploadEvidenceImage(evidenceFile, activity.id, currentUser.id)
+      }
+      if (removingEvidence) evidenceUrl = null
+
+      const payload: Record<string, unknown> = {
+        user_id:            currentUser.id,
+        title:              title.trim(),
+        description:        description.trim() || null,
+        date:               selectedDate,
+        status,
+        priority:           existingPriority,   // preserved; not exposed in UI
+        notes:              existingNotes,       // preserved; not exposed in UI
+        category,
+        goal_id:            goalId || null,
+        emoji:              emoji || null,
+        start_time:         startTime || null,
+        end_time:           endTime || null,
+        is_public:          isPublic,
+        completion_percentage: completionPct,
+        tags,
+        recurrence_type:    recurrenceType,
+        recurrence_config:  recurrenceType !== 'none' ? {
+          end_date:    recurrenceEndDate || undefined,
+          occurrences: recurrenceEndDate ? undefined : recurrenceCount,
+          days_of_week: recurrenceType === 'custom' ? daysOfWeek : undefined,
+        } : null,
+        color:              null,
+        parent_activity_id: activity?.parent_activity_id || null,
+        ...(activity?.invited_from_activity_id ? { invited_from_activity_id: activity.invited_from_activity_id } : {}),
+        ...(evidenceUrl ? { evidence_image_url: evidenceUrl } : {}),
+        ...(removingEvidence ? { evidence_image_url: null } : {}),
+      }
+
+      let savedId: string | null = null
+      if (isEditing) {
+        await updateActivity(activity.id, payload as any)
+        savedId = activity.id
+      } else if (recurrenceType !== 'none') {
+        const parent = await createRecurringActivities(payload as any, recurrenceType, (payload.recurrence_config as any)!)
+        savedId = parent?.id ?? null
+      } else {
+        const created = await createActivity(payload as any)
+        savedId = created?.id ?? null
+      }
+
+      // Send invitations to pending invitees
+      if (savedId && pendingInvitees.length > 0) {
+        for (const invitee of pendingInvitees) {
+          await inviteToActivity(savedId, currentUser.id, invitee.id).catch(err =>
+            console.warn('[ActivityForm] invite failed for', invitee.id, err)
+          )
+        }
+      }
+
+      onSaved()
+    } catch (err: any) {
+      console.error('Save activity error:', err)
+      setSaveError(err?.message || 'Error al guardar. Intenta nuevamente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAddPending = (user: Profile) => {
+    setPendingInvitees(prev => [...prev, user])
+    setInviteSearch('')
+    setInviteResults([])
+  }
+
+  const handleCancelInvitation = async (invId: string) => {
+    await cancelActivityInvitation(invId).catch(() => {})
+    setInvitations(prev => prev.filter(i => i.id !== invId))
+  }
+
+  const handleEvidenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setEvidenceFile(file)
+    setEvidencePreview(URL.createObjectURL(file))
+    setRemovingEvidence(false)
+  }
+
+  const showEvidence = isEditing && (status === 'in_progress' || status === 'done')
+  const DAY_LABELS   = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
+
+  const INV_STATUS_LABEL: Record<string, string> = { pending: 'Pendiente', accepted: 'Aceptó', declined: 'Declinó' }
+  const INV_STATUS_COLOR: Record<string, string> = {
+    pending:  'text-amber-600 dark:text-amber-400',
+    accepted: 'text-emerald-600 dark:text-emerald-400',
+    declined: 'text-red-500',
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col animate-scale-in">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center text-lg hover:bg-muted/80 transition-colors relative"
+            >
+              {emoji || CATEGORY_CONFIG[category].emoji}
+              {showEmojiPicker && (
+                <div className="absolute top-11 left-0 z-10 bg-popover border border-border rounded-xl p-2 shadow-lg grid grid-cols-8 gap-1 w-52">
+                  {EMOJIS.map(e => (
+                    <button key={e} type="button"
+                      onClick={ev => { ev.stopPropagation(); setEmoji(e); setShowEmojiPicker(false) }}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-base transition-colors"
+                    >{e}</button>
+                  ))}
+                  <button type="button"
+                    onClick={ev => { ev.stopPropagation(); setEmoji(''); setShowEmojiPicker(false) }}
+                    className="col-span-2 text-[10px] text-muted-foreground hover:text-foreground px-1 py-0.5 rounded hover:bg-muted transition-colors"
+                  >Quitar</button>
+                </div>
+              )}
+            </button>
+            <h2 className="text-lg font-semibold">
+              {isEditing ? 'Editar actividad' : 'Nueva actividad'}
+            </h2>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-border px-5">
+          {([{ key: 'basic', label: 'Básico' }, { key: 'recurrence', label: 'Repetición' }] as const).map(({ key, label }) => (
+            <button key={key} type="button" onClick={() => setActiveTab(key)}
+              className={cn('px-3 py-2.5 text-sm font-medium border-b-2 transition-colors',
+                activeTab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >{label}</button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+          {/* ── BÁSICO ── */}
+          {activeTab === 'basic' && (
+            <>
+              {/* Title with autocomplete */}
+              <div className="relative">
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                  placeholder="¿Qué quieres lograr?" required autoFocus
+                  className="w-full text-base font-medium bg-transparent border-none outline-none placeholder:text-muted-foreground/60"
+                />
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
+                    {suggestions.map(s => (
+                      <button key={s} type="button"
+                        onMouseDown={() => { setTitle(s); setShowSuggestions(false) }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors truncate"
+                      >{s}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <textarea value={description} onChange={e => setDescription(e.target.value)}
+                placeholder="Añade una descripción (opcional)" rows={2}
+                className="w-full text-sm bg-muted/40 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-ring resize-none placeholder:text-muted-foreground/50"
+              />
+
+              {/* Category */}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Categoría</label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {(Object.keys(CATEGORY_CONFIG) as ActivityCategory[]).map(cat => (
+                    <button key={cat} type="button" onClick={() => setCategory(cat)}
+                      className={cn('flex flex-col items-center gap-1 py-2 px-1 rounded-xl border text-xs font-medium transition-all',
+                        category === cat ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40 text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      <span className="text-base">{CATEGORY_CONFIG[cat].emoji}</span>
+                      <span>{CATEGORY_CONFIG[cat].label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date row */}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha</label>
+                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              {/* Time row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Hora inicio
+                  </label>
+                  <TimePicker value={startTime} onChange={setStartTime} placeholder="--" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Hora fin
+                  </label>
+                  <TimePicker value={endTime} onChange={setEndTime} placeholder="--" />
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Estado</label>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                  {(Object.keys(STATUS_CONFIG) as ActivityStatus[]).map(s => (
+                    <button key={s} type="button" onClick={() => setStatus(s)}
+                      className={cn('py-1.5 px-2 rounded-xl border text-xs font-medium transition-all text-center',
+                        status === s
+                          ? cn('border-transparent', STATUS_CONFIG[s].bgColor, STATUS_CONFIG[s].textColor)
+                          : 'border-border text-muted-foreground hover:border-primary/40'
+                      )}
+                    >{STATUS_CONFIG[s].label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Completion (only in_progress) */}
+              {status === 'in_progress' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-muted-foreground">Progreso</label>
+                    <input type="number" min={0} max={100} value={completionPct}
+                      onChange={e => setCompletionPct(Math.max(0, Math.min(100, Number(e.target.value))))}
+                      className="w-16 text-center rounded-lg border border-input bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
+                    />
+                  </div>
+                  <input type="range" min={0} max={100} value={completionPct}
+                    onChange={e => setCompletionPct(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                </div>
+              )}
+
+              {/* Evidence (edit + in_progress/done) */}
+              {showEvidence && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                    <ImageIcon className="w-3 h-3" /> Evidencia del estado
+                  </label>
+                  {evidencePreview && !removingEvidence ? (
+                    <div className="relative rounded-xl overflow-hidden border border-border">
+                      <img src={evidencePreview} alt="Evidencia" className="w-full max-h-40 object-cover" />
+                      <button type="button"
+                        onClick={() => { setRemovingEvidence(true); setEvidencePreview(null); setEvidenceFile(null) }}
+                        className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                      ><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => evidenceInputRef.current?.click()}
+                      className="w-full border-2 border-dashed border-border rounded-xl py-4 flex flex-col items-center gap-1.5 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+                    >
+                      <Upload className="w-5 h-5" />
+                      <span className="text-xs font-medium">Subir imagen de evidencia</span>
+                    </button>
+                  )}
+                  <input ref={evidenceInputRef} type="file" accept="image/*" className="hidden" onChange={handleEvidenceChange} />
+                </div>
+              )}
+
+              {/* Goal */}
+              {goals.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                    <Target className="w-3 h-3" /> Vincular a meta
+                  </label>
+                  <select value={goalId} onChange={e => setGoalId(e.target.value)}
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Sin meta</option>
+                    {goals.map(g => <option key={g.id} value={g.id}>{g.emoji} {g.title}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* Tags */}
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                  <Hash className="w-3 h-3" /> Etiquetas (separadas por coma)
+                </label>
+                <input type="text" value={tagsInput} onChange={e => setTagsInput(e.target.value)}
+                  placeholder="ejercicio, salud, mañana"
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              {/* ── Participantes + visibility ── */}
+              <div className="border-t border-border/50 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <UserPlus className="w-3 h-3" /> Invitar personas
+                  </span>
+                  {/* Visibility toggle lives here — semantically tied to sharing */}
+                  <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                    <div onClick={() => setIsPublic(!isPublic)}
+                      className={cn('w-8 h-4 rounded-full transition-colors relative', isPublic ? 'bg-primary' : 'bg-muted')}
+                    >
+                      <div className={cn('absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform', isPublic ? 'translate-x-4' : 'translate-x-0.5')} />
+                    </div>
+                    <span className="text-xs text-muted-foreground">{isPublic ? 'Visible' : 'Privado'}</span>
+                  </label>
+                </div>
+                <input type="text" value={inviteSearch} onChange={e => setInviteSearch(e.target.value)}
+                  placeholder="Busca por nombre, usuario o correo…"
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
+                {inviteResults.length > 0 && (
+                  <div className="mt-1 border border-border rounded-xl overflow-hidden">
+                    {inviteResults.map(u => (
+                      <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 border-b border-border last:border-b-0">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                          style={{ backgroundColor: u.color }}>
+                          {u.full_name?.[0] || u.email[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{u.full_name || u.username || u.email}</p>
+                          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                        </div>
+                        <button type="button"
+                          onClick={() => isEditing && activity?.id
+                            ? (async () => {
+                                setInviting(u.id)
+                                try {
+                                  const inv = await inviteToActivity(activity.id, currentUser!.id, u.id)
+                                  setInvitations(prev => [...prev, inv])
+                                  setInviteSearch('')
+                                  setInviteResults([])
+                                } catch {} finally { setInviting(null) }
+                              })()
+                            : handleAddPending(u)
+                          }
+                          disabled={inviting === u.id}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                        >
+                          {inviting === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
+                          Invitar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Pending invitees (pre-save, create mode) */}
+                {pendingInvitees.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    {pendingInvitees.map(u => (
+                      <div key={u.id} className="flex items-center gap-3 py-1.5">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                          style={{ backgroundColor: u.color }}>
+                          {u.full_name?.[0] || u.email[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{u.full_name || u.email}</p>
+                          <p className="text-xs text-amber-600 dark:text-amber-400">Se invitará al guardar</p>
+                        </div>
+                        <button type="button" onClick={() => setPendingInvitees(prev => prev.filter(x => x.id !== u.id))}
+                          className="w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Existing invitations (edit mode) */}
+                {invitations.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    {invitations.map(inv => {
+                      const person = inv.invitee
+                      return (
+                        <div key={inv.id} className="flex items-center gap-3 py-1.5">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                            style={{ backgroundColor: person?.color || '#6366f1' }}>
+                            {person?.avatar_url
+                              ? <img src={person.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                              : (person?.full_name?.[0] || person?.email?.[0] || '?')}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{person?.full_name || person?.email}</p>
+                            <p className={cn('text-xs font-medium', INV_STATUS_COLOR[inv.status])}>
+                              {INV_STATUS_LABEL[inv.status]}
+                            </p>
+                          </div>
+                          {inv.status === 'pending' && (
+                            <button type="button" onClick={() => handleCancelInvitation(inv.id)}
+                              className="w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Cancelar invitación">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {inv.status === 'accepted' && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
+                          {inv.status === 'declined' && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ── REPETICIÓN ── */}
+          {activeTab === 'recurrence' && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Repetir</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {([
+                    { value: 'none',     label: 'Nunca' },
+                    { value: 'daily',    label: '🗓 Diario' },
+                    { value: 'weekdays', label: '💼 Días hábiles' },
+                    { value: 'weekly',   label: '📅 Semanal' },
+                    { value: 'monthly',  label: '🌙 Mensual' },
+                    { value: 'custom',   label: '⚙️ Personalizado' },
+                  ] as const).map(opt => (
+                    <button key={opt.value} type="button" onClick={() => setRecurrenceType(opt.value)}
+                      className={cn('py-2 px-2 rounded-xl border text-xs font-medium transition-all',
+                        recurrenceType === opt.value ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40 text-muted-foreground'
+                      )}
+                    >{opt.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {recurrenceType === 'custom' && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Días de la semana</label>
+                  <div className="flex gap-1.5">
+                    {DAY_LABELS.map((label, i) => (
+                      <button key={i} type="button"
+                        onClick={() => setDaysOfWeek(prev => prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i])}
+                        className={cn('w-8 h-8 rounded-full text-xs font-medium border transition-all',
+                          daysOfWeek.includes(i) ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40'
+                        )}
+                      >{label}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {recurrenceType !== 'none' && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fin</label>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Fecha de fin (opcional)</label>
+                      <input type="date" value={recurrenceEndDate} onChange={e => setRecurrenceEndDate(e.target.value)}
+                        className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    {!recurrenceEndDate && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs text-muted-foreground">O número de repeticiones</label>
+                          <input type="number" min={2} max={365} value={recurrenceCount}
+                            onChange={e => setRecurrenceCount(Math.max(2, Math.min(365, Number(e.target.value) || 2)))}
+                            className="w-16 text-center rounded-lg border border-input bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
+                          />
+                        </div>
+                        <input type="range" min={2} max={365} value={recurrenceCount}
+                          onChange={e => setRecurrenceCount(Number(e.target.value))}
+                          className="w-full accent-primary"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex flex-col gap-2 px-5 py-3 border-t border-border">
+          {saveError && (
+            <p className="text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">{saveError}</p>
+          )}
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm font-medium rounded-xl border border-border hover:bg-muted transition-colors">
+              Cancelar
+            </button>
+            <button type="button" disabled={saving || !title.trim()}
+              onClick={e => handleSubmit(e)}
+              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              {saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : pendingInvitees.length > 0 ? `Crear e invitar (${pendingInvitees.length})` : recurrenceType !== 'none' ? 'Crear recurrente' : 'Crear actividad'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── TimePicker ───────────────────────────────────────────────────────────────
+function TimePicker({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const parts = value ? value.split(':') : []
+  const hVal  = parts[0] ?? ''
+  const mVal  = parts[1] ?? ''
+  const update = (h: string, m: string) => {
+    if (!h && !m) { onChange(''); return }
+    onChange(`${(h || '00').padStart(2, '0')}:${(m || '00').padStart(2, '0')}`)
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <select value={hVal} onChange={e => update(e.target.value, mVal)}
+        className="flex-1 rounded-xl border border-input bg-background px-1.5 py-2 text-sm outline-none focus:ring-2 focus:ring-ring min-w-0">
+        <option value="">{placeholder || '--'}</option>
+        {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => (
+          <option key={h} value={h}>{h}</option>
+        ))}
+      </select>
+      <span className="text-xs font-bold text-muted-foreground shrink-0">:</span>
+      <select value={mVal} onChange={e => update(hVal, e.target.value)}
+        className="flex-1 rounded-xl border border-input bg-background px-1.5 py-2 text-sm outline-none focus:ring-2 focus:ring-ring min-w-0">
+        <option value="">--</option>
+        {['00', '15', '30', '45'].map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
+    </div>
+  )
+}

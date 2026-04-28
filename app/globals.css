@@ -1,0 +1,142 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-display: 'DM Sans', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --background: 34 20% 97%;
+    --foreground: 230 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 230 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 20% 12%;
+
+    --primary: 252 87% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 34 15% 92%;
+    --secondary-foreground: 230 20% 20%;
+
+    --muted: 34 15% 93%;
+    --muted-foreground: 230 10% 50%;
+
+    --accent: 252 87% 96%;
+    --accent-foreground: 252 87% 40%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 34 15% 88%;
+    --input: 34 15% 88%;
+    --ring: 252 87% 60%;
+
+    --radius: 0.75rem;
+
+    /* Status colors */
+    --todo: 220 13% 46%;
+    --todo-foreground: 0 0% 100%;
+    --in-progress: 43 96% 56%;
+    --in-progress-foreground: 0 0% 0%;
+    --done: 158 64% 52%;
+    --done-foreground: 0 0% 100%;
+    --blocked: 0 72% 51%;
+    --blocked-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 230 22% 9%;
+    --foreground: 34 20% 93%;
+
+    --card: 230 20% 12%;
+    --card-foreground: 34 20% 93%;
+
+    --popover: 230 20% 13%;
+    --popover-foreground: 34 20% 93%;
+
+    --primary: 252 87% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 230 15% 18%;
+    --secondary-foreground: 34 20% 80%;
+
+    --muted: 230 15% 17%;
+    --muted-foreground: 230 10% 55%;
+
+    --accent: 252 40% 20%;
+    --accent-foreground: 252 87% 75%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 230 15% 20%;
+    --input: 230 15% 20%;
+    --ring: 252 87% 65%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+}
+
+@layer components {
+  .activity-card {
+    @apply relative rounded-xl border bg-card p-3 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer;
+  }
+
+  .activity-card-ghost {
+    @apply border-dashed border-2 border-muted rounded-xl p-3 flex items-center justify-center text-muted-foreground hover:border-primary/40 hover:text-primary/60 transition-all duration-200 cursor-pointer;
+  }
+
+  .day-cell {
+    @apply relative rounded-lg sm:rounded-xl p-1 sm:p-2 min-h-[80px] sm:min-h-[150px] border border-border/20 bg-card/30 dark:bg-card/50 transition-all duration-150;
+  }
+
+  .day-cell-today {
+    @apply border-primary/40 bg-primary/5 dark:bg-primary/10;
+  }
+
+  .day-cell-selected {
+    @apply border-primary/60 bg-primary/10 dark:bg-primary/15;
+  }
+
+  .day-cell:hover {
+    @apply bg-muted/40 border-border/60;
+  }
+
+  .glass {
+    @apply backdrop-blur-md bg-white/80 dark:bg-card/80 border border-white/20 dark:border-white/10;
+  }
+
+  .shimmer {
+    background: linear-gradient(90deg, transparent, hsl(var(--muted)) 50%, transparent);
+    background-size: 200% 100%;
+    @apply animate-shimmer;
+  }
+}
