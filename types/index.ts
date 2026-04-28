@@ -3,6 +3,7 @@ export type ActivityPriority = 'low' | 'medium' | 'high' | 'critical'
 export type ActivityCategory = 'task' | 'habit' | 'event' | 'note'
 export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly' | 'weekdays' | 'custom'
 export type InvitationStatus = 'pending' | 'accepted' | 'declined'
+export type TaskCategory = 'task' | 'habit' | 'event' | 'note'
 export type NotificationType =
   | 'status_update'
   | 'task_completed'
