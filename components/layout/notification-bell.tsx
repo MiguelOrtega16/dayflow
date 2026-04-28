@@ -38,6 +38,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
   const [open, setOpen]                     = useState(false)
   const [responding, setResponding]         = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const channelName = useRef(`notifications-${userId}-${Math.random().toString(36).slice(2)}`)
   const supabase    = createClient()
 
   const load = async () => {
@@ -49,7 +50,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
   useEffect(() => {
     load()
     const channel = supabase
-      .channel('notifications-realtime')
+      .channel(channelName.current)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'notifications',
         filter: `recipient_id=eq.${userId}`,

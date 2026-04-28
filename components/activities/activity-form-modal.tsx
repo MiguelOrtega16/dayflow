@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
-import { X, Clock, Hash, Target, Upload, ImageIcon, Trash2, UserPlus, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { X, Clock, Smile, Target, Upload, ImageIcon, Trash2, UserPlus, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG } from '@/lib/utils'
 import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
@@ -56,8 +56,11 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [saving, setSaving]               = useState(false)
   const [saveError, setSaveError]         = useState<string | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [showTitleEmoji, setShowTitleEmoji]   = useState(false)
   const [activeTab, setActiveTab]         = useState<Tab>('basic')
   const [goals, setGoals]                 = useState<Goal[]>([])
+
+  const titleRef = useRef<HTMLInputElement>(null)
 
   // Title autocomplete
   const [suggestions, setSuggestions]     = useState<string[]>([])
@@ -186,6 +189,17 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     }
   }
 
+  const insertTitleEmoji = (e: string) => {
+    const el = titleRef.current
+    if (!el) { setTitle(t => t + e); setShowTitleEmoji(false); return }
+    const start = el.selectionStart ?? title.length
+    const end   = el.selectionEnd   ?? title.length
+    const next  = title.slice(0, start) + e + title.slice(end)
+    setTitle(next)
+    setShowTitleEmoji(false)
+    setTimeout(() => { el.focus(); el.setSelectionRange(start + e.length, start + e.length) }, 0)
+  }
+
   const handleAddPending = (user: Profile) => {
     setPendingInvitees(prev => [...prev, user])
     setInviteSearch('')
@@ -268,16 +282,34 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
           {/* ── BÁSICO ── */}
           {activeTab === 'basic' && (
             <>
-              {/* Title with autocomplete */}
-              <div className="relative">
-                <input type="text" value={title} onChange={e => setTitle(e.target.value)}
+              {/* Title with autocomplete + inline emoji picker */}
+              <div className="relative flex items-center gap-2">
+                <input ref={titleRef} type="text" value={title} onChange={e => setTitle(e.target.value)}
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                   onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                   placeholder="¿Qué quieres lograr?" required autoFocus
-                  className="w-full text-base font-medium bg-transparent border-none outline-none placeholder:text-muted-foreground/60"
+                  className="flex-1 text-base font-medium bg-transparent border-none outline-none placeholder:text-muted-foreground/60 min-w-0"
                 />
+                <div className="relative shrink-0">
+                  <button type="button" onClick={() => setShowTitleEmoji(p => !p)}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Insertar emoji en el título"
+                  >
+                    <Smile className="w-4 h-4" />
+                  </button>
+                  {showTitleEmoji && (
+                    <div className="absolute top-9 right-0 z-20 bg-popover border border-border rounded-xl p-2 shadow-lg grid grid-cols-8 gap-1 w-52">
+                      {EMOJIS.map(e => (
+                        <button key={e} type="button"
+                          onClick={ev => { ev.stopPropagation(); insertTitleEmoji(e) }}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-base transition-colors"
+                        >{e}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
+                  <div className="absolute top-full left-0 right-8 z-20 mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
                     {suggestions.map(s => (
                       <button key={s} type="button"
                         onMouseDown={() => { setTitle(s); setShowSuggestions(false) }}
@@ -406,17 +438,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                   </select>
                 </div>
               )}
-
-              {/* Tags */}
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                  <Hash className="w-3 h-3" /> Etiquetas (separadas por coma)
-                </label>
-                <input type="text" value={tagsInput} onChange={e => setTagsInput(e.target.value)}
-                  placeholder="ejercicio, salud, mañana"
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
 
               {/* ── Participantes + visibility ── */}
               <div className="border-t border-border/50 pt-4">
@@ -625,30 +646,75 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   )
 }
 
-// ─── TimePicker ───────────────────────────────────────────────────────────────
-function TimePicker({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  const parts = value ? value.split(':') : []
-  const hVal  = parts[0] ?? ''
-  const mVal  = parts[1] ?? ''
-  const update = (h: string, m: string) => {
-    if (!h && !m) { onChange(''); return }
-    onChange(`${(h || '00').padStart(2, '0')}:${(m || '00').padStart(2, '0')}`)
+// ─── TimePicker (12h format, text inputs) ─────────────────────────────────────
+function TimePicker({ value, onChange }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const parse = (v: string) => {
+    if (!v) return { h: '', m: '', p: 'AM' as 'AM' | 'PM' }
+    const [hRaw, mRaw] = v.split(':')
+    const h24 = parseInt(hRaw)
+    return {
+      h: String(h24 % 12 || 12),
+      m: mRaw || '00',
+      p: (h24 >= 12 ? 'PM' : 'AM') as 'AM' | 'PM',
+    }
   }
+
+  const [local, setLocal] = useState(() => parse(value))
+
+  useEffect(() => { setLocal(parse(value)) }, [value])
+
+  const push = (h: string, m: string, p: 'AM' | 'PM') => {
+    const hNum = parseInt(h)
+    if (!h || isNaN(hNum)) { onChange(''); return }
+    const h24 = p === 'AM' ? (hNum === 12 ? 0 : hNum) : (hNum === 12 ? 12 : hNum + 12)
+    const mNum = Math.min(59, Math.max(0, parseInt(m) || 0))
+    onChange(`${String(h24).padStart(2, '0')}:${String(mNum).padStart(2, '0')}`)
+  }
+
+  const update = (field: 'h' | 'm' | 'p', val: string) => {
+    const next = { ...local, [field]: val }
+    setLocal(next)
+    push(next.h, next.m, next.p as 'AM' | 'PM')
+  }
+
+  const inputCls = 'w-10 text-center rounded-lg border border-input bg-background px-1 py-2 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums'
+
   return (
     <div className="flex items-center gap-1">
-      <select value={hVal} onChange={e => update(e.target.value, mVal)}
-        className="flex-1 rounded-xl border border-input bg-background px-1.5 py-2 text-sm outline-none focus:ring-2 focus:ring-ring min-w-0">
-        <option value="">{placeholder || '--'}</option>
-        {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => (
-          <option key={h} value={h}>{h}</option>
-        ))}
-      </select>
+      <input type="text" inputMode="numeric" value={local.h} placeholder="--"
+        onChange={e => {
+          const v = e.target.value.replace(/\D/g, '').slice(0, 2)
+          const n = parseInt(v)
+          if (v === '' || (!isNaN(n) && n >= 0 && n <= 12)) update('h', v)
+        }}
+        onBlur={() => {
+          if (local.h) push(local.h, local.m, local.p as 'AM' | 'PM')
+        }}
+        className={inputCls}
+      />
       <span className="text-xs font-bold text-muted-foreground shrink-0">:</span>
-      <select value={mVal} onChange={e => update(hVal, e.target.value)}
-        className="flex-1 rounded-xl border border-input bg-background px-1.5 py-2 text-sm outline-none focus:ring-2 focus:ring-ring min-w-0">
-        <option value="">--</option>
-        {['00', '15', '30', '45'].map(m => <option key={m} value={m}>{m}</option>)}
-      </select>
+      <input type="text" inputMode="numeric" value={local.m} placeholder="00"
+        onChange={e => {
+          const v = e.target.value.replace(/\D/g, '').slice(0, 2)
+          const n = parseInt(v)
+          if (v === '' || (!isNaN(n) && n <= 59)) update('m', v)
+        }}
+        onBlur={() => {
+          if (local.m.length === 1) {
+            const padded = local.m.padStart(2, '0')
+            const next = { ...local, m: padded }
+            setLocal(next)
+            push(next.h, padded, next.p as 'AM' | 'PM')
+          }
+        }}
+        className={inputCls}
+      />
+      <button type="button"
+        onClick={() => update('p', local.p === 'AM' ? 'PM' : 'AM')}
+        className="px-2 py-1.5 rounded-lg border border-input bg-background text-xs font-semibold hover:bg-muted transition-colors shrink-0 tabular-nums"
+      >
+        {local.p || 'AM'}
+      </button>
     </div>
   )
 }

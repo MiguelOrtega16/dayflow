@@ -98,7 +98,7 @@ export default function StatsPage() {
       </div>
 
       {/* Métricas clave */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
           { label: 'Total actividades', value: total, icon: '📋' },
           { label: 'Completadas', value: done, icon: '✅' },

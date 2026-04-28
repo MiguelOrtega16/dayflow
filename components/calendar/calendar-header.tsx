@@ -4,6 +4,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Plus, Calendar, LayoutGrid } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { NotificationBell } from '@/components/layout/notification-bell'
 
 interface CalendarHeaderProps {
   currentDate: Date
@@ -12,10 +13,11 @@ interface CalendarHeaderProps {
   onToday: () => void
   onModeChange: (mode: 'month' | 'week') => void
   onAddActivity: () => void
+  userId?: string
 }
 
 export function CalendarHeader({
-  currentDate, mode, onNavigate, onToday, onModeChange, onAddActivity
+  currentDate, mode, onNavigate, onToday, onModeChange, onAddActivity, userId
 }: CalendarHeaderProps) {
   const title = mode === 'month'
     ? format(currentDate, 'MMMM yyyy', { locale: es })
@@ -23,7 +25,7 @@ export function CalendarHeader({
 
   return (
     <div className="flex items-center justify-between px-2 sm:px-4 h-12 sm:h-16 border-b border-border shrink-0 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onToday}
           className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border hover:bg-muted transition-colors"
@@ -47,7 +49,7 @@ export function CalendarHeader({
         <h1 className="text-sm sm:text-lg font-semibold capitalize truncate max-w-[120px] sm:max-w-none">{title}</h1>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <div className="flex items-center bg-muted rounded-lg p-0.5">
           <button
             onClick={() => onModeChange('month')}
@@ -85,6 +87,13 @@ export function CalendarHeader({
           <span className="hidden sm:inline">Nueva actividad</span>
           <span className="sm:hidden">Agregar</span>
         </button>
+
+        {/* Notification bell — desktop only; mobile gets it from the top bar */}
+        {userId && (
+          <div className="hidden md:flex">
+            <NotificationBell userId={userId} topBar />
+          </div>
+        )}
       </div>
     </div>
   )
