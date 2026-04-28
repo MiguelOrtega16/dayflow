@@ -201,6 +201,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           }}
           onModeChange={setMode}
           onAddActivity={() => setShowAddModal(true)}
+          userId={currentUser?.id}
         />
 
         <UserFilterBar

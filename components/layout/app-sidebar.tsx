@@ -47,7 +47,7 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
         collapsed && 'justify-center px-0'
       )}>
         <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
-          <span className="text-primary-foreground text-sm font-bold">◈</span>
+          <CalendarDays className="w-4 h-4 text-primary-foreground" />
         </div>
         {!collapsed && (
           <span className="font-semibold text-xl tracking-tight">DayFlow</span>
