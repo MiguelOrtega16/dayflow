@@ -45,6 +45,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
     check()
+    if (window.innerWidth < 768) setMode('week')
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])

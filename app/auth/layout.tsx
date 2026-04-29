@@ -1,18 +1,13 @@
-'use client'
-
-import { useEffect } from 'react'
-
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    const root = document.documentElement
-    const previous = root.classList.contains('dark') ? 'dark' : 'light'
-    root.classList.remove('light', 'dark')
-    root.classList.add('dark')
-    return () => {
-      root.classList.remove('light', 'dark')
-      root.classList.add(previous)
-    }
-  }, [])
-
-  return <>{children}</>
+  return (
+    <>
+      {/* Force dark mode synchronously before React hydrates — prevents flash */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `document.documentElement.classList.remove('light');document.documentElement.classList.add('dark');`,
+        }}
+      />
+      {children}
+    </>
+  )
 }
