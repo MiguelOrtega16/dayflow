@@ -26,6 +26,29 @@ const TYPE_ICONS: Record<string, string> = {
 
 const ACTION_TYPES = new Set(['activity_invitation', 'calendar_share_invite'])
 
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const play = (freq: number, start: number, dur: number) => {
+      const osc  = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      gain.gain.setValueAtTime(0.35, ctx.currentTime + start)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur)
+      osc.start(ctx.currentTime + start)
+      osc.stop(ctx.currentTime + start + dur)
+    }
+    play(660, 0,    0.18)   // E5  — first note
+    play(880, 0.14, 0.28)   // A5  — second note (higher, overlaps slightly)
+    setTimeout(() => ctx.close(), 600)
+  } catch {
+    // Browser may block audio without prior user interaction — silently ignore
+  }
+}
+
 interface NotificationBellProps {
   userId: string
   collapsed?: boolean
@@ -54,7 +77,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'notifications',
         filter: `recipient_id=eq.${userId}`,
-      }, () => load())
+      }, () => { load(); playNotificationSound() })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [userId])

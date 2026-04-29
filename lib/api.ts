@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client'
 import type { Activity, ActivityInvitation, ActivityStatus, Goal, Notification, RecurrenceConfig, RecurrenceType } from '@/types'
 import { addDays, addWeeks, addMonths, format, parseISO, isWeekend } from 'date-fns'
+import { sendNotificationEmail } from '@/lib/email'
 
 // ─── Activities ──────────────────────────────────────────────────────────────
 
@@ -408,6 +409,16 @@ export async function inviteToActivity(activityId: string, inviterId: string, in
     message: `${inviterName} te invitó a: ${actTitle}`,
   })
 
+  sendNotificationEmail({
+    recipientId: inviteeId,
+    senderName:  inviterName,
+    subject:     `${inviterName} te invitó a una actividad en DayFlow`,
+    title:       'Nueva invitación a actividad',
+    message:     `<strong>${inviterName}</strong> te invitó a participar en: <strong>${actTitle}</strong>. Abre DayFlow para aceptar o declinar.`,
+    ctaText:     'Ver en DayFlow',
+    ctaUrl:      `${process.env.NEXT_PUBLIC_APP_URL || 'https://dayflow.vercel.app'}/dashboard`,
+  })
+
   return inv as ActivityInvitation
 }
 
@@ -538,6 +549,16 @@ export async function shareCalendar(ownerId: string, sharedWithId: string, canEd
     actor_id: ownerId,
     type: 'calendar_share_invite',
     message: `${ownerName} quiere compartir su calendario contigo`,
+  })
+
+  sendNotificationEmail({
+    recipientId: sharedWithId,
+    senderName:  ownerName,
+    subject:     `${ownerName} quiere compartir su calendario contigo`,
+    title:       'Invitación de calendario compartido',
+    message:     `<strong>${ownerName}</strong> te ha invitado a ver su calendario en DayFlow. Acepta la invitación para empezar a colaborar.`,
+    ctaText:     'Ver en DayFlow',
+    ctaUrl:      `${process.env.NEXT_PUBLIC_APP_URL || 'https://dayflow.vercel.app'}/dashboard/people`,
   })
 
   return share

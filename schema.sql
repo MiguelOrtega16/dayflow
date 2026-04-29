@@ -19,9 +19,13 @@ create table if not exists public.profiles (
   avatar_url text,
   bio text,
   color text not null default '#6366f1',
+  email_notifications boolean not null default false,
   created_at timestamptz default now() not null,
   updated_at timestamptz default now() not null
 );
+
+-- Idempotent column addition for existing deployments
+alter table public.profiles add column if not exists email_notifications boolean not null default false;
 
 alter table public.profiles enable row level security;
 

@@ -43,10 +43,10 @@ export const STATUS_CONFIG: Record<ActivityStatus, {
   },
   skipped: {
     label: 'Omitido',
-    color: 'border-gray-300',
-    bgColor: 'bg-gray-100 dark:bg-gray-600/25',
-    textColor: 'text-gray-600 dark:text-gray-400',
-    dotColor: 'bg-gray-400',
+    color: 'border-gray-400 dark:border-gray-500',
+    bgColor: 'bg-gray-100 dark:bg-gray-700/60',
+    textColor: 'text-gray-700 dark:text-gray-300',
+    dotColor: 'bg-gray-400 dark:bg-gray-500',
   },
 }
 

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { CalendarDays } from 'lucide-react'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
@@ -66,7 +67,9 @@ export default function SignupPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-8">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-2 mb-8">
-          <span className="text-primary text-2xl">◈</span>
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+            <CalendarDays className="w-4 h-4 text-primary-foreground" />
+          </div>
           <span className="font-semibold text-2xl">DayFlow</span>
         </div>
 
