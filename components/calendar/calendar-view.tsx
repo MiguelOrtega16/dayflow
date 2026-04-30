@@ -342,7 +342,9 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
               days={[selectedDate]}
               activities={activities}
               allUsers={allUsers}
+              currentUserId={currentUser?.id}
               onEditActivity={setEditingActivity}
+              onActivityUpdated={fetchActivities}
               onAddActivityAtTime={openAddAtTime}
             />
           </div>
