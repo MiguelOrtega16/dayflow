@@ -135,7 +135,6 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
       const d = new Date(date + 'T12:00:00') // noon to avoid timezone edge-cases
       setCurrentDate(d)
       setSelectedDate(d)
-      setMobilePanelOpen(true)
     }
     window.addEventListener('dayflow:navigate', onNavigate)
     return () => window.removeEventListener('dayflow:navigate', onNavigate)
