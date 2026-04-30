@@ -116,7 +116,7 @@ export function TimeGridView({
         return (
           <div className="flex shrink-0 border-b border-border bg-card">
             <div className="w-10 shrink-0 flex items-start justify-end pr-1 pt-1">
-              <span className="text-[8px] text-muted-foreground leading-tight text-right">{'Todo\ndía'}</span>
+              <span className="text-[8px] text-muted-foreground leading-tight text-right">{'Todo el \ndía'}</span>
             </div>
             {rows.map(({ day, events }) => (
               <div key={format(day, 'yyyy-MM-dd')} className="flex-1 p-0.5 border-l border-border/40 first:border-l-0 min-h-[22px]">
@@ -148,7 +148,7 @@ export function TimeGridView({
             {HOURS.map(h => (
               <div key={h} className="absolute right-1.5 text-[10px] text-muted-foreground leading-none"
                 style={{ top: h * HOUR_HEIGHT - 7 }}>
-                {h === 0 ? '' : h < 12 ? `${h}AM` : h === 12 ? '12PM' : `${h - 12}PM`}
+                {h === 0 ? '12AM' : h < 12 ? `${h}AM` : h === 12 ? '12PM' : `${h - 12}PM`}
               </div>
             ))}
           </div>

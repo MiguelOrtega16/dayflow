@@ -41,6 +41,23 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [emoji, setEmoji]             = useState(activity?.emoji || '')
   const [startTime, setStartTime]     = useState(activity?.start_time || initialStartTime || '')
   const [endTime, setEndTime]         = useState(activity?.end_time   || initialEndTime   || '')
+
+  const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
+  const addHour = (t: string) => {
+    const [h, m] = t.split(':').map(Number)
+    const nh = Math.min(23, h + 1)
+    return `${String(nh).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  }
+
+  const handleStartTimeChange = (val: string) => {
+    setStartTime(val)
+    if (val && endTime && toMin(endTime) <= toMin(val)) setEndTime(addHour(val))
+  }
+
+  const handleEndTimeChange = (val: string) => {
+    if (val && startTime && toMin(val) <= toMin(startTime)) return
+    setEndTime(val)
+  }
   const [isPublic, setIsPublic]       = useState(activity?.is_public ?? true)
   const [completionPct, setCompletionPct] = useState(activity?.completion_percentage || 0)
   const [tagsInput, setTagsInput]     = useState(activity?.tags?.join(', ') || '')
@@ -357,13 +374,13 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
                     <Clock className="w-3 h-3" /> Hora inicio
                   </label>
-                  <TimePicker value={startTime} onChange={setStartTime} placeholder="--" />
+                  <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
                     <Clock className="w-3 h-3" /> Hora fin
                   </label>
-                  <TimePicker value={endTime} onChange={setEndTime} placeholder="--" />
+                  <TimePicker value={endTime} onChange={handleEndTimeChange} placeholder="--" />
                 </div>
               </div>
 
