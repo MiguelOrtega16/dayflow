@@ -22,11 +22,13 @@ interface ActivityFormModalProps {
   currentUser: Profile | null
   onClose: () => void
   onSaved: () => void
+  initialStartTime?: string
+  initialEndTime?: string
 }
 
 type Tab = 'basic' | 'recurrence'
 
-export function ActivityFormModal({ date, activity, currentUser, onClose, onSaved }: ActivityFormModalProps) {
+export function ActivityFormModal({ date, activity, currentUser, onClose, onSaved, initialStartTime, initialEndTime }: ActivityFormModalProps) {
   const isEditing = !!activity
 
   // Core fields
@@ -37,8 +39,8 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [category, setCategory]       = useState<ActivityCategory>(activity?.category || 'task')
   const [goalId, setGoalId]           = useState<string>(activity?.goal_id || '')
   const [emoji, setEmoji]             = useState(activity?.emoji || '')
-  const [startTime, setStartTime]     = useState(activity?.start_time || '')
-  const [endTime, setEndTime]         = useState(activity?.end_time || '')
+  const [startTime, setStartTime]     = useState(activity?.start_time || initialStartTime || '')
+  const [endTime, setEndTime]         = useState(activity?.end_time   || initialEndTime   || '')
   const [isPublic, setIsPublic]       = useState(activity?.is_public ?? true)
   const [completionPct, setCompletionPct] = useState(activity?.completion_percentage || 0)
   const [tagsInput, setTagsInput]     = useState(activity?.tags?.join(', ') || '')

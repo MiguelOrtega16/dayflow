@@ -268,7 +268,7 @@ export function DayDetailPanel({
                                 <div className="flex items-center gap-1">
                                   {activity.emoji && <span className="text-sm">{activity.emoji}</span>}
                                   <span className={cn(
-                                    'text-sm font-medium truncate',
+                                    'text-sm font-medium break-words min-w-0',
                                     activity.status === 'done' && 'line-through opacity-60',
                                     activity.status === 'skipped' && 'opacity-40'
                                   )}>

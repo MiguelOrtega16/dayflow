@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Menu, CalendarDays } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { AppSidebar } from './app-sidebar'
 import { NotificationBell } from './notification-bell'
 import { cn } from '@/lib/utils'
@@ -40,21 +40,13 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
         {/* ── Top bar — mobile only; desktop uses the sidebar + CalendarHeader bell ── */}
         <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border bg-card shrink-0">
           {/* Left: hamburger + logo on mobile; empty on desktop (sidebar handles branding) */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-foreground transition-colors"
-              aria-label="Abrir menú"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <div className="md:hidden flex items-center gap-2">
-              <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center">
-                <CalendarDays className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <span className="font-semibold text-base">DayFlow</span>
-            </div>
-          </div>
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-foreground transition-colors"
+            aria-label="Abrir menú"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
 
           {/* Right: notification bell — always top-right */}
           {profile?.id && (

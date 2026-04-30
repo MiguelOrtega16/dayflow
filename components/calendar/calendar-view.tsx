@@ -11,15 +11,16 @@ import { createClient } from '@/lib/supabase/client'
 import { getActivitiesForRange } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { getColombiaHolidays } from '@/lib/holidays'
-import { X } from 'lucide-react'
 import type { Activity, Profile } from '@/types'
 import { DayCell } from './day-cell'
 import { DayDetailPanel } from './day-detail-panel'
 import { CalendarHeader } from './calendar-header'
 import { UserFilterBar } from './user-filter-bar'
 import { ActivityFormModal } from '../activities/activity-form-modal'
+import { CompactMonthGrid } from './compact-month-grid'
+import { TimeGridView } from './time-grid-view'
 
-type CalendarMode = 'month' | 'week'
+type CalendarMode = 'month' | 'week' | 'day'
 
 interface CalendarViewProps {
   currentUser: Profile | null
@@ -36,8 +37,8 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   const [loading, setLoading]           = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
+  const [modalInitialTime, setModalInitialTime] = useState<{ start: string; end: string } | null>(null)
   const [activeUserIds, setActiveUserIds] = useState<string[]>([])
-  const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   // Detected client-side after hydration; starts false (SSR-safe)
   const [isMobile, setIsMobile] = useState(false)
   const supabase = createClient()
@@ -69,12 +70,16 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
   // ── Mobile week view: 3 days centred on selectedDate ─────────────────────────
   const isMobileWeek = isMobile && mode === 'week'
+  const isMobileDay  = isMobile && mode === 'day'
 
   const getDateRange = useCallback(() => {
     if (mode === 'month') {
       const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 })
       const end   = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 0 })
       return { start: format(start, 'yyyy-MM-dd'), end: format(end, 'yyyy-MM-dd') }
+    } else if (mode === 'day') {
+      const s = format(selectedDate, 'yyyy-MM-dd')
+      return { start: s, end: s }
     } else if (isMobileWeek) {
       return {
         start: format(subDays(selectedDate, 1), 'yyyy-MM-dd'),
@@ -141,8 +146,9 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
       const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 })
       const end   = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 0 })
       return eachDayOfInterval({ start, end })
+    } else if (mode === 'day') {
+      return [selectedDate]
     } else if (isMobileWeek) {
-      // 3-day view: yesterday / today (selected) / tomorrow
       return [subDays(selectedDate, 1), selectedDate, addDays(selectedDate, 1)]
     } else {
       const start = startOfWeek(currentDate, { weekStartsOn: 0 })
@@ -150,6 +156,12 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
       return eachDayOfInterval({ start, end })
     }
   }
+
+  // Days for the compact week strip (always 7)
+  const weekStripDays = eachDayOfInterval({
+    start: startOfWeek(isMobileWeek ? selectedDate : currentDate, { weekStartsOn: 0 }),
+    end:   endOfWeek(isMobileWeek ? selectedDate : currentDate, { weekStartsOn: 0 }),
+  })
 
   const getActivitiesForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd')
@@ -160,11 +172,12 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     const d = direction === 'next' ? 1 : -1
     if (mode === 'month') {
       setCurrentDate(d > 0 ? addMonths(currentDate, 1) : subMonths(currentDate, 1))
+    } else if (mode === 'day') {
+      const next = addDays(selectedDate, d)
+      setSelectedDate(next); setCurrentDate(next)
     } else if (isMobileWeek) {
-      // Shift the 3-day window by 3 days
       const next = addDays(selectedDate, d * 3)
-      setSelectedDate(next)
-      setCurrentDate(next)
+      setSelectedDate(next); setCurrentDate(next)
     } else {
       setCurrentDate(d > 0 ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1))
     }
@@ -186,6 +199,114 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
       ...getColombiaHolidays(year + 1),
     ])
   }, [getYear(currentDate)])
+
+  const openAddAtTime = (start: string, end: string) => {
+    setModalInitialTime({ start, end })
+    setShowAddModal(true)
+  }
+  const closeModal = () => { setShowAddModal(false); setEditingActivity(null); setModalInitialTime(null) }
+
+  // ── Shared day-detail panel props ────────────────────────────────────────────
+  const detailProps = {
+    date:             selectedDate,
+    activities:       getActivitiesForDate(selectedDate),
+    currentUserId:    currentUser?.id || '',
+    currentUserColor: currentUser?.color || '#6366f1',
+    allUsers,
+    onAddActivity:    () => setShowAddModal(true),
+    onEditActivity:   setEditingActivity,
+    onActivityUpdated: fetchActivities,
+  }
+
+  // ── Mobile day view (time grid, full screen) ──────────────────────────────
+  if (isMobileDay) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <CalendarHeader
+          currentDate={selectedDate}
+          mode={mode}
+          onNavigate={navigate}
+          onToday={() => { const t = new Date(); setCurrentDate(t); setSelectedDate(t) }}
+          onModeChange={m => { setMode(m) }}
+          onAddActivity={() => setShowAddModal(true)}
+          userId={currentUser?.id}
+        />
+        <div className="flex-1 overflow-hidden">
+          <TimeGridView
+            days={[selectedDate]}
+            activities={activities}
+            allUsers={allUsers}
+            currentUserId={currentUser?.id}
+            onEditActivity={setEditingActivity}
+            onActivityUpdated={fetchActivities}
+            onAddActivityAtTime={openAddAtTime}
+          />
+        </div>
+        {(showAddModal || editingActivity) && (
+          <ActivityFormModal
+            date={selectedDate} activity={editingActivity} currentUser={currentUser}
+            onClose={closeModal}
+            onSaved={() => { closeModal(); fetchActivities() }}
+            initialStartTime={modalInitialTime?.start}
+            initialEndTime={modalInitialTime?.end}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // ── Mobile month / week view (compact grid + permanent day detail) ─────────
+  if (isMobile && (mode === 'month' || mode === 'week')) {
+    const gridDays = mode === 'month' ? undefined : weekStripDays
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <CalendarHeader
+          currentDate={isMobileWeek ? selectedDate : currentDate}
+          mode={mode}
+          onNavigate={navigate}
+          onToday={() => { const t = new Date(); setCurrentDate(t); setSelectedDate(t) }}
+          onModeChange={m => { setMode(m) }}
+          onAddActivity={() => setShowAddModal(true)}
+          userId={currentUser?.id}
+        />
+        <UserFilterBar
+          users={allUsers} activeUserIds={activeUserIds}
+          onToggleUser={id => setActiveUserIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+          )}
+        />
+
+        {/* Compact grid — top 25% */}
+        <div className="shrink-0 border-b border-border" style={{ height: '25dvh' }}>
+          <CompactMonthGrid
+            currentDate={mode === 'week' ? (isMobileWeek ? selectedDate : currentDate) : currentDate}
+            selectedDate={selectedDate}
+            days={gridDays}
+            activities={activities}
+            holidays={holidays}
+            allUsers={allUsers}
+            activeUserIds={activeUserIds}
+            onDateSelect={d => { setSelectedDate(d); setCurrentDate(d) }}
+          />
+        </div>
+
+        {/* Day detail — remaining ~75% */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <DayDetailPanel {...detailProps} />
+        </div>
+
+        {(showAddModal || editingActivity) && (
+          <ActivityFormModal
+            date={selectedDate} activity={editingActivity} currentUser={currentUser}
+            onClose={closeModal}
+            onSaved={() => { closeModal(); fetchActivities() }}
+            initialStartTime={modalInitialTime?.start}
+            initialEndTime={modalInitialTime?.end}
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full">
@@ -215,8 +336,21 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           }
         />
 
-        {/* Calendar grid */}
-        <div className="flex-1 overflow-auto p-1.5 sm:p-4">
+        {/* Desktop day view — time grid */}
+        {mode === 'day' && (
+          <div className="flex-1 overflow-hidden">
+            <TimeGridView
+              days={[selectedDate]}
+              activities={activities}
+              allUsers={allUsers}
+              onEditActivity={setEditingActivity}
+              onAddActivityAtTime={openAddAtTime}
+            />
+          </div>
+        )}
+
+        {/* Calendar grid — month / week */}
+        {mode !== 'day' && <div className="flex-1 overflow-auto p-1.5 sm:p-4">
           {/* Week day headers */}
           <div className={cn('grid mb-2', isMobileWeek ? 'grid-cols-3' : 'grid-cols-7')}>
             {weekDayHeaders.map((day, i) => (
@@ -256,7 +390,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
                   allUsers={allUsers}
                   loading={loading}
                   holiday={holidays.get(format(day, 'yyyy-MM-dd'))}
-                  onClick={() => { setSelectedDate(day); setMobilePanelOpen(true) }}
+                  onClick={() => { setSelectedDate(day) }}
                   onAddActivity={() => { setSelectedDate(day); setShowAddModal(true) }}
                   onEditActivity={setEditingActivity}
                   onActivityUpdated={fetchActivities}
@@ -264,11 +398,11 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
               )
             })}
           </div>
-        </div>
+        </div>}
       </div>
 
-      {/* ── Desktop: right-side detail panel (w-80 controlled here) ── */}
-      <div className="hidden md:flex w-80 shrink-0 border-l border-border">
+      {/* ── Desktop: right-side detail panel — hidden in day mode ── */}
+      {mode !== 'day' && <div className="hidden md:flex w-80 shrink-0 border-l border-border">
         <DayDetailPanel
           date={selectedDate}
           activities={getActivitiesForDate(selectedDate)}
@@ -279,44 +413,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onEditActivity={setEditingActivity}
           onActivityUpdated={fetchActivities}
         />
-      </div>
-
-      {/* ── Mobile: full-width bottom-sheet detail panel ── */}
-      {mobilePanelOpen && (
-        <div
-          className="fixed inset-0 z-50 md:hidden"
-          onClick={() => setMobilePanelOpen(false)}
-        >
-          <div className="absolute inset-0 bg-black/40" />
-          <div
-            className="absolute inset-x-0 bottom-0 bg-card rounded-t-2xl border-t border-border shadow-2xl flex flex-col"
-            style={{ maxHeight: '85dvh' }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Drag handle + close */}
-            <div className="relative flex items-center justify-center px-4 pt-3 pb-2 shrink-0">
-              <div className="w-10 h-1 bg-muted rounded-full" />
-              <button
-                onClick={() => setMobilePanelOpen(false)}
-                className="absolute right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {/* DayDetailPanel fills full width of the sheet */}
-            <DayDetailPanel
-              date={selectedDate}
-              activities={getActivitiesForDate(selectedDate)}
-              currentUserId={currentUser?.id || ''}
-              currentUserColor={currentUser?.color || '#6366f1'}
-              allUsers={allUsers}
-              onAddActivity={() => { setMobilePanelOpen(false); setShowAddModal(true) }}
-              onEditActivity={a => { setMobilePanelOpen(false); setEditingActivity(a) }}
-              onActivityUpdated={fetchActivities}
-            />
-          </div>
-        </div>
-      )}
+      </div>}
 
       {/* Add/Edit Activity Modal */}
       {(showAddModal || editingActivity) && (
@@ -324,6 +421,8 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           date={selectedDate}
           activity={editingActivity}
           currentUser={currentUser}
+          initialStartTime={modalInitialTime?.start}
+          initialEndTime={modalInitialTime?.end}
           onClose={() => { setShowAddModal(false); setEditingActivity(null) }}
           onSaved={() => { setShowAddModal(false); setEditingActivity(null); fetchActivities() }}
         />
