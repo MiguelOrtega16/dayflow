@@ -275,8 +275,17 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           )}
         />
 
-        {/* Compact grid — top 25% */}
-        <div className="shrink-0 border-b border-border" style={{ height: '25dvh' }}>
+        {/* Compact grid — height scales with number of week rows so 5/6-row months don't overflow */}
+        <div className="shrink-0 border-b border-border" style={{
+          height: (() => {
+            if (mode !== 'month') return '25dvh'
+            const rows = eachDayOfInterval({
+              start: startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 }),
+              end:   endOfWeek(endOfMonth(currentDate),   { weekStartsOn: 0 }),
+            }).length / 7
+            return rows >= 6 ? '32dvh' : rows >= 5 ? '28dvh' : '25dvh'
+          })(),
+        }}>
           <CompactMonthGrid
             currentDate={mode === 'week' ? (isMobileWeek ? selectedDate : currentDate) : currentDate}
             selectedDate={selectedDate}

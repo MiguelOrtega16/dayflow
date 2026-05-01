@@ -147,7 +147,7 @@ export function TimeGridView({
           <div className="w-10 shrink-0 relative select-none">
             {HOURS.map(h => (
               <div key={h} className="absolute right-1.5 text-[10px] text-muted-foreground leading-none"
-                style={{ top: h * HOUR_HEIGHT - 7 }}>
+                style={{ top: h === 0 ? 2 : h * HOUR_HEIGHT - 7 }}>
                 {h === 0 ? '12AM' : h < 12 ? `${h}AM` : h === 12 ? '12PM' : `${h - 12}PM`}
               </div>
             ))}
