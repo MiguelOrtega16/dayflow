@@ -3,10 +3,9 @@
 -- Safe to run on fresh OR existing Supabase projects.
 -- Every statement uses IF NOT EXISTS / DROP IF EXISTS so it
 -- is idempotent: run it as many times as needed.
+-- Uses gen_random_uuid() (built-in since PostgreSQL 13) so
+-- no extensions are required.
 -- ============================================================
-
--- Enable UUID extension
-create extension if not exists "uuid-ossp";
 
 -- ============================================================
 -- PROFILES
@@ -24,7 +23,7 @@ create table if not exists public.profiles (
   updated_at timestamptz default now() not null
 );
 
--- Idempotent column addition for existing deployments
+-- Upgrade path: add columns that were added after initial release
 alter table public.profiles add column if not exists email_notifications boolean not null default false;
 
 alter table public.profiles enable row level security;
@@ -63,20 +62,25 @@ create trigger on_auth_user_created
 -- SHARED CALENDARS  (before activities — RLS references it)
 -- ============================================================
 create table if not exists public.shared_calendars (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   owner_id uuid references public.profiles(id) on delete cascade not null,
   shared_with_id uuid references public.profiles(id) on delete cascade not null,
   can_edit boolean default false not null,
-  status text not null default 'accepted'
-    check (status in ('pending', 'accepted', 'declined')),
+  status text not null default 'accepted',
   created_at timestamptz default now() not null,
   unique(owner_id, shared_with_id)
 );
 
--- Add status column if upgrading from older schema
+-- Add status check constraint idempotently
+do $$ begin
+  alter table public.shared_calendars
+    add constraint shared_calendars_status_check
+    check (status in ('pending', 'accepted', 'declined'));
+exception when duplicate_object then null; end $$;
+
+-- Upgrade path: add status column if upgrading from a schema that didn't have it
 alter table public.shared_calendars
-  add column if not exists status text not null default 'accepted'
-  check (status in ('pending', 'accepted', 'declined'));
+  add column if not exists status text not null default 'accepted';
 
 alter table public.shared_calendars enable row level security;
 
@@ -104,21 +108,29 @@ create policy "Users can delete their own shares"
 -- GOALS  (before activities — activities.goal_id references it)
 -- ============================================================
 create table if not exists public.goals (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade not null,
   title text not null,
   description text,
   emoji text,
   color text,
-  status text not null default 'todo'
-    check (status in ('todo', 'in_progress', 'done', 'blocked', 'skipped')),
-  priority text not null default 'medium'
-    check (priority in ('low', 'medium', 'high', 'critical')),
+  status text not null default 'todo',
+  priority text not null default 'medium',
   target_date date,
   is_public boolean default true not null,
   created_at timestamptz default now() not null,
   updated_at timestamptz default now() not null
 );
+
+do $$ begin
+  alter table public.goals add constraint goals_status_check
+    check (status in ('todo', 'in_progress', 'done', 'blocked', 'skipped'));
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table public.goals add constraint goals_priority_check
+    check (priority in ('low', 'medium', 'high', 'critical'));
+exception when duplicate_object then null; end $$;
 
 create index if not exists goals_user_id_idx on public.goals(user_id);
 
@@ -156,52 +168,72 @@ create policy "Users can delete own goals"
 -- ACTIVITIES
 -- ============================================================
 create table if not exists public.activities (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade not null,
   goal_id uuid references public.goals(id) on delete set null,
-  invited_from_activity_id uuid,   -- set after creation via FK below
+  invited_from_activity_id uuid,
   title text not null,
   description text,
   date date not null,
-  status text not null default 'todo'
-    check (status in ('todo', 'in_progress', 'done', 'blocked', 'skipped')),
-  priority text not null default 'medium'
-    check (priority in ('low', 'medium', 'high', 'critical')),
-  category text not null default 'task'
-    check (category in ('task', 'habit', 'event', 'note')),
+  status text not null default 'todo',
+  priority text not null default 'medium',
+  category text not null default 'task',
   tags text[] default '{}',
   color text,
   emoji text,
   start_time time,
   end_time time,
-  recurrence_type text not null default 'none'
-    check (recurrence_type in ('none', 'daily', 'weekly', 'monthly', 'weekdays', 'custom')),
+  recurrence_type text not null default 'none',
   recurrence_config jsonb,
   parent_activity_id uuid references public.activities(id) on delete set null,
   is_public boolean default true not null,
   notes text,
-  completion_percentage integer default 0
-    check (completion_percentage >= 0 and completion_percentage <= 100),
+  completion_percentage integer default 0,
   evidence_image_url text,
   created_at timestamptz default now() not null,
   updated_at timestamptz default now() not null
 );
 
--- Self-referential FK for invited activities (must be added after table creation)
+do $$ begin
+  alter table public.activities add constraint activities_status_check
+    check (status in ('todo', 'in_progress', 'done', 'blocked', 'skipped'));
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table public.activities add constraint activities_priority_check
+    check (priority in ('low', 'medium', 'high', 'critical'));
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table public.activities add constraint activities_category_check
+    check (category in ('task', 'habit', 'event', 'note'));
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table public.activities add constraint activities_recurrence_check
+    check (recurrence_type in ('none', 'daily', 'weekly', 'monthly', 'weekdays', 'custom'));
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table public.activities add constraint activities_completion_check
+    check (completion_percentage >= 0 and completion_percentage <= 100);
+exception when duplicate_object then null; end $$;
+
+-- Self-referential FK for invited activities
 alter table public.activities
   drop constraint if exists activities_invited_from_activity_id_fkey;
 alter table public.activities
   add constraint activities_invited_from_activity_id_fkey
   foreign key (invited_from_activity_id) references public.activities(id) on delete set null;
 
--- Upgrade path: add new columns to existing tables
+-- Upgrade path: add columns added after initial release
 alter table public.activities add column if not exists invited_from_activity_id uuid;
 alter table public.activities add column if not exists evidence_image_url text;
 
-create index if not exists activities_user_id_idx    on public.activities(user_id);
-create index if not exists activities_date_idx        on public.activities(date);
-create index if not exists activities_user_date_idx   on public.activities(user_id, date);
-create index if not exists activities_status_idx      on public.activities(status);
+create index if not exists activities_user_id_idx   on public.activities(user_id);
+create index if not exists activities_date_idx       on public.activities(date);
+create index if not exists activities_user_date_idx  on public.activities(user_id, date);
+create index if not exists activities_status_idx     on public.activities(status);
 
 alter table public.activities enable row level security;
 
@@ -218,6 +250,11 @@ create policy "Users can view own activities"
           and sc.owner_id = activities.user_id
           and sc.status = 'accepted'
       )
+    )
+    or exists (
+      select 1 from public.activity_invitations ai
+      where ai.activity_id = activities.id
+        and ai.invitee_id = auth.uid()
     )
   );
 
@@ -240,16 +277,20 @@ create policy "Users can delete own activities"
 -- ACTIVITY INVITATIONS
 -- ============================================================
 create table if not exists public.activity_invitations (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   activity_id uuid references public.activities(id) on delete cascade not null,
   inviter_id  uuid references public.profiles(id)   on delete cascade not null,
   invitee_id  uuid references public.profiles(id)   on delete cascade not null,
-  status text not null default 'pending'
-    check (status in ('pending', 'accepted', 'declined')),
+  status text not null default 'pending',
   created_at   timestamptz default now() not null,
   responded_at timestamptz,
   unique(activity_id, invitee_id)
 );
+
+do $$ begin
+  alter table public.activity_invitations add constraint activity_invitations_status_check
+    check (status in ('pending', 'accepted', 'declined'));
+exception when duplicate_object then null; end $$;
 
 create index if not exists act_inv_activity_idx on public.activity_invitations(activity_id);
 create index if not exists act_inv_invitee_idx  on public.activity_invitations(invitee_id);
@@ -281,7 +322,7 @@ create policy "Cancel activity invitations"
 -- ACTIVITY COMMENTS
 -- ============================================================
 create table if not exists public.activity_comments (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   activity_id uuid references public.activities(id) on delete cascade not null,
   user_id uuid references public.profiles(id) on delete cascade not null,
   content text not null,
@@ -330,7 +371,7 @@ create policy "Users can delete own comments"
 -- NOTIFICATIONS
 -- ============================================================
 create table if not exists public.notifications (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   recipient_id uuid references public.profiles(id) on delete cascade not null,
   actor_id     uuid references public.profiles(id) on delete cascade not null,
   type text not null,
@@ -341,17 +382,15 @@ create table if not exists public.notifications (
   created_at timestamptz default now() not null
 );
 
--- Update the type constraint to include all notification types (idempotent via DO block)
+-- Drop any existing type constraint then re-add with full list (idempotent)
 do $$
-declare
-  v_con text;
+declare v_con text;
 begin
   select conname into v_con
   from pg_constraint c
   join pg_class t on c.conrelid = t.oid
   join pg_namespace n on t.relnamespace = n.oid
   where n.nspname = 'public' and t.relname = 'notifications' and c.contype = 'c';
-
   if v_con is not null then
     execute format('alter table public.notifications drop constraint %I', v_con);
   end if;
@@ -538,7 +577,7 @@ grant select              on public.profiles              to anon, authenticated
 grant insert, update      on public.profiles              to authenticated;
 grant select, insert, update, delete on public.goals               to authenticated;
 grant select, insert, update, delete on public.activities           to authenticated;
-grant select, insert, delete         on public.shared_calendars     to authenticated;
+grant select, insert, update, delete on public.shared_calendars     to authenticated;
 grant select, insert, update, delete on public.notifications        to authenticated;
 grant select, insert, update, delete on public.activity_comments    to authenticated;
 grant select, insert, update, delete on public.activity_invitations to authenticated;
@@ -546,12 +585,7 @@ grant select, insert, update, delete on public.activity_invitations to authentic
 grant usage on all sequences in schema public to authenticated;
 
 -- ============================================================
--- STORAGE BUCKET FOR EVIDENCE IMAGES
--- Create manually in: Supabase Dashboard → Storage → New bucket
---   Name: activity-evidence
---   Public: ON
--- Or run this if you have service-role access:
--- insert into storage.buckets (id, name, public)
---   values ('activity-evidence', 'activity-evidence', true)
---   on conflict (id) do nothing;
+-- STORAGE
+-- Create manually: Supabase Dashboard → Storage → New bucket
+--   Name: activity-evidence   Public: ON
 -- ============================================================

@@ -139,7 +139,7 @@ export function generateRecurrenceDates(
   return dates
 }
 
-export async function updateActivity(id: string, updates: Partial<Activity>) {
+export async function updateActivity(id: string, updates: Partial<Activity>, updaterId?: string) {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('activities')
@@ -149,14 +149,58 @@ export async function updateActivity(id: string, updates: Partial<Activity>) {
     .single()
 
   if (error) throw error
+  if (updaterId) notifyActivityParticipants(data as Activity, updaterId, updates).catch(() => {})
   return data as Activity
 }
 
-export async function updateActivityStatus(id: string, status: ActivityStatus) {
+export async function updateActivityStatus(id: string, status: ActivityStatus, updaterId?: string) {
   return updateActivity(id, {
     status,
     completion_percentage: status === 'done' ? 100 : status === 'skipped' ? 0 : undefined,
-  })
+  }, updaterId)
+}
+
+async function notifyActivityParticipants(
+  activity: Activity,
+  updaterId: string,
+  updates: Partial<Activity>,
+) {
+  const supabase  = createClient()
+  const origId    = (activity as any).invited_from_activity_id || activity.id
+
+  // Find original owner
+  const { data: orig } = await supabase
+    .from('activities').select('user_id, title').eq('id', origId).single()
+  if (!orig) return
+
+  // Find accepted invitees
+  const { data: invs } = await supabase
+    .from('activity_invitations').select('invitee_id')
+    .eq('activity_id', origId).eq('status', 'accepted')
+
+  const participants = new Set<string>([orig.user_id])
+  invs?.forEach(i => participants.add(i.invitee_id))
+  participants.delete(updaterId)
+  if (participants.size === 0) return
+
+  const type = updates.status ? 'status_update' : 'new_activity'
+  const statusLabels: Record<string, string> = {
+    todo: 'Por hacer', in_progress: 'En progreso', done: 'Completado',
+    blocked: 'Bloqueado', skipped: 'Omitido',
+  }
+  const message = updates.status
+    ? `Estado de "${orig.title}" cambiado a: ${statusLabels[updates.status] ?? updates.status}`
+    : `"${orig.title}" fue actualizada`
+
+  await Promise.all([...participants].map(recipientId =>
+    supabase.from('notifications').insert({
+      recipient_id: recipientId,
+      actor_id:     updaterId,
+      type,
+      activity_id:  origId,
+      message,
+    })
+  ))
 }
 
 export async function deleteActivity(id: string, deleteAll?: boolean) {

@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
-import { X, Clock, Smile, Target, Upload, ImageIcon, Trash2, UserPlus, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { X, Clock, Smile, Target, UserPlus, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG } from '@/lib/utils'
 import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
   getActivityTitleSuggestions, getActivityInvitations, inviteToActivity,
-  cancelActivityInvitation, searchUsers, uploadEvidenceImage,
+  cancelActivityInvitation, searchUsers,
 } from '@/lib/api'
 import type {
   Activity, ActivityStatus, ActivityCategory, RecurrenceType,
@@ -87,10 +87,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const suggestTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Evidence image
-  const [evidenceFile, setEvidenceFile]     = useState<File | null>(null)
-  const [evidencePreview, setEvidencePreview] = useState<string | null>(activity?.evidence_image_url || null)
-  const [removingEvidence, setRemovingEvidence] = useState(false)
-  const evidenceInputRef = useRef<HTMLInputElement>(null)
 
   // Participants — existing invitations (edit) + pending to send after save (both modes)
   const [invitations, setInvitations]         = useState<ActivityInvitation[]>([])
@@ -143,11 +139,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     try {
       const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean)
 
-      let evidenceUrl = activity?.evidence_image_url || null
-      if (evidenceFile && isEditing && activity?.id) {
-        evidenceUrl = await uploadEvidenceImage(evidenceFile, activity.id, currentUser.id)
-      }
-      if (removingEvidence) evidenceUrl = null
+      const evidenceUrl = activity?.evidence_image_url || null
 
       const payload: Record<string, unknown> = {
         user_id:            currentUser.id,
@@ -175,12 +167,11 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
         parent_activity_id: activity?.parent_activity_id || null,
         ...(activity?.invited_from_activity_id ? { invited_from_activity_id: activity.invited_from_activity_id } : {}),
         ...(evidenceUrl ? { evidence_image_url: evidenceUrl } : {}),
-        ...(removingEvidence ? { evidence_image_url: null } : {}),
       }
 
       let savedId: string | null = null
       if (isEditing) {
-        await updateActivity(activity.id, payload as any)
+        await updateActivity(activity.id, payload as any, currentUser?.id)
         savedId = activity.id
       } else if (recurrenceType !== 'none') {
         const parent = await createRecurringActivities(payload as any, recurrenceType, (payload.recurrence_config as any)!)
@@ -230,15 +221,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     setInvitations(prev => prev.filter(i => i.id !== invId))
   }
 
-  const handleEvidenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setEvidenceFile(file)
-    setEvidencePreview(URL.createObjectURL(file))
-    setRemovingEvidence(false)
-  }
 
-  const showEvidence = isEditing && (status === 'in_progress' || status === 'done')
   const DAY_LABELS   = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
 
   const INV_STATUS_LABEL: Record<string, string> = { pending: 'Pendiente', accepted: 'Aceptó', declined: 'Declinó' }
@@ -417,31 +400,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 </div>
               )}
 
-              {/* Evidence (edit + in_progress/done) */}
-              {showEvidence && (
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                    <ImageIcon className="w-3 h-3" /> Evidencia del estado
-                  </label>
-                  {evidencePreview && !removingEvidence ? (
-                    <div className="relative rounded-xl overflow-hidden border border-border">
-                      <img src={evidencePreview} alt="Evidencia" className="w-full max-h-40 object-cover" />
-                      <button type="button"
-                        onClick={() => { setRemovingEvidence(true); setEvidencePreview(null); setEvidenceFile(null) }}
-                        className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
-                      ><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => evidenceInputRef.current?.click()}
-                      className="w-full border-2 border-dashed border-border rounded-xl py-4 flex flex-col items-center gap-1.5 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
-                    >
-                      <Upload className="w-5 h-5" />
-                      <span className="text-xs font-medium">Subir imagen de evidencia</span>
-                    </button>
-                  )}
-                  <input ref={evidenceInputRef} type="file" accept="image/*" className="hidden" onChange={handleEvidenceChange} />
-                </div>
-              )}
+              {/* Evidence hidden — feature preserved in DB/API but not exposed in UI */}
 
               {/* Goal */}
               {goals.length > 0 && (

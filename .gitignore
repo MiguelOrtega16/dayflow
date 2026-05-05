@@ -58,3 +58,21 @@ coverage/
 # ── TypeScript ────────────────────────────────────────────────────────────────
 *.tsbuildinfo
 next-env.d.ts
+.env.production
+
+# ── Capacitor ─────────────────────────────────────────────────────────────────
+# Android — commit the project, ignore build artefacts
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/app/google-services.json
+
+# iOS — commit the project, ignore CocoaPods & user settings (add when on macOS)
+ios/App/Pods/
+ios/App/.DS_Store
+ios/App/App.xcworkspace/xcuserdata/
+ios/.DS_Store
+
+# Capacitor internal cache
+.capacitor/

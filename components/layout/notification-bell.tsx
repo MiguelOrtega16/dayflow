@@ -77,7 +77,15 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'notifications',
         filter: `recipient_id=eq.${userId}`,
-      }, () => { load(); playNotificationSound() })
+      }, (payload: any) => {
+        load()
+        playNotificationSound()
+        // Refresh the calendar when an activity we participate in was updated
+        const type = payload?.new?.type
+        if (type && ['status_update', 'task_completed', 'new_activity', 'activity_invitation'].includes(type)) {
+          window.dispatchEvent(new CustomEvent('dayflow:refresh'))
+        }
+      })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [userId])

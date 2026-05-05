@@ -25,7 +25,7 @@ export function buildEmailHtml(title: string, message: string, ctaText?: string,
 </html>`
 }
 
-export async function sendNotificationEmail(payload: {
+export async function sendNotificationEmail(_payload: {
   recipientId: string
   senderName: string
   subject: string
@@ -34,19 +34,26 @@ export async function sendNotificationEmail(payload: {
   ctaText?: string
   ctaUrl?: string
 }) {
-  const bodyHtml = buildEmailHtml(payload.title, payload.message, payload.ctaText, payload.ctaUrl)
+  // ── Email sending is disabled until a custom domain is configured with Resend ──
+  // To re-enable: remove the early return below and set RESEND_API_KEY + RESEND_FROM_EMAIL
+  // in your production environment variables.
+  return
+
+  /* eslint-disable no-unreachable */
+  const bodyHtml = buildEmailHtml(_payload.title, _payload.message, _payload.ctaText, _payload.ctaUrl)
   try {
     await fetch('/api/notify-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        recipientId: payload.recipientId,
-        senderName:  payload.senderName,
-        subject:     payload.subject,
+        recipientId: _payload.recipientId,
+        senderName:  _payload.senderName,
+        subject:     _payload.subject,
         bodyHtml,
       }),
     })
   } catch {
     // Email is best-effort — never block the main action
   }
+  /* eslint-enable no-unreachable */
 }

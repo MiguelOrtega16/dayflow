@@ -78,7 +78,7 @@ export function DayCell({
 
   const handleQuickStatus = async (activity: Activity, status: ActivityStatus) => {
     closeContextMenu()
-    await updateActivityStatus(activity.id, status)
+    await updateActivityStatus(activity.id, status, currentUserId)
     onActivityUpdated()
   }
 

@@ -70,7 +70,7 @@ export function TimeGridView({
 
   const handleStatus = async (activity: Activity, status: ActivityStatus) => {
     closeCtx()
-    await updateActivityStatus(activity.id, status)
+    await updateActivityStatus(activity.id, status, currentUserId)
     onActivityUpdated?.()
   }
 
