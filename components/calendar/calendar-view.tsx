@@ -97,7 +97,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     setLoading(true)
     try {
       const { start, end } = getDateRange()
-      const data = await getActivitiesForRange(start, end, activeUserIds)
+      const data = await getActivitiesForRange(start, end, activeUserIds, currentUser?.id)
       setActivities(data)
     } catch (err) {
       console.error('Failed to fetch activities:', err)

@@ -26,6 +26,7 @@ export interface Profile {
   bio: string | null
   color: string
   email_notifications: boolean
+  fcm_token: string | null
   created_at: string
   updated_at: string
 }
@@ -52,6 +53,9 @@ export interface Goal {
 export interface Activity {
   id: string
   user_id: string
+  // Set when the viewing user is a participant (not the owner)
+  participant_status?: ActivityStatus
+  invitation_id?: string
   title: string
   description: string | null
   date: string
@@ -85,6 +89,7 @@ export interface ActivityInvitation {
   inviter_id: string
   invitee_id: string
   status: InvitationStatus
+  participant_status: ActivityStatus
   created_at: string
   responded_at: string | null
   // Joined

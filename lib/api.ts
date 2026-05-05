@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Activity, ActivityInvitation, ActivityStatus, Goal, Notification, RecurrenceConfig, RecurrenceType } from '@/types'
 import { addDays, addWeeks, addMonths, format, parseISO, isWeekend } from 'date-fns'
 import { sendNotificationEmail } from '@/lib/email'
+import { sendPushNotification } from '@/lib/push-notifications'
 
 // ─── Activities ──────────────────────────────────────────────────────────────
 
@@ -27,10 +28,12 @@ export async function getActivitiesByDate(date: string, userIds?: string[]) {
 export async function getActivitiesForRange(
   startDate: string,
   endDate: string,
-  userIds?: string[]
+  userIds?: string[],
+  currentUserId?: string,
 ) {
   const supabase = createClient()
 
+  // 1. Activities owned by the user(s) in the filter list
   let query = supabase
     .from('activities')
     .select(`*, profile:profiles(*), goal:goals(id, title, emoji, color)`)
@@ -43,9 +46,47 @@ export async function getActivitiesForRange(
     query = query.in('user_id', userIds)
   }
 
-  const { data, error } = await query
+  const { data: ownedData, error } = await query
   if (error) throw error
-  return data as Activity[]
+
+  // 2. Activities the current user was invited to and accepted
+  let participantData: Activity[] = []
+  if (currentUserId) {
+    const { data: invitations } = await supabase
+      .from('activity_invitations')
+      .select('id, activity_id, participant_status')
+      .eq('invitee_id', currentUserId)
+      .eq('status', 'accepted')
+
+    if (invitations && invitations.length > 0) {
+      const ids = invitations.map(i => i.activity_id)
+      const { data: invitedActs } = await supabase
+        .from('activities')
+        .select(`*, profile:profiles(*), goal:goals(id, title, emoji, color)`)
+        .in('id', ids)
+        .gte('date', startDate)
+        .lte('date', endDate)
+
+      if (invitedActs) {
+        participantData = invitedActs.map(act => {
+          const inv = invitations.find(i => i.activity_id === act.id)!
+          return {
+            ...act,
+            participant_status: (inv.participant_status || 'todo') as Activity['participant_status'],
+            invitation_id: inv.id,
+          }
+        })
+      }
+    }
+  }
+
+  // Merge, deduplicating by id (owner's record takes priority)
+  const seen = new Set<string>()
+  const merged: Activity[] = []
+  for (const a of [...(ownedData || []), ...participantData]) {
+    if (!seen.has(a.id)) { seen.add(a.id); merged.push(a) }
+  }
+  return merged
 }
 
 export async function createActivity(activity: Omit<Activity, 'id' | 'created_at' | 'updated_at' | 'profile' | 'goal'>) {
@@ -463,6 +504,12 @@ export async function inviteToActivity(activityId: string, inviterId: string, in
     ctaUrl:      `${process.env.NEXT_PUBLIC_APP_URL || 'https://dayflow.vercel.app'}/dashboard`,
   })
 
+  sendPushNotification({
+    recipientId: inviteeId,
+    title: '👋 Nueva invitación',
+    body:  `${inviterName} te invitó a: ${actTitle}`,
+  })
+
   return inv as ActivityInvitation
 }
 
@@ -495,58 +542,14 @@ export async function respondToActivityInvitation(
     else console.warn('[respondToActivityInvitation] activity still null after direct fetch — RLS may need updating')
   }
 
+  // Mark invitation accepted/declined — no activity copy is created.
+  // Participants share the original activity record; each tracks their own
+  // progress via activity_invitations.participant_status.
   const { error: updErr } = await supabase
     .from('activity_invitations')
     .update({ status: accept ? 'accepted' : 'declined', responded_at: new Date().toISOString() })
     .eq('id', invitationId)
   if (updErr) throw updErr
-
-  if (accept && (inv as any).activity) {
-    const orig = (inv as any).activity as Activity
-
-    // Core payload — uses only the original schema columns that are guaranteed to exist.
-    const corePayload: Record<string, unknown> = {
-      user_id:              userId,
-      title:                orig.title,
-      description:          orig.description,
-      date:                 orig.date,
-      status:               'todo',
-      priority:             orig.priority,
-      category:             orig.category,
-      emoji:                orig.emoji,
-      start_time:           orig.start_time,
-      end_time:             orig.end_time,
-      is_public:            orig.is_public,
-      tags:                 orig.tags || [],
-      goal_id:              null,
-      recurrence_type:      'none',
-      recurrence_config:    null,
-      parent_activity_id:   null,
-      color:                null,
-      notes:                null,
-      completion_percentage: 0,
-    }
-
-    // Try inserting with the new linkage column; if the column doesn't exist yet
-    // (schema not migrated), fall back to the core payload so the activity is
-    // always created regardless of migration state.
-    let { error: insertErr } = await supabase.from('activities').insert({
-      ...corePayload,
-      invited_from_activity_id: orig.id,
-    })
-
-    if (insertErr) {
-      if (insertErr.message?.includes('invited_from_activity_id')) {
-        // Column not yet migrated — retry without it
-        const fallback = await supabase.from('activities').insert(corePayload)
-        insertErr = fallback.error
-      }
-      if (insertErr) {
-        console.error('[respondToActivityInvitation] activity insert failed:', insertErr)
-        throw insertErr
-      }
-    }
-  }
 
   const { data: me } = await supabase.from('profiles').select('full_name,email').eq('id', userId).single()
   const meName   = (me as any)?.full_name || (me as any)?.email || 'Alguien'
@@ -566,6 +569,38 @@ export async function respondToActivityInvitation(
       ? acceptMsg
       : `${meName} declinó tu invitación a: ${actTitle}`,
   })
+}
+
+export async function updateParticipantStatus(invitationId: string, status: ActivityStatus, updaterId: string) {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('activity_invitations')
+    .update({ participant_status: status })
+    .eq('id', invitationId)
+    .eq('invitee_id', updaterId)
+  if (error) throw error
+
+  // Notify other participants that this person updated their status
+  const { data: inv } = await supabase
+    .from('activity_invitations')
+    .select('activity_id, activity:activities(title, user_id)')
+    .eq('id', invitationId)
+    .single()
+
+  if (inv) {
+    const activity = (inv as any).activity
+    if (activity) {
+      const statusLabels: Record<string, string> = {
+        todo: 'Por hacer', in_progress: 'En progreso', done: 'Completado',
+        blocked: 'Bloqueado', skipped: 'Omitido',
+      }
+      notifyActivityParticipants(
+        { id: inv.activity_id, user_id: activity.user_id, title: activity.title } as any,
+        updaterId,
+        { status },
+      ).catch(() => {})
+    }
+  }
 }
 
 export async function cancelActivityInvitation(invitationId: string) {
@@ -603,6 +638,12 @@ export async function shareCalendar(ownerId: string, sharedWithId: string, canEd
     message:     `<strong>${ownerName}</strong> te ha invitado a ver su calendario en DayFlow. Acepta la invitación para empezar a colaborar.`,
     ctaText:     'Ver en DayFlow',
     ctaUrl:      `${process.env.NEXT_PUBLIC_APP_URL || 'https://dayflow.vercel.app'}/dashboard/people`,
+  })
+
+  sendPushNotification({
+    recipientId: sharedWithId,
+    title: '📅 Calendario compartido',
+    body:  `${ownerName} quiere compartir su calendario contigo`,
   })
 
   return share

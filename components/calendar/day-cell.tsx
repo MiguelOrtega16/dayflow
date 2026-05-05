@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Plus, X } from 'lucide-react'
 import { cn, STATUS_CONFIG, getInitials, formatTime } from '@/lib/utils'
-import { deleteActivity, updateActivityStatus } from '@/lib/api'
+import { deleteActivity, updateActivityStatus, updateParticipantStatus } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile } from '@/types'
 
 interface DayCellProps {
@@ -78,7 +78,11 @@ export function DayCell({
 
   const handleQuickStatus = async (activity: Activity, status: ActivityStatus) => {
     closeContextMenu()
-    await updateActivityStatus(activity.id, status, currentUserId)
+    if (activity.invitation_id) {
+      await updateParticipantStatus(activity.invitation_id, status, currentUserId)
+    } else {
+      await updateActivityStatus(activity.id, status, currentUserId)
+    }
     onActivityUpdated()
   }
 

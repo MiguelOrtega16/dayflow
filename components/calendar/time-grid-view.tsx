@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { format, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { cn, STATUS_CONFIG } from '@/lib/utils'
-import { updateActivityStatus, deleteActivity } from '@/lib/api'
+import { updateActivityStatus, updateParticipantStatus, deleteActivity } from '@/lib/api'
 import type { Activity, ActivityStatus } from '@/types'
 
 const HOUR_HEIGHT = 56
@@ -70,7 +70,11 @@ export function TimeGridView({
 
   const handleStatus = async (activity: Activity, status: ActivityStatus) => {
     closeCtx()
-    await updateActivityStatus(activity.id, status, currentUserId)
+    if (activity.invitation_id && currentUserId) {
+      await updateParticipantStatus(activity.invitation_id, status, currentUserId)
+    } else {
+      await updateActivityStatus(activity.id, status, currentUserId)
+    }
     onActivityUpdated?.()
   }
 

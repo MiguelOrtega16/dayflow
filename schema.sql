@@ -25,6 +25,7 @@ create table if not exists public.profiles (
 
 -- Upgrade path: add columns that were added after initial release
 alter table public.profiles add column if not exists email_notifications boolean not null default false;
+alter table public.profiles add column if not exists fcm_token text;
 
 alter table public.profiles enable row level security;
 
@@ -291,6 +292,21 @@ do $$ begin
   alter table public.activity_invitations add constraint activity_invitations_status_check
     check (status in ('pending', 'accepted', 'declined'));
 exception when duplicate_object then null; end $$;
+
+alter table public.activity_invitations
+  add column if not exists participant_status text not null default 'todo';
+
+do $$ begin
+  alter table public.activity_invitations add constraint activity_invitations_participant_status_check
+    check (participant_status in ('todo', 'in_progress', 'done', 'blocked', 'skipped'));
+exception when duplicate_object then null; end $$;
+
+-- Allow invitees to update their own participant_status
+drop policy if exists "Participants can update their status" on public.activity_invitations;
+create policy "Participants can update their status"
+  on public.activity_invitations for update to authenticated
+  using (invitee_id = auth.uid())
+  with check (invitee_id = auth.uid());
 
 create index if not exists act_inv_activity_idx on public.activity_invitations(activity_id);
 create index if not exists act_inv_invitee_idx  on public.activity_invitations(invitee_id);

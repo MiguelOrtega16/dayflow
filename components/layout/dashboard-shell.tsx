@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Menu } from 'lucide-react'
 import { AppSidebar } from './app-sidebar'
 import { NotificationBell } from './notification-bell'
 import { cn } from '@/lib/utils'
+import { initPushNotifications } from '@/lib/push-notifications'
 import type { Profile } from '@/types'
 
 interface DashboardShellProps {
@@ -14,6 +15,10 @@ interface DashboardShellProps {
 
 export function DashboardShell({ profile, children }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  useEffect(() => {
+    if (profile?.id) initPushNotifications(profile.id)
+  }, [profile?.id])
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">

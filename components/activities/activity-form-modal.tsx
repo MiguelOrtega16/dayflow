@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
-import { X, Clock, Smile, Target, UserPlus, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { X, Clock, Smile, Target, UserPlus, CheckCircle2, XCircle } from 'lucide-react'
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG } from '@/lib/utils'
 import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
@@ -93,7 +93,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [pendingInvitees, setPendingInvitees] = useState<Profile[]>([])
   const [inviteSearch, setInviteSearch]       = useState('')
   const [inviteResults, setInviteResults]     = useState<Profile[]>([])
-  const [inviting, setInviting]               = useState<string | null>(null)
 
   useEffect(() => {
     if (currentUser) getGoals(currentUser.id).then(setGoals).catch(() => {})
@@ -450,22 +449,10 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                           <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                         </div>
                         <button type="button"
-                          onClick={() => isEditing && activity?.id
-                            ? (async () => {
-                                setInviting(u.id)
-                                try {
-                                  const inv = await inviteToActivity(activity.id, currentUser!.id, u.id)
-                                  setInvitations(prev => [...prev, inv])
-                                  setInviteSearch('')
-                                  setInviteResults([])
-                                } catch {} finally { setInviting(null) }
-                              })()
-                            : handleAddPending(u)
-                          }
-                          disabled={inviting === u.id}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                          onClick={() => handleAddPending(u)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                         >
-                          {inviting === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
+                          <UserPlus className="w-3 h-3" />
                           Invitar
                         </button>
                       </div>
@@ -615,7 +602,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
             <button type="button" disabled={saving || !title.trim()}
               onClick={e => handleSubmit(e)}
               className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              {saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : pendingInvitees.length > 0 ? `Crear e invitar (${pendingInvitees.length})` : recurrenceType !== 'none' ? 'Crear recurrente' : 'Crear actividad'}
+              {saving ? 'Guardando...' : pendingInvitees.length > 0 ? `${isEditing ? 'Guardar' : 'Crear'} e invitar (${pendingInvitees.length})` : isEditing ? 'Guardar cambios' : recurrenceType !== 'none' ? 'Crear recurrente' : 'Crear actividad'}
             </button>
           </div>
         </div>
