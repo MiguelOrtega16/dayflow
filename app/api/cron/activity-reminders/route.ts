@@ -2,10 +2,17 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendFCM } from '@/lib/firebase-admin'
 
-// Vercel invokes this with Authorization: Bearer CRON_SECRET
 function isAuthorized(request: Request) {
   const auth = request.headers.get('authorization')
   return auth === `Bearer ${process.env.CRON_SECRET}`
+}
+
+// Formats "14:30:00" → "2:30 PM"
+function formatTime(t: string): string {
+  const [h, m] = t.split(':').map(Number)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const hour  = h % 12 || 12
+  return `${hour}:${String(m).padStart(2, '0')} ${ampm}`
 }
 
 export async function GET(request: Request) {
@@ -13,27 +20,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  // Use service-role key to bypass RLS and read all users' activities
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // Find activities starting in 25–35 minutes from now
-  const now       = new Date()
-  const windowMin = new Date(now.getTime() + 25 * 60 * 1000)
-  const windowMax = new Date(now.getTime() + 35 * 60 * 1000)
-
-  const todayStr    = now.toISOString().slice(0, 10)
-  const windowMinT  = windowMin.toTimeString().slice(0, 5)   // "HH:MM"
-  const windowMaxT  = windowMax.toTimeString().slice(0, 5)
+  // All timed activities for today (cron runs once a day — morning digest)
+  const todayStr = new Date().toISOString().slice(0, 10)
 
   const { data: activities, error } = await supabase
     .from('activities')
-    .select('id, title, emoji, user_id, start_time, date')
+    .select('id, title, emoji, user_id, start_time')
     .eq('date', todayStr)
-    .gte('start_time', windowMinT)
-    .lte('start_time', windowMaxT)
+    .not('start_time', 'is', null)
+    .order('start_time', { ascending: true })
 
   if (error) {
     console.error('[reminders] query error:', error)
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ sent: 0 })
   }
 
-  // For each activity, collect all recipients: owner + accepted invitees
+  // Collect all recipients per activity: owner + accepted invitees
   const activityIds = activities.map(a => a.id)
 
   const { data: invitations } = await supabase
@@ -53,17 +53,21 @@ export async function GET(request: Request) {
     .in('activity_id', activityIds)
     .eq('status', 'accepted')
 
-  // Build map: activityId → [userId, ...inviteeIds]
   const recipientMap: Record<string, string[]> = {}
+  for (const act of activities) recipientMap[act.id] = [act.user_id]
+  for (const inv of invitations ?? []) recipientMap[inv.activity_id]?.push(inv.invitee_id)
+
+  // Group activities by recipient so each user gets one summary notification
+  const byUser: Record<string, typeof activities> = {}
   for (const act of activities) {
-    recipientMap[act.id] = [act.user_id]
-  }
-  for (const inv of invitations ?? []) {
-    recipientMap[inv.activity_id]?.push(inv.invitee_id)
+    for (const uid of recipientMap[act.id] ?? []) {
+      if (!byUser[uid]) byUser[uid] = []
+      byUser[uid].push(act)
+    }
   }
 
-  // Fetch all relevant FCM tokens in one query
-  const allUserIds = [...new Set(Object.values(recipientMap).flat())]
+  // Fetch FCM tokens
+  const allUserIds = Object.keys(byUser)
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, fcm_token')
@@ -75,20 +79,26 @@ export async function GET(request: Request) {
     if (p.fcm_token) tokenMap[p.id] = p.fcm_token
   }
 
-  // Send push notifications
+  // Send one summary push per user
   let sent = 0
-  for (const act of activities) {
-    const label  = act.emoji ? `${act.emoji} ${act.title}` : act.title
-    const title  = '⏰ Próxima actividad'
-    const body   = `"${label}" empieza en 30 minutos`
-    const recipients = recipientMap[act.id] ?? []
+  await Promise.all(
+    Object.entries(byUser).map(async ([uid, acts]) => {
+      const token = tokenMap[uid]
+      if (!token) return
 
-    await Promise.all(
-      recipients
-        .filter(uid => tokenMap[uid])
-        .map(uid => sendFCM(tokenMap[uid], title, body).then(() => { sent++ }))
-    )
-  }
+      const count = acts.length
+      const title = `📅 Tienes ${count} actividad${count > 1 ? 'es' : ''} hoy`
+      const lines = acts.slice(0, 4).map(a => {
+        const label = a.emoji ? `${a.emoji} ${a.title}` : a.title
+        return `${formatTime(a.start_time!)} — ${label}`
+      })
+      if (count > 4) lines.push(`…y ${count - 4} más`)
+      const body = lines.join('\n')
+
+      await sendFCM(token, title, body)
+      sent++
+    })
+  )
 
   return NextResponse.json({ sent, activities: activities.length })
 }
