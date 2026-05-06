@@ -49,7 +49,29 @@ export async function getActivitiesForRange(
   const { data: ownedData, error } = await query
   if (error) throw error
 
-  // 2. Activities the current user was invited to and accepted
+  // 2. Participant statuses for owned activities (so owners can see each invitee's progress)
+  let participantsByActivity: Record<string, Activity['participants']> = {}
+  if (currentUserId && ownedData && ownedData.length > 0) {
+    const ownedIds = ownedData.map((a: any) => a.id)
+    const { data: invites } = await supabase
+      .from('activity_invitations')
+      .select('activity_id, invitee_id, participant_status, profile:profiles!activity_invitations_invitee_id_fkey(id, full_name, email, color, avatar_url)')
+      .in('activity_id', ownedIds)
+      .eq('status', 'accepted')
+
+    if (invites) {
+      for (const inv of invites as any[]) {
+        if (!participantsByActivity[inv.activity_id]) participantsByActivity[inv.activity_id] = []
+        participantsByActivity[inv.activity_id]!.push({
+          invitee_id: inv.invitee_id,
+          participant_status: (inv.participant_status || 'todo') as ActivityStatus,
+          profile: inv.profile,
+        })
+      }
+    }
+  }
+
+  // 3. Activities the current user was invited to and accepted
   let participantData: Activity[] = []
   if (currentUserId) {
     const { data: invitations } = await supabase
@@ -80,10 +102,16 @@ export async function getActivitiesForRange(
     }
   }
 
+  // Attach participant statuses to owned activities
+  const enrichedOwned: Activity[] = (ownedData || []).map((a: any) => ({
+    ...a,
+    participants: participantsByActivity[a.id] || [],
+  }))
+
   // Merge, deduplicating by id (owner's record takes priority)
   const seen = new Set<string>()
   const merged: Activity[] = []
-  for (const a of [...(ownedData || []), ...participantData]) {
+  for (const a of [...enrichedOwned, ...participantData]) {
     if (!seen.has(a.id)) { seen.add(a.id); merged.push(a) }
   }
   return merged
@@ -590,10 +618,6 @@ export async function updateParticipantStatus(invitationId: string, status: Acti
   if (inv) {
     const activity = (inv as any).activity
     if (activity) {
-      const statusLabels: Record<string, string> = {
-        todo: 'Por hacer', in_progress: 'En progreso', done: 'Completado',
-        blocked: 'Bloqueado', skipped: 'Omitido',
-      }
       notifyActivityParticipants(
         { id: inv.activity_id, user_id: activity.user_id, title: activity.title } as any,
         updaterId,

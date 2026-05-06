@@ -37,6 +37,14 @@ const STATUS_PILL_BG: Record<ActivityStatus, string> = {
   skipped:     'bg-gray-100   dark:bg-gray-600/20',
 }
 
+const STATUS_DOT: Record<ActivityStatus, string> = {
+  todo:        'bg-slate-400',
+  in_progress: 'bg-amber-400',
+  done:        'bg-emerald-500',
+  blocked:     'bg-red-500',
+  skipped:     'bg-gray-400',
+}
+
 const MAX_VISIBLE = 5
 
 interface ContextMenu {
@@ -59,7 +67,7 @@ export function DayCell({
   const isWeekend    = date.getDay() === 0 || date.getDay() === 6
   const isRightEdge  = date.getDay() >= 5
 
-  const done     = activities.filter(a => a.status === 'done').length
+  const done     = activities.filter(a => (a.invitation_id ? (a.participant_status ?? a.status) : a.status) === 'done').length
   const total    = activities.length
   const progress = total > 0 ? (done / total) * 100 : 0
 
@@ -245,23 +253,30 @@ export function DayCell({
               </button>
             )}
 
-            {/* Status change (own only) */}
-            {contextMenu.activity.user_id === currentUserId && (
+            {/* Status change (own or participant) */}
+            {(contextMenu.activity.user_id === currentUserId || !!contextMenu.activity.invitation_id) && (
               <>
                 <div className="border-t border-border my-1" />
-                <p className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Cambiar estado</p>
-                {(Object.keys(STATUS_CHAR) as ActivityStatus[]).map(s => (
-                  <button key={s} onClick={() => handleQuickStatus(contextMenu.activity, s)}
-                    className={cn(
-                      'w-full text-left px-3 py-1.5 hover:bg-muted transition-colors flex items-center gap-2',
-                      contextMenu.activity.status === s && 'font-semibold text-primary'
-                    )}
-                  >
-                    <span className={cn('text-xs', STATUS_CONFIG[s].textColor)}>{STATUS_CHAR[s]}</span>
-                    {STATUS_CONFIG[s].label}
-                    {contextMenu.activity.status === s && <span className="ml-auto text-[10px] text-primary">actual</span>}
-                  </button>
-                ))}
+                <p className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  {contextMenu.activity.invitation_id ? 'Mi estado' : 'Cambiar estado'}
+                </p>
+                {(Object.keys(STATUS_CHAR) as ActivityStatus[]).map(s => {
+                  const current = contextMenu.activity.invitation_id
+                    ? (contextMenu.activity.participant_status ?? contextMenu.activity.status)
+                    : contextMenu.activity.status
+                  return (
+                    <button key={s} onClick={() => handleQuickStatus(contextMenu.activity, s)}
+                      className={cn(
+                        'w-full text-left px-3 py-1.5 hover:bg-muted transition-colors flex items-center gap-2',
+                        current === s && 'font-semibold text-primary'
+                      )}
+                    >
+                      <span className={cn('text-xs', STATUS_CONFIG[s].textColor)}>{STATUS_CHAR[s]}</span>
+                      {STATUS_CONFIG[s].label}
+                      {current === s && <span className="ml-auto text-[10px] text-primary">actual</span>}
+                    </button>
+                  )
+                })}
               </>
             )}
 
@@ -303,33 +318,38 @@ function ActivityPill({
   onEditActivity: (a: Activity) => void
   onContextMenu: (e: React.MouseEvent, a: Activity) => void
 }) {
-  const statusCfg   = STATUS_CONFIG[activity.status]
-  const userProfile = allUsers.find(u => u.profile.id === activity.user_id)?.profile
-  const userColor   = userProfile?.color || '#6366f1'
-  const isOwn       = activity.user_id === currentUserId
+  const isParticipant   = !!activity.invitation_id
+  // Participants see their own status; owners see the activity's global status
+  const effectiveStatus = isParticipant ? (activity.participant_status ?? activity.status) : activity.status
+  const statusCfg       = STATUS_CONFIG[effectiveStatus]
+  const userProfile     = allUsers.find(u => u.profile.id === activity.user_id)?.profile
+  const userColor       = userProfile?.color || '#6366f1'
+  const isOwn           = activity.user_id === currentUserId
+  const canInteract     = isOwn || isParticipant
+  const hasParticipants = !isParticipant && (activity.participants?.length ?? 0) > 0
 
   return (
     <div
-      onClick={e => { e.stopPropagation(); if (isOwn) onEditActivity(activity); else onClick() }}
+      onClick={e => { e.stopPropagation(); if (canInteract) onEditActivity(activity); else onClick() }}
       onContextMenu={e => onContextMenu(e, activity)}
       className={cn(
         'relative flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs transition-opacity overflow-hidden',
-        isOwn ? 'cursor-pointer hover:opacity-80' : 'cursor-default hover:opacity-70',
-        STATUS_PILL_BG[activity.status],
-        activity.status === 'done'    && 'opacity-60',
-        activity.status === 'skipped' && 'opacity-40',
+        canInteract ? 'cursor-pointer hover:opacity-80' : 'cursor-default hover:opacity-70',
+        STATUS_PILL_BG[effectiveStatus],
+        effectiveStatus === 'done'    && 'opacity-60',
+        effectiveStatus === 'skipped' && 'opacity-40',
         deleting && 'opacity-30 pointer-events-none',
       )}
       style={{ borderLeft: `2.5px solid ${userColor}` }}
       title={`${userProfile ? (userProfile.full_name || userProfile.email) + ': ' : ''}${activity.title} · ${statusCfg.label}${activity.start_time ? ' · ' + formatTime(activity.start_time) : ''}`}
     >
       <span className={cn('text-[9px] font-bold shrink-0 leading-none', statusCfg.textColor)}>
-        {STATUS_CHAR[activity.status]}
+        {STATUS_CHAR[effectiveStatus]}
       </span>
 
       {activity.emoji && <span className="text-[10px] shrink-0 leading-none">{activity.emoji}</span>}
 
-      <span className={cn('font-medium flex-1 truncate leading-tight', activity.status === 'done' && 'line-through')}>
+      <span className={cn('font-medium flex-1 truncate leading-tight', effectiveStatus === 'done' && 'line-through')}>
         {activity.title}
       </span>
 
@@ -339,8 +359,21 @@ function ActivityPill({
         </span>
       )}
 
-      {activity.invited_from_activity_id && (
-        <span className="text-[8px] shrink-0 opacity-70" title="Actividad a la que fuiste invitado">👥</span>
+      {/* Participant status dots — shown on owner's pill, one dot per accepted invitee */}
+      {hasParticipants && (
+        <span className="flex items-center gap-[2px] shrink-0">
+          {activity.participants!.slice(0, 4).map(p => (
+            <span
+              key={p.invitee_id}
+              className={cn('w-1.5 h-1.5 rounded-full', STATUS_DOT[p.participant_status])}
+              title={`${p.profile.full_name || p.profile.email}: ${STATUS_CONFIG[p.participant_status].label}`}
+            />
+          ))}
+        </span>
+      )}
+
+      {isParticipant && (
+        <span className="text-[8px] shrink-0 opacity-70" title="Eres participante">👥</span>
       )}
 
       {expanded && activity.goal && (
@@ -359,7 +392,7 @@ function ActivityPill({
       )}
 
       {/* In-progress completion bar */}
-      {activity.status === 'in_progress' && activity.completion_percentage > 0 && (
+      {effectiveStatus === 'in_progress' && activity.completion_percentage > 0 && (
         <div className="absolute bottom-0 left-0 h-[2px] bg-amber-400 rounded-sm"
           style={{ width: `${activity.completion_percentage}%` }} />
       )}

@@ -341,11 +341,60 @@ export function DayDetailPanel({
                                   ))}
                                 </div>
 
-                                {activity.status === 'in_progress' && activity.completion_percentage > 0 && (
+                                {effectiveStatus === 'in_progress' && activity.completion_percentage > 0 && (
                                   <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden">
                                     <div className="h-full bg-amber-400 rounded-full" style={{ width: `${activity.completion_percentage}%` }} />
                                   </div>
                                 )}
+
+                              {/* Participant status rows — shown to the owner */}
+                              {!isParticipant && activity.participants && activity.participants.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-border/40 space-y-1">
+                                  {activity.participants.map(p => {
+                                    const pCfg = STATUS_CONFIG[p.participant_status]
+                                    return (
+                                      <div key={p.invitee_id} className="flex items-center gap-1.5">
+                                        <div
+                                          className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white shrink-0"
+                                          style={{ backgroundColor: p.profile.color || '#6366f1' }}
+                                        >
+                                          {p.profile.avatar_url
+                                            ? <img src={p.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                                            : getInitials(p.profile.full_name, p.profile.email).charAt(0)}
+                                        </div>
+                                        <span className="text-[11px] text-muted-foreground flex-1 truncate">
+                                          {p.profile.full_name || p.profile.email}
+                                        </span>
+                                        <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0', pCfg.bgColor, pCfg.textColor)}>
+                                          {pCfg.label}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Owner status row — shown to participants */}
+                              {isParticipant && activity.profile && (
+                                <div className="mt-2 pt-2 border-t border-border/40">
+                                  <div className="flex items-center gap-1.5">
+                                    <div
+                                      className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white shrink-0"
+                                      style={{ backgroundColor: activity.profile.color || '#6366f1' }}
+                                    >
+                                      {activity.profile.avatar_url
+                                        ? <img src={activity.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                                        : getInitials(activity.profile.full_name, activity.profile.email).charAt(0)}
+                                    </div>
+                                    <span className="text-[11px] text-muted-foreground flex-1 truncate">
+                                      {activity.profile.full_name || activity.profile.email} (organizador)
+                                    </span>
+                                    <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0', STATUS_CONFIG[activity.status].bgColor, STATUS_CONFIG[activity.status].textColor)}>
+                                      {STATUS_CONFIG[activity.status].label}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
 
                               {/* Evidence image */}
                               {activity.evidence_image_url && (

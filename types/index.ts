@@ -16,6 +16,7 @@ export type NotificationType =
   | 'calendar_share_invite'
   | 'calendar_share_accepted'
   | 'calendar_share_declined'
+  | 'activity_reminder'
 
 export interface Profile {
   id: string
@@ -78,6 +79,12 @@ export interface Activity {
   completion_percentage: number
   created_at: string
   updated_at: string
+  // Accepted participants and their per-user statuses (populated for owned activities)
+  participants?: Array<{
+    invitee_id: string
+    participant_status: ActivityStatus
+    profile: Pick<Profile, 'id' | 'full_name' | 'email' | 'color' | 'avatar_url'>
+  }>
   // Joined
   profile?: Profile
   goal?: Pick<Goal, 'id' | 'title' | 'emoji' | 'color'> | null

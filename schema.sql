@@ -418,7 +418,8 @@ alter table public.notifications
   check (type in (
     'status_update', 'task_completed', 'goal_completed', 'goal_progress', 'new_activity',
     'activity_invitation', 'invitation_accepted', 'invitation_declined',
-    'calendar_share_invite', 'calendar_share_accepted', 'calendar_share_declined'
+    'calendar_share_invite', 'calendar_share_accepted', 'calendar_share_declined',
+    'activity_reminder'
   ));
 
 create index if not exists notifications_recipient_idx
