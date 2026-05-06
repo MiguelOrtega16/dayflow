@@ -106,11 +106,21 @@ export async function getActivitiesForRange(
     participants: participantsByActivity[a.id] || [],
   }))
 
-  // Merge, deduplicating by id (owner's record takes priority)
+  // Build invitation_id lookup — must survive deduplication when the enriched owned version wins
+  const invitationIdByActivity = new Map<string, string>()
+  for (const a of participantData) {
+    if (a.invitation_id) invitationIdByActivity.set(a.id, a.invitation_id)
+  }
+
+  // Merge, deduplicating by id (enriched owned record wins, but carry over invitation_id)
   const seen = new Set<string>()
   const merged: Activity[] = []
   for (const a of [...enrichedOwned, ...participantData]) {
-    if (!seen.has(a.id)) { seen.add(a.id); merged.push(a) }
+    if (!seen.has(a.id)) {
+      seen.add(a.id)
+      const invId = invitationIdByActivity.get(a.id)
+      merged.push(invId && !a.invitation_id ? { ...a, invitation_id: invId } : a)
+    }
   }
   return merged
 }

@@ -86,9 +86,7 @@ export function DayDetailPanel({
   const dateLabel = isTodayDate ? 'Hoy' : format(date, 'EEEE', { locale: es })
   const dateSubLabel = format(date, "d 'de' MMMM 'de' yyyy", { locale: es })
 
-  // Invited activities belong to a user who may not be in allUsers (no calendar share).
-  // Group them under the current user's section so they don't disappear from the panel.
-  const ownerIdsInView = new Set(allUsers.map(u => u.profile.id))
+  const myProfile = allUsers.find(u => u.isOwn)?.profile
 
   const done = activities.filter(a => a.status === 'done').length
   const total = activities.length
@@ -96,15 +94,40 @@ export function DayDetailPanel({
 
   const overlappingIds = getOverlappingIds(activities)
 
-  const byUser = allUsers.map(({ profile, isOwn }) => ({
-    profile, isOwn,
-    activities: [...activities.filter(a =>
-      a.user_id === profile.id ||
-      // Invited activity whose owner has no shared calendar — show under the participant's own section
-      (isOwn && !!a.invitation_id && !ownerIdsInView.has(a.user_id))
-    )]
-      .sort((a, b) => timeToMin(a.start_time) - timeToMin(b.start_time)),
-  })).filter(u => u.activities.length > 0 || u.isOwn)
+  // Section 1: Own activities sorted by time
+  const myActivities = activities
+    .filter(a => a.user_id === currentUserId)
+    .sort((a, b) => timeToMin(a.start_time) - timeToMin(b.start_time))
+
+  // Section 2: Activities I'm a participant in, grouped by owner
+  const sharedGroupMap = new Map<string, { profile: Profile | null; activities: Activity[] }>()
+  for (const act of activities.filter(a => !!a.invitation_id)) {
+    const ownerId = act.user_id
+    if (!sharedGroupMap.has(ownerId)) {
+      sharedGroupMap.set(ownerId, {
+        profile: allUsers.find(u => u.profile.id === ownerId)?.profile || act.profile || null,
+        activities: [],
+      })
+    }
+    sharedGroupMap.get(ownerId)!.activities.push(act)
+  }
+  const sharedGroups = [...sharedGroupMap.values()].map(g => ({
+    ...g,
+    activities: [...g.activities].sort((a, b) => timeToMin(a.start_time) - timeToMin(b.start_time)),
+  }))
+
+  // Section 3: Other users' solo activities (calendar shared, I'm not participating)
+  const othersGroups = allUsers
+    .filter(u => !u.isOwn)
+    .map(u => ({
+      profile: u.profile,
+      activities: activities
+        .filter(a => a.user_id === u.profile.id && !a.invitation_id)
+        .sort((a, b) => timeToMin(a.start_time) - timeToMin(b.start_time)),
+    }))
+    .filter(g => g.activities.length > 0)
+
+  const showSectionHeaders = sharedGroups.length > 0 || othersGroups.length > 0 || isSharedView
 
   const handleCycleStatus = async (activity: Activity) => {
     const canUpdate = activity.user_id === currentUserId || !!activity.invitation_id
@@ -159,6 +182,300 @@ export function DayDetailPanel({
     } catch {}
   }
 
+  const renderActivityCard = (activity: Activity, borderColor: string) => {
+    const isParticipant = !!activity.invitation_id
+    const statusCfg = STATUS_CONFIG[activity.status]
+    const StatusIcon = STATUS_ICON[activity.status]
+    const isOwnActivity = activity.user_id === currentUserId
+    const canInteract = isOwnActivity || isParticipant
+    const priorityCfg = PRIORITY_CONFIG[activity.priority]
+    const isCommentOpen = openCommentId === activity.id
+    const comments = commentsMap[activity.id] || []
+    const isLoadingComments = commentLoading[activity.id]
+
+    return (
+      <div key={activity.id} className={cn('rounded-xl border border-l-2', statusCfg.bgColor)} style={{ borderLeftColor: borderColor }}>
+
+        {/* ── Time header ── */}
+        {activity.start_time && (
+          <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5 border-b border-border/40">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3 h-3 text-muted-foreground shrink-0" />
+              <span className="text-xs font-semibold">
+                {formatTime(activity.start_time)}
+                {activity.end_time && (
+                  <span className="text-muted-foreground font-normal"> – {formatTime(activity.end_time)}</span>
+                )}
+              </span>
+            </div>
+            {overlappingIds.has(activity.id) && (
+              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 shrink-0">
+                ⚠ Simultáneo
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Tarjeta principal */}
+        <div className="p-3">
+          <div className="flex items-start gap-2">
+            {/* Botón de estado */}
+            <button
+              onClick={() => handleCycleStatus(activity)}
+              disabled={!canInteract}
+              className={cn(
+                'mt-0.5 shrink-0 transition-colors',
+                canInteract ? 'hover:opacity-70 cursor-pointer' : 'cursor-default',
+                statusCfg.textColor
+              )}
+              title={`Estado: ${statusCfg.label}${canInteract ? ' (clic para cambiar)' : ''}`}
+            >
+              <StatusIcon className="w-4 h-4" />
+            </button>
+
+            {/* Contenido */}
+            <div
+              className={cn('flex-1 min-w-0', canInteract && 'cursor-pointer')}
+              onClick={() => canInteract && onEditActivity(activity)}
+            >
+              <div className="flex items-center gap-1">
+                {activity.emoji && <span className="text-sm">{activity.emoji}</span>}
+                <span className={cn(
+                  'text-sm font-medium break-words min-w-0',
+                  activity.status === 'done' && 'line-through opacity-60',
+                  activity.status === 'skipped' && 'opacity-40'
+                )}>
+                  {activity.title}
+                </span>
+              </div>
+
+              {activity.description && (
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                  {activity.description}
+                </p>
+              )}
+
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-semibold', statusCfg.bgColor, statusCfg.textColor)}>
+                  {statusCfg.label}
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-background/60 text-muted-foreground font-medium">
+                  {CATEGORY_CONFIG[activity.category].emoji} {CATEGORY_CONFIG[activity.category].label}
+                </span>
+
+                {activity.goal && (
+                  <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                    <span>{activity.goal.emoji || '🎯'}</span>
+                    <span className="max-w-[80px] truncate">{activity.goal.title}</span>
+                  </span>
+                )}
+
+                {activity.priority !== 'medium' && (
+                  <span className={cn('text-[10px] font-medium', priorityCfg.color)}>
+                    {priorityCfg.icon} {priorityCfg.label}
+                  </span>
+                )}
+
+                {activity.invited_from_activity_id && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-medium">
+                    👥 Invitado
+                  </span>
+                )}
+
+                {activity.recurrence_type !== 'none' && (
+                  <span className="text-[10px] text-primary font-medium">🔄 Recurrente</span>
+                )}
+
+                {activity.tags?.slice(0, 2).map(tag => (
+                  <span key={tag} className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+
+              {activity.status === 'in_progress' && activity.completion_percentage > 0 && (
+                <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden">
+                  <div className="h-full bg-amber-400 rounded-full" style={{ width: `${activity.completion_percentage}%` }} />
+                </div>
+              )}
+
+              {/* Participant avatars */}
+              {activity.participants && activity.participants.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-border/40 flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] text-muted-foreground">👥</span>
+                  {activity.participants.map(p => (
+                    <div key={p.invitee_id} className="flex items-center gap-1">
+                      <div
+                        className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white shrink-0"
+                        style={{ backgroundColor: p.profile.color || '#6366f1' }}
+                        title={p.profile.full_name || p.profile.email || ''}
+                      >
+                        {p.profile.avatar_url
+                          ? <img src={p.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                          : getInitials(p.profile.full_name, p.profile.email).charAt(0)}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[60px]">
+                        {p.profile.full_name?.split(' ')[0] || p.profile.email?.split('@')[0]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Evidence image */}
+              {activity.evidence_image_url && (
+                <div className="mt-2 rounded-lg overflow-hidden border border-border/50">
+                  <img
+                    src={activity.evidence_image_url}
+                    alt="Evidencia"
+                    className="w-full max-h-36 object-cover cursor-pointer"
+                    onClick={() => window.open(activity.evidence_image_url!, '_blank')}
+                    title="Ver evidencia en tamaño completo"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Acciones */}
+            <div className="flex items-center gap-0.5 shrink-0">
+              {activity.is_public && (
+                <button
+                  onClick={() => handleToggleComments(activity.id)}
+                  className={cn(
+                    'flex items-center gap-0.5 px-1 h-6 rounded-md transition-colors text-muted-foreground',
+                    isCommentOpen ? 'bg-primary/10 text-primary' : 'hover:bg-background/60 hover:text-foreground'
+                  )}
+                  title="Comentarios"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  {(commentCounts[activity.id] ?? 0) > 0 && (
+                    <span className="text-[9px] font-bold leading-none">
+                      {commentCounts[activity.id]}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {isOwnActivity && (
+                <div className="relative">
+                  <button
+                    onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === activity.id ? null : activity.id) }}
+                    className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <MoreHorizontal className="w-3.5 h-3.5" />
+                  </button>
+
+                  {openMenuId === activity.id && (
+                    <div
+                      className="absolute right-0 top-7 z-50 w-56 bg-popover border border-border rounded-xl shadow-lg py-1 text-sm"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => { onEditActivity(activity); setOpenMenuId(null) }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-muted transition-colors"
+                      >
+                        ✏️ Editar
+                      </button>
+                      <div className="border-t border-border my-1" />
+                      <button
+                        onClick={() => handleDelete(activity)}
+                        className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors"
+                      >
+                        🗑 Eliminar esta actividad
+                      </button>
+                      {activity.recurrence_type !== 'none' && (
+                        <button
+                          onClick={() => handleDelete(activity, true)}
+                          className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors"
+                        >
+                          🗑 Eliminar todas las recurrentes
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Sección de comentarios */}
+        {isCommentOpen && (
+          <div className="border-t border-border/50 bg-background/40 rounded-b-xl overflow-hidden">
+            {isLoadingComments ? (
+              <div className="px-3 py-2 text-xs text-muted-foreground">Cargando comentarios…</div>
+            ) : (
+              <>
+                {comments.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-muted-foreground italic">
+                    Sin comentarios aún. ¡Sé el primero!
+                  </p>
+                ) : (
+                  <div className="px-3 py-2 space-y-2 max-h-40 overflow-y-auto">
+                    {comments.map(comment => {
+                      const isOwnerOfComment = comment.user_id === currentUserId
+                      const commenterProfile = comment.profile
+                      return (
+                        <div key={comment.id} className="flex items-start gap-2 group">
+                          <div
+                            className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 mt-0.5"
+                            style={{ backgroundColor: commenterProfile?.color || '#6366f1' }}
+                          >
+                            {commenterProfile?.avatar_url
+                              ? <img src={commenterProfile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                              : getInitials(commenterProfile?.full_name, commenterProfile?.email)
+                            }
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-[10px] font-semibold truncate">
+                                {commenterProfile?.full_name || commenterProfile?.email || 'Usuario'}
+                              </span>
+                              <span className="text-[9px] text-muted-foreground shrink-0">
+                                {formatRelativeTime(comment.created_at)}
+                              </span>
+                            </div>
+                            <p className="text-xs text-foreground/80 leading-snug">{comment.content}</p>
+                          </div>
+                          {isOwnerOfComment && (
+                            <button
+                              onClick={() => handleDeleteComment(activity.id, comment.id)}
+                              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all shrink-0"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <div className="px-3 py-2 border-t border-border/30 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newCommentText[activity.id] || ''}
+                    onChange={e => setNewCommentText(prev => ({ ...prev, [activity.id]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(activity.id) } }}
+                    placeholder="Escribe un comentario…"
+                    className="flex-1 text-xs bg-background rounded-lg border border-input px-2 py-1.5 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                  />
+                  <button
+                    onClick={() => handleAddComment(activity.id)}
+                    disabled={!newCommentText[activity.id]?.trim()}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
+                  >
+                    <Send className="w-3 h-3" />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 bg-card/50 flex flex-col overflow-hidden">
       {/* Encabezado */}
@@ -207,341 +524,96 @@ export function DayDetailPanel({
           </div>
         ) : (
           <div className="p-3 space-y-4">
-            {byUser.map(({ profile, isOwn, activities: userActivities }) => (
-              <div key={profile.id}>
-                {isSharedView && (
-                  <div
-                    className="flex items-center gap-2 mb-2 px-1 py-1 rounded-lg"
-                    style={{ backgroundColor: profile.color + '15' }}
-                  >
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                      style={{ backgroundColor: profile.color }}
-                    >
-                      {profile.avatar_url
-                        ? <img src={profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                        : getInitials(profile.full_name, profile.email)
-                      }
-                    </div>
-                    <span className="text-xs font-semibold" style={{ color: profile.color }}>
-                      {isOwn ? 'Tú' : profile.full_name || profile.email}
+
+            {/* ── Section 1: My activities ── */}
+            <div>
+              {showSectionHeaders && myProfile && (
+                <div className="flex items-center gap-2 mb-2 px-1 py-1 rounded-lg"
+                  style={{ backgroundColor: myProfile.color + '15' }}>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                    style={{ backgroundColor: myProfile.color }}>
+                    {myProfile.avatar_url
+                      ? <img src={myProfile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                      : getInitials(myProfile.full_name, myProfile.email)}
+                  </div>
+                  <span className="text-xs font-semibold" style={{ color: myProfile.color }}>Tú</span>
+                  {myActivities.length > 0 && (
+                    <span className="ml-auto text-[10px] text-muted-foreground font-medium">
+                      {myActivities.filter(a => a.status === 'done').length}/{myActivities.length}
                     </span>
-                    {userActivities.length > 0 && (
-                      <span className="ml-auto text-[10px] text-muted-foreground font-medium">
-                        {userActivities.filter(a => a.status === 'done').length}/{userActivities.length}
-                      </span>
+                  )}
+                </div>
+              )}
+              <div className="space-y-1.5">
+                {myActivities.length === 0 ? (
+                  <button onClick={onAddActivity} className="activity-card-ghost w-full text-sm">
+                    <Plus className="w-4 h-4 mr-1" /> Agregar actividad
+                  </button>
+                ) : (
+                  myActivities.map(a => renderActivityCard(a, myProfile?.color || currentUserColor))
+                )}
+              </div>
+            </div>
+
+            {/* ── Section 2: Shared activities (I'm a participant) ── */}
+            {sharedGroups.map((group, gi) => (
+              <div key={group.profile?.id ?? `shared-${gi}`}>
+                <div className="flex items-center gap-2 mb-2 px-1 py-1 rounded-lg"
+                  style={{ backgroundColor: (group.profile?.color || '#6366f1') + '15' }}>
+                  {/* Overlapping avatars: owner + me */}
+                  <div className="flex items-center">
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 ring-2 ring-background"
+                      style={{ backgroundColor: group.profile?.color || '#6366f1' }}>
+                      {group.profile?.avatar_url
+                        ? <img src={group.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                        : getInitials(group.profile?.full_name, group.profile?.email)}
+                    </div>
+                    {myProfile && (
+                      <div className="-ml-2 w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 ring-2 ring-background"
+                        style={{ backgroundColor: myProfile.color || currentUserColor }}>
+                        {myProfile.avatar_url
+                          ? <img src={myProfile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                          : getInitials(myProfile.full_name, myProfile.email).charAt(0)}
+                      </div>
                     )}
                   </div>
-                )}
-
+                  <span className="text-xs font-semibold ml-1" style={{ color: group.profile?.color || '#6366f1' }}>
+                    {group.profile?.full_name?.split(' ')[0] || group.profile?.email || 'Compartida'} & Tú
+                  </span>
+                  <span className="ml-auto text-[10px] text-muted-foreground font-medium">
+                    {group.activities.filter(a => a.status === 'done').length}/{group.activities.length}
+                  </span>
+                </div>
                 <div className="space-y-1.5">
-                  {userActivities.length === 0 && isOwn ? (
-                    <button onClick={onAddActivity} className="activity-card-ghost w-full text-sm">
-                      <Plus className="w-4 h-4 mr-1" /> Agregar actividad
-                    </button>
-                  ) : (
-                    userActivities.map(activity => {
-                      const isParticipant = !!activity.invitation_id
-                      const statusCfg = STATUS_CONFIG[activity.status]
-                      const StatusIcon = STATUS_ICON[activity.status]
-                      const isOwnActivity = activity.user_id === currentUserId
-                      const canInteract = isOwnActivity || isParticipant
-                      const priorityCfg = PRIORITY_CONFIG[activity.priority]
-                      const isCommentOpen = openCommentId === activity.id
-                      const comments = commentsMap[activity.id] || []
-                      const isLoadingComments = commentLoading[activity.id]
-
-                      return (
-                        <div key={activity.id} className={cn('rounded-xl border border-l-2', statusCfg.bgColor)} style={{ borderLeftColor: profile.color }}>
-
-                          {/* ── Time header (shown when activity has a start time) ── */}
-                          {activity.start_time && (
-                            <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5 border-b border-border/40">
-                              <div className="flex items-center gap-1.5">
-                                <Clock className="w-3 h-3 text-muted-foreground shrink-0" />
-                                <span className="text-xs font-semibold">
-                                  {formatTime(activity.start_time)}
-                                  {activity.end_time && (
-                                    <span className="text-muted-foreground font-normal"> – {formatTime(activity.end_time)}</span>
-                                  )}
-                                </span>
-                              </div>
-                              {overlappingIds.has(activity.id) && (
-                                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 shrink-0">
-                                  ⚠ Simultáneo
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Tarjeta principal */}
-                          <div className="p-3">
-                            <div className="flex items-start gap-2">
-                              {/* Botón de estado */}
-                              <button
-                                onClick={() => handleCycleStatus(activity)}
-                                disabled={!canInteract}
-                                className={cn(
-                                  'mt-0.5 shrink-0 transition-colors',
-                                  canInteract ? 'hover:opacity-70 cursor-pointer' : 'cursor-default',
-                                  statusCfg.textColor
-                                )}
-                                title={`Estado: ${statusCfg.label}${canInteract ? ' (clic para cambiar)' : ''}`}
-                              >
-                                <StatusIcon className="w-4 h-4" />
-                              </button>
-
-                              {/* Contenido */}
-                              <div
-                                className={cn('flex-1 min-w-0', canInteract && 'cursor-pointer')}
-                                onClick={() => canInteract && onEditActivity(activity)}
-                              >
-                                <div className="flex items-center gap-1">
-                                  {activity.emoji && <span className="text-sm">{activity.emoji}</span>}
-                                  <span className={cn(
-                                    'text-sm font-medium break-words min-w-0',
-                                    activity.status === 'done' && 'line-through opacity-60',
-                                    activity.status === 'skipped' && 'opacity-40'
-                                  )}>
-                                    {activity.title}
-                                  </span>
-                                </div>
-
-                                {activity.description && (
-                                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                                    {activity.description}
-                                  </p>
-                                )}
-
-                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                  {/* Status badge */}
-                                  <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-semibold', statusCfg.bgColor, statusCfg.textColor)}>
-                                    {statusCfg.label}
-                                  </span>
-                                  {/* Category badge */}
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-background/60 text-muted-foreground font-medium">
-                                    {CATEGORY_CONFIG[activity.category].emoji} {CATEGORY_CONFIG[activity.category].label}
-                                  </span>
-
-                                  {activity.goal && (
-                                    <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                                      <span>{activity.goal.emoji || '🎯'}</span>
-                                      <span className="max-w-[80px] truncate">{activity.goal.title}</span>
-                                    </span>
-                                  )}
-
-                                  {activity.priority !== 'medium' && (
-                                    <span className={cn('text-[10px] font-medium', priorityCfg.color)}>
-                                      {priorityCfg.icon} {priorityCfg.label}
-                                    </span>
-                                  )}
-
-                                  {activity.invited_from_activity_id && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-medium">
-                                      👥 Invitado
-                                    </span>
-                                  )}
-
-                                  {activity.recurrence_type !== 'none' && (
-                                    <span className="text-[10px] text-primary font-medium">🔄 Recurrente</span>
-                                  )}
-
-                                  {activity.tags?.slice(0, 2).map(tag => (
-                                    <span key={tag} className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary font-medium">
-                                      #{tag}
-                                    </span>
-                                  ))}
-                                </div>
-
-                                {activity.status === 'in_progress' && activity.completion_percentage > 0 && (
-                                  <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden">
-                                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${activity.completion_percentage}%` }} />
-                                  </div>
-                                )}
-
-                              {/* Participant avatars — shown when the activity is shared */}
-                              {activity.participants && activity.participants.length > 0 && (
-                                <div className="mt-2 pt-2 border-t border-border/40 flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-[10px] text-muted-foreground">👥</span>
-                                  {activity.participants.map(p => (
-                                    <div key={p.invitee_id} className="flex items-center gap-1">
-                                      <div
-                                        className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white shrink-0"
-                                        style={{ backgroundColor: p.profile.color || '#6366f1' }}
-                                        title={p.profile.full_name || p.profile.email || ''}
-                                      >
-                                        {p.profile.avatar_url
-                                          ? <img src={p.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                                          : getInitials(p.profile.full_name, p.profile.email).charAt(0)}
-                                      </div>
-                                      <span className="text-[10px] text-muted-foreground truncate max-w-[60px]">
-                                        {p.profile.full_name?.split(' ')[0] || p.profile.email?.split('@')[0]}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Evidence image */}
-                              {activity.evidence_image_url && (
-                                <div className="mt-2 rounded-lg overflow-hidden border border-border/50">
-                                  <img
-                                    src={activity.evidence_image_url}
-                                    alt="Evidencia"
-                                    className="w-full max-h-36 object-cover cursor-pointer"
-                                    onClick={() => window.open(activity.evidence_image_url!, '_blank')}
-                                    title="Ver evidencia en tamaño completo"
-                                  />
-                                </div>
-                              )}
-                              </div>
-
-                              {/* Acciones */}
-                              <div className="flex items-center gap-0.5 shrink-0">
-                                {/* Botón de comentarios */}
-                                {activity.is_public && (
-                                  <button
-                                    onClick={() => handleToggleComments(activity.id)}
-                                    className={cn(
-                                      'flex items-center gap-0.5 px-1 h-6 rounded-md transition-colors text-muted-foreground',
-                                      isCommentOpen ? 'bg-primary/10 text-primary' : 'hover:bg-background/60 hover:text-foreground'
-                                    )}
-                                    title="Comentarios"
-                                  >
-                                    <MessageCircle className="w-3.5 h-3.5" />
-                                    {(commentCounts[activity.id] ?? 0) > 0 && (
-                                      <span className="text-[9px] font-bold leading-none">
-                                        {commentCounts[activity.id]}
-                                      </span>
-                                    )}
-                                  </button>
-                                )}
-
-                                {/* Menú (solo propias) */}
-                                {isOwnActivity && (
-                                  <div className="relative">
-                                    <button
-                                      onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === activity.id ? null : activity.id) }}
-                                      className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
-                                    >
-                                      <MoreHorizontal className="w-3.5 h-3.5" />
-                                    </button>
-
-                                    {openMenuId === activity.id && (
-                                      <div
-                                        className="absolute right-0 top-7 z-50 w-56 bg-popover border border-border rounded-xl shadow-lg py-1 text-sm"
-                                        onClick={e => e.stopPropagation()}
-                                      >
-                                        <button
-                                          onClick={() => { onEditActivity(activity); setOpenMenuId(null) }}
-                                          className="w-full text-left px-3 py-1.5 hover:bg-muted transition-colors"
-                                        >
-                                          ✏️ Editar
-                                        </button>
-                                        <div className="border-t border-border my-1" />
-                                        <button
-                                          onClick={() => handleDelete(activity)}
-                                          className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors"
-                                        >
-                                          🗑 Eliminar esta actividad
-                                        </button>
-                                        {activity.recurrence_type !== 'none' && (
-                                          <button
-                                            onClick={() => handleDelete(activity, true)}
-                                            className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors"
-                                          >
-                                            🗑 Eliminar todas las recurrentes
-                                          </button>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Sección de comentarios */}
-                          {isCommentOpen && (
-                            <div className="border-t border-border/50 bg-background/40 rounded-b-xl overflow-hidden">
-                              {isLoadingComments ? (
-                                <div className="px-3 py-2 text-xs text-muted-foreground">Cargando comentarios…</div>
-                              ) : (
-                                <>
-                                  {comments.length === 0 ? (
-                                    <p className="px-3 py-2 text-xs text-muted-foreground italic">
-                                      Sin comentarios aún. ¡Sé el primero!
-                                    </p>
-                                  ) : (
-                                    <div className="px-3 py-2 space-y-2 max-h-40 overflow-y-auto">
-                                      {comments.map(comment => {
-                                        const isOwnerOfComment = comment.user_id === currentUserId
-                                        const commenterProfile = comment.profile
-                                        return (
-                                          <div key={comment.id} className="flex items-start gap-2 group">
-                                            <div
-                                              className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 mt-0.5"
-                                              style={{ backgroundColor: commenterProfile?.color || '#6366f1' }}
-                                            >
-                                              {commenterProfile?.avatar_url
-                                                ? <img src={commenterProfile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                                                : getInitials(commenterProfile?.full_name, commenterProfile?.email)
-                                              }
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                              <div className="flex items-baseline gap-1.5">
-                                                <span className="text-[10px] font-semibold truncate">
-                                                  {commenterProfile?.full_name || commenterProfile?.email || 'Usuario'}
-                                                </span>
-                                                <span className="text-[9px] text-muted-foreground shrink-0">
-                                                  {formatRelativeTime(comment.created_at)}
-                                                </span>
-                                              </div>
-                                              <p className="text-xs text-foreground/80 leading-snug">{comment.content}</p>
-                                            </div>
-                                            {isOwnerOfComment && (
-                                              <button
-                                                onClick={() => handleDeleteComment(activity.id, comment.id)}
-                                                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all shrink-0"
-                                              >
-                                                <Trash2 className="w-3 h-3" />
-                                              </button>
-                                            )}
-                                          </div>
-                                        )
-                                      })}
-                                    </div>
-                                  )}
-
-                                  {/* Input para nuevo comentario */}
-                                  <div className="px-3 py-2 border-t border-border/30 flex items-center gap-2">
-                                    <input
-                                      type="text"
-                                      value={newCommentText[activity.id] || ''}
-                                      onChange={e => setNewCommentText(prev => ({ ...prev, [activity.id]: e.target.value }))}
-                                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(activity.id) } }}
-                                      placeholder="Escribe un comentario…"
-                                      className="flex-1 text-xs bg-background rounded-lg border border-input px-2 py-1.5 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                                    />
-                                    <button
-                                      onClick={() => handleAddComment(activity.id)}
-                                      disabled={!newCommentText[activity.id]?.trim()}
-                                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
-                                    >
-                                      <Send className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })
-                  )}
+                  {group.activities.map(a => renderActivityCard(a, group.profile?.color || '#6366f1'))}
                 </div>
               </div>
             ))}
+
+            {/* ── Section 3: Other users' solo activities ── */}
+            {othersGroups.map(group => (
+              <div key={group.profile.id}>
+                <div className="flex items-center gap-2 mb-2 px-1 py-1 rounded-lg"
+                  style={{ backgroundColor: group.profile.color + '15' }}>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                    style={{ backgroundColor: group.profile.color }}>
+                    {group.profile.avatar_url
+                      ? <img src={group.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                      : getInitials(group.profile.full_name, group.profile.email)}
+                  </div>
+                  <span className="text-xs font-semibold" style={{ color: group.profile.color }}>
+                    {group.profile.full_name || group.profile.email}
+                  </span>
+                  <span className="ml-auto text-[10px] text-muted-foreground font-medium">
+                    {group.activities.filter(a => a.status === 'done').length}/{group.activities.length}
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {group.activities.map(a => renderActivityCard(a, group.profile.color || '#6366f1'))}
+                </div>
+              </div>
+            ))}
+
           </div>
         )}
       </div>
