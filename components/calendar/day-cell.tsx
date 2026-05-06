@@ -250,9 +250,7 @@ export function DayCell({
                   {contextMenu.activity.invitation_id ? 'Mi estado' : 'Cambiar estado'}
                 </p>
                 {(Object.keys(STATUS_CHAR) as ActivityStatus[]).map(s => {
-                  const current = contextMenu.activity.invitation_id
-                    ? (contextMenu.activity.participant_status ?? contextMenu.activity.status)
-                    : contextMenu.activity.status
+                  const current = contextMenu.activity.status
                   return (
                     <button key={s} onClick={() => handleQuickStatus(contextMenu.activity, s)}
                       className={cn(
