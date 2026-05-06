@@ -4,7 +4,7 @@ import { format, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2 } from 'lucide-react'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime, getInitials, formatRelativeTime } from '@/lib/utils'
-import { updateActivityStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
+import { updateActivityStatus, updateParticipantStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile, ActivityComment } from '@/types'
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -66,24 +66,40 @@ export function DayDetailPanel({
   const dateLabel = isTodayDate ? 'Hoy' : format(date, 'EEEE', { locale: es })
   const dateSubLabel = format(date, "d 'de' MMMM 'de' yyyy", { locale: es })
 
-  const done = activities.filter(a => a.status === 'done').length
+  // Invited activities belong to a user who may not be in allUsers (no calendar share).
+  // Group them under the current user's section so they don't disappear from the panel.
+  const ownerIdsInView = new Set(allUsers.map(u => u.profile.id))
+
+  const done = activities.filter(a => {
+    const s = a.invitation_id ? (a.participant_status ?? a.status) : a.status
+    return s === 'done'
+  }).length
   const total = activities.length
   const isSharedView = allUsers.length > 1
 
-  // Sort all activities by time for overlap detection
   const overlappingIds = getOverlappingIds(activities)
 
   const byUser = allUsers.map(({ profile, isOwn }) => ({
     profile, isOwn,
-    activities: [...activities.filter(a => a.user_id === profile.id)]
+    activities: [...activities.filter(a =>
+      a.user_id === profile.id ||
+      // Invited activity whose owner has no shared calendar — show under the participant's own section
+      (isOwn && !!a.invitation_id && !ownerIdsInView.has(a.user_id))
+    )]
       .sort((a, b) => timeToMin(a.start_time) - timeToMin(b.start_time)),
   })).filter(u => u.activities.length > 0 || u.isOwn)
 
   const handleCycleStatus = async (activity: Activity) => {
-    if (activity.user_id !== currentUserId) return
-    const currentIdx = STATUS_CYCLE.indexOf(activity.status)
-    const nextStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length]
-    await updateActivityStatus(activity.id, nextStatus)
+    if (activity.invitation_id) {
+      const currentIdx = STATUS_CYCLE.indexOf(activity.participant_status ?? activity.status)
+      const nextStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length]
+      await updateParticipantStatus(activity.invitation_id, nextStatus, currentUserId)
+    } else {
+      if (activity.user_id !== currentUserId) return
+      const currentIdx = STATUS_CYCLE.indexOf(activity.status)
+      const nextStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length]
+      await updateActivityStatus(activity.id, nextStatus)
+    }
     onActivityUpdated()
   }
 
@@ -212,9 +228,12 @@ export function DayDetailPanel({
                     </button>
                   ) : (
                     userActivities.map(activity => {
-                      const statusCfg = STATUS_CONFIG[activity.status]
-                      const StatusIcon = STATUS_ICON[activity.status]
+                      const isParticipant = !!activity.invitation_id
+                      const effectiveStatus = (isParticipant ? activity.participant_status : undefined) ?? activity.status
+                      const statusCfg = STATUS_CONFIG[effectiveStatus]
+                      const StatusIcon = STATUS_ICON[effectiveStatus]
                       const isOwnActivity = activity.user_id === currentUserId
+                      const canInteract = isOwnActivity || isParticipant
                       const priorityCfg = PRIORITY_CONFIG[activity.priority]
                       const isCommentOpen = openCommentId === activity.id
                       const comments = commentsMap[activity.id] || []
@@ -249,21 +268,21 @@ export function DayDetailPanel({
                               {/* Botón de estado */}
                               <button
                                 onClick={() => handleCycleStatus(activity)}
-                                disabled={!isOwnActivity}
+                                disabled={!canInteract}
                                 className={cn(
                                   'mt-0.5 shrink-0 transition-colors',
-                                  isOwnActivity ? 'hover:opacity-70 cursor-pointer' : 'cursor-default',
+                                  canInteract ? 'hover:opacity-70 cursor-pointer' : 'cursor-default',
                                   statusCfg.textColor
                                 )}
-                                title={`Estado: ${statusCfg.label}${isOwnActivity ? ' (clic para cambiar)' : ''}`}
+                                title={`Estado: ${statusCfg.label}${canInteract ? ' (clic para cambiar)' : ''}`}
                               >
                                 <StatusIcon className="w-4 h-4" />
                               </button>
 
                               {/* Contenido */}
                               <div
-                                className={cn('flex-1 min-w-0', isOwnActivity && 'cursor-pointer')}
-                                onClick={() => isOwnActivity && onEditActivity(activity)}
+                                className={cn('flex-1 min-w-0', canInteract && 'cursor-pointer')}
+                                onClick={() => canInteract && onEditActivity(activity)}
                               >
                                 <div className="flex items-center gap-1">
                                   {activity.emoji && <span className="text-sm">{activity.emoji}</span>}

@@ -98,6 +98,13 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  // Reload notifications when app returns to foreground (mobile Capacitor / tab switch)
+  useEffect(() => {
+    const handleVisibility = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [userId])
+
   const handleMarkRead = async (n: Notification) => {
     if (n.is_read) return
     await markNotificationRead(n.id)
