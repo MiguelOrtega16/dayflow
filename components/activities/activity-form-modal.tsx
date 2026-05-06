@@ -348,8 +348,8 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               {/* Category */}
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Categoría</label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {(Object.keys(CATEGORY_CONFIG) as ActivityCategory[]).map(cat => (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(Object.keys(CATEGORY_CONFIG) as ActivityCategory[]).filter(c => c !== 'habit' && c !== 'note').map(cat => (
                     <button key={cat} type="button" onClick={() => setCategory(cat)}
                       className={cn('flex flex-col items-center gap-1 py-2 px-1 rounded-xl border text-xs font-medium transition-all',
                         category === cat ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40 text-muted-foreground hover:text-foreground'
