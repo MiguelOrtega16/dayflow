@@ -104,7 +104,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     } finally {
       setLoading(false)
     }
-  }, [getDateRange, activeUserIds])
+  }, [getDateRange, activeUserIds, currentUser?.id])
 
   useEffect(() => { fetchActivities() }, [fetchActivities])
 
