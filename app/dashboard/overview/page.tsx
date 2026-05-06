@@ -4,9 +4,8 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { getActivitiesByDate } from '@/lib/api'
+import { getActivitiesForRange, updateActivityStatus } from '@/lib/api'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG } from '@/lib/utils'
-import { updateActivityStatus } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile } from '@/types'
 import { CheckCircle2, Circle, Play, Ban, SkipForward } from 'lucide-react'
 
@@ -36,7 +35,7 @@ export default function OverviewPage() {
     const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     setProfile(p)
     const today = format(new Date(), 'yyyy-MM-dd')
-    const data = await getActivitiesByDate(today, [user.id])
+    const data = await getActivitiesForRange(today, today, [user.id], user.id)
     setActivities(data)
     setLoading(false)
   }

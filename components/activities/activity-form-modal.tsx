@@ -454,7 +454,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                       <p className="text-[11px] opacity-70">
                         {isPublic
                           ? 'Las personas con las que compartes tu calendario pueden verla y comentarla, pero no modificarla'
-                          : 'Solo tú puedes ver esta actividad'}
+                          : 'Solo tú y las personas a las que invitas pueden ver esta actividad'}
                       </p>
                     </div>
                   </div>

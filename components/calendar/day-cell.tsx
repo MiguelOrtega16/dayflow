@@ -315,7 +315,7 @@ function ActivityPill({
       onClick={e => { e.stopPropagation(); if (canInteract) onEditActivity(activity); else onClick() }}
       onContextMenu={e => onContextMenu(e, activity)}
       className={cn(
-        'relative flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs transition-opacity overflow-hidden',
+        'relative flex items-start gap-1 px-1.5 py-0.5 rounded-md text-xs transition-opacity overflow-hidden',
         canInteract ? 'cursor-pointer hover:opacity-80' : 'cursor-default hover:opacity-70',
         STATUS_PILL_BG[activity.status],
         activity.status === 'done'    && 'opacity-60',
@@ -331,7 +331,7 @@ function ActivityPill({
 
       {activity.emoji && <span className="text-[10px] shrink-0 leading-none">{activity.emoji}</span>}
 
-      <span className={cn('font-medium flex-1 truncate leading-tight', activity.status === 'done' && 'line-through')}>
+      <span className={cn('font-medium flex-1 break-words leading-tight', activity.status === 'done' && 'line-through')}>
         {activity.title}
       </span>
 
