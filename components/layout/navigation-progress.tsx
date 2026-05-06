@@ -8,7 +8,7 @@ export function NavigationProgress() {
   const prevPath     = useRef(pathname)
   const [width, setWidth]   = useState(0)
   const [visible, setVisible] = useState(false)
-  const raf = useRef<ReturnType<typeof setTimeout>>()
+  const raf = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     if (pathname === prevPath.current) return
