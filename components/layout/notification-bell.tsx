@@ -10,6 +10,22 @@ import {
 import { cn, formatRelativeTime, getInitials } from '@/lib/utils'
 import type { Notification } from '@/types'
 
+// Shared AudioContext — created once, resumed on first user gesture to satisfy autoplay policy
+let sharedAudioCtx: AudioContext | null = null
+
+function getAudioCtx(): AudioContext | null {
+  if (typeof window === 'undefined') return null
+  if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+    try { sharedAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)() } catch { return null }
+  }
+  return sharedAudioCtx
+}
+
+function resumeAudioCtx() {
+  const ctx = getAudioCtx()
+  if (ctx?.state === 'suspended') ctx.resume().catch(() => {})
+}
+
 const TYPE_ICONS: Record<string, string> = {
   task_completed:          '✅',
   status_update:           '🔄',
@@ -28,8 +44,10 @@ const TYPE_ICONS: Record<string, string> = {
 const ACTION_TYPES = new Set(['activity_invitation', 'calendar_share_invite'])
 
 function playNotificationSound() {
+  const ctx = getAudioCtx()
+  // Skip silently if the context isn't running — happens when no user gesture has occurred yet
+  if (!ctx || ctx.state !== 'running') return
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
     const play = (freq: number, start: number, dur: number) => {
       const osc  = ctx.createOscillator()
       const gain = ctx.createGain()
@@ -42,11 +60,10 @@ function playNotificationSound() {
       osc.start(ctx.currentTime + start)
       osc.stop(ctx.currentTime + start + dur)
     }
-    play(660, 0,    0.18)   // E5  — first note
-    play(880, 0.14, 0.28)   // A5  — second note (higher, overlaps slightly)
-    setTimeout(() => ctx.close(), 600)
+    play(660, 0,    0.18)
+    play(880, 0.14, 0.28)
   } catch {
-    // Browser may block audio without prior user interaction — silently ignore
+    // silently ignore
   }
 }
 
@@ -105,6 +122,16 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
     document.addEventListener('visibilitychange', handleVisibility)
     return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [userId])
+
+  // Resume the shared AudioContext on first user interaction so notification sounds can play
+  useEffect(() => {
+    document.addEventListener('click',      resumeAudioCtx, { passive: true })
+    document.addEventListener('touchstart', resumeAudioCtx, { passive: true })
+    return () => {
+      document.removeEventListener('click',      resumeAudioCtx)
+      document.removeEventListener('touchstart', resumeAudioCtx)
+    }
+  }, [])
 
   const handleMarkRead = async (n: Notification) => {
     if (n.is_read) return

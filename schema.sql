@@ -267,7 +267,15 @@ create policy "Users can insert own activities"
 drop policy if exists "Users can update own activities" on public.activities;
 create policy "Users can update own activities"
   on public.activities for update to authenticated
-  using (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    or exists (
+      select 1 from public.activity_invitations ai
+      where ai.activity_id = activities.id
+        and ai.invitee_id = auth.uid()
+        and ai.status = 'accepted'
+    )
+  );
 
 drop policy if exists "Users can delete own activities" on public.activities;
 create policy "Users can delete own activities"

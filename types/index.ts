@@ -54,8 +54,7 @@ export interface Goal {
 export interface Activity {
   id: string
   user_id: string
-  // Set when the viewing user is a participant (not the owner)
-  participant_status?: ActivityStatus
+  // Set when the viewing user is an accepted invitee (not the owner)
   invitation_id?: string
   title: string
   description: string | null
@@ -79,10 +78,9 @@ export interface Activity {
   completion_percentage: number
   created_at: string
   updated_at: string
-  // Accepted participants and their per-user statuses (populated for owned activities)
+  // Accepted participants (populated for owned activities)
   participants?: Array<{
     invitee_id: string
-    participant_status: ActivityStatus
     profile: Pick<Profile, 'id' | 'full_name' | 'email' | 'color' | 'avatar_url'>
   }>
   // Joined

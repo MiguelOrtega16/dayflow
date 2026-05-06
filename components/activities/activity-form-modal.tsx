@@ -7,7 +7,7 @@ import { cn, CATEGORY_CONFIG, STATUS_CONFIG } from '@/lib/utils'
 import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
   getActivityTitleSuggestions, getActivityInvitations, inviteToActivity,
-  cancelActivityInvitation, searchUsers, updateParticipantStatus,
+  cancelActivityInvitation, searchUsers,
 } from '@/lib/api'
 import type {
   Activity, ActivityStatus, ActivityCategory, RecurrenceType,
@@ -136,12 +136,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     setSaving(true)
     setSaveError(null)
     try {
-      // Participant (invited user): can only update their own status — they don't own the record
-      if (isEditing && activity?.invitation_id) {
-        await updateParticipantStatus(activity.invitation_id, status, currentUser.id)
-        onSaved()
-        return
-      }
 
       const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean)
 
@@ -228,8 +222,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   }
 
 
-  const isParticipant = isEditing && !!activity?.invitation_id
-  const DAY_LABELS    = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
+  const DAY_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
 
   const INV_STATUS_LABEL: Record<string, string> = { pending: 'Pendiente', accepted: 'Aceptó', declined: 'Declinó' }
   const INV_STATUS_COLOR: Record<string, string> = {
@@ -266,7 +259,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               )}
             </button>
             <h2 className="text-lg font-semibold">
-              {isEditing && activity?.invitation_id ? 'Actividad compartida' : isEditing ? 'Editar actividad' : 'Nueva actividad'}
+              {isEditing ? 'Editar actividad' : 'Nueva actividad'}
             </h2>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors">
@@ -288,12 +281,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
-          {/* ── Participant notice ── */}
-          {isEditing && activity?.invitation_id && (
-            <div className="rounded-xl bg-primary/10 border border-primary/20 px-3 py-2.5 text-xs text-primary">
-              Eres participante de esta actividad. Solo puedes actualizar tu estado personal.
-            </div>
-          )}
 
           {/* ── BÁSICO ── */}
           {activeTab === 'basic' && (
@@ -304,7 +291,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                   onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                   placeholder="¿Qué quieres lograr?" required autoFocus
-                  readOnly={isParticipant}
                   className="flex-1 text-base font-medium bg-transparent border-none outline-none placeholder:text-muted-foreground/60 min-w-0 disabled:opacity-60"
                 />
                 <div className="relative shrink-0">
@@ -337,9 +323,8 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 )}
               </div>
 
-              <textarea value={description} onChange={e => !isParticipant && setDescription(e.target.value)}
+              <textarea value={description} onChange={e => setDescription(e.target.value)}
                 placeholder="Añade una descripción (opcional)" rows={2}
-                readOnly={isParticipant}
                 className="w-full text-sm bg-muted/40 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-ring resize-none placeholder:text-muted-foreground/50"
               />
 
@@ -619,7 +604,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
             <button type="button" disabled={saving || !title.trim()}
               onClick={e => handleSubmit(e)}
               className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              {saving ? 'Guardando...' : isParticipant ? 'Actualizar mi estado' : pendingInvitees.length > 0 ? `${isEditing ? 'Guardar' : 'Crear'} e invitar (${pendingInvitees.length})` : isEditing ? 'Guardar cambios' : recurrenceType !== 'none' ? 'Crear recurrente' : 'Crear actividad'}
+              {saving ? 'Guardando...' : pendingInvitees.length > 0 ? `${isEditing ? 'Guardar' : 'Crear'} e invitar (${pendingInvitees.length})` : isEditing ? 'Guardar cambios' : recurrenceType !== 'none' ? 'Crear recurrente' : 'Crear actividad'}
             </button>
           </div>
         </div>

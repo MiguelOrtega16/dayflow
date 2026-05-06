@@ -55,7 +55,7 @@ export async function getActivitiesForRange(
     const ownedIds = ownedData.map((a: any) => a.id)
     const { data: invites } = await supabase
       .from('activity_invitations')
-      .select('activity_id, invitee_id, participant_status, profile:profiles!activity_invitations_invitee_id_fkey(id, full_name, email, color, avatar_url)')
+      .select('activity_id, invitee_id, profile:profiles!activity_invitations_invitee_id_fkey(id, full_name, email, color, avatar_url)')
       .in('activity_id', ownedIds)
       .eq('status', 'accepted')
 
@@ -64,7 +64,6 @@ export async function getActivitiesForRange(
         if (!participantsByActivity[inv.activity_id]) participantsByActivity[inv.activity_id] = []
         participantsByActivity[inv.activity_id]!.push({
           invitee_id: inv.invitee_id,
-          participant_status: (inv.participant_status || 'todo') as ActivityStatus,
           profile: inv.profile,
         })
       }
@@ -76,7 +75,7 @@ export async function getActivitiesForRange(
   if (currentUserId) {
     const { data: invitations } = await supabase
       .from('activity_invitations')
-      .select('id, activity_id, participant_status')
+      .select('id, activity_id')
       .eq('invitee_id', currentUserId)
       .eq('status', 'accepted')
 
@@ -94,7 +93,6 @@ export async function getActivitiesForRange(
           const inv = invitations.find(i => i.activity_id === act.id)!
           return {
             ...act,
-            participant_status: (inv.participant_status || 'todo') as Activity['participant_status'],
             invitation_id: inv.id,
           }
         })

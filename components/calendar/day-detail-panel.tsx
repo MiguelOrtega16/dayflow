@@ -4,7 +4,7 @@ import { format, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2 } from 'lucide-react'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime, getInitials, formatRelativeTime } from '@/lib/utils'
-import { updateActivityStatus, updateParticipantStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
+import { updateActivityStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile, ActivityComment } from '@/types'
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -70,10 +70,7 @@ export function DayDetailPanel({
   // Group them under the current user's section so they don't disappear from the panel.
   const ownerIdsInView = new Set(allUsers.map(u => u.profile.id))
 
-  const done = activities.filter(a => {
-    const s = a.invitation_id ? (a.participant_status ?? a.status) : a.status
-    return s === 'done'
-  }).length
+  const done = activities.filter(a => a.status === 'done').length
   const total = activities.length
   const isSharedView = allUsers.length > 1
 
@@ -90,16 +87,11 @@ export function DayDetailPanel({
   })).filter(u => u.activities.length > 0 || u.isOwn)
 
   const handleCycleStatus = async (activity: Activity) => {
-    if (activity.invitation_id) {
-      const currentIdx = STATUS_CYCLE.indexOf(activity.participant_status ?? activity.status)
-      const nextStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length]
-      await updateParticipantStatus(activity.invitation_id, nextStatus, currentUserId)
-    } else {
-      if (activity.user_id !== currentUserId) return
-      const currentIdx = STATUS_CYCLE.indexOf(activity.status)
-      const nextStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length]
-      await updateActivityStatus(activity.id, nextStatus)
-    }
+    const canUpdate = activity.user_id === currentUserId || !!activity.invitation_id
+    if (!canUpdate) return
+    const currentIdx = STATUS_CYCLE.indexOf(activity.status)
+    const nextStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length]
+    await updateActivityStatus(activity.id, nextStatus)
     onActivityUpdated()
   }
 
@@ -229,9 +221,8 @@ export function DayDetailPanel({
                   ) : (
                     userActivities.map(activity => {
                       const isParticipant = !!activity.invitation_id
-                      const effectiveStatus = (isParticipant ? activity.participant_status : undefined) ?? activity.status
-                      const statusCfg = STATUS_CONFIG[effectiveStatus]
-                      const StatusIcon = STATUS_ICON[effectiveStatus]
+                      const statusCfg = STATUS_CONFIG[activity.status]
+                      const StatusIcon = STATUS_ICON[activity.status]
                       const isOwnActivity = activity.user_id === currentUserId
                       const canInteract = isOwnActivity || isParticipant
                       const priorityCfg = PRIORITY_CONFIG[activity.priority]
@@ -341,58 +332,32 @@ export function DayDetailPanel({
                                   ))}
                                 </div>
 
-                                {effectiveStatus === 'in_progress' && activity.completion_percentage > 0 && (
+                                {activity.status === 'in_progress' && activity.completion_percentage > 0 && (
                                   <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden">
                                     <div className="h-full bg-amber-400 rounded-full" style={{ width: `${activity.completion_percentage}%` }} />
                                   </div>
                                 )}
 
-                              {/* Participant status rows — shown to the owner */}
-                              {!isParticipant && activity.participants && activity.participants.length > 0 && (
-                                <div className="mt-2 pt-2 border-t border-border/40 space-y-1">
-                                  {activity.participants.map(p => {
-                                    const pCfg = STATUS_CONFIG[p.participant_status]
-                                    return (
-                                      <div key={p.invitee_id} className="flex items-center gap-1.5">
-                                        <div
-                                          className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white shrink-0"
-                                          style={{ backgroundColor: p.profile.color || '#6366f1' }}
-                                        >
-                                          {p.profile.avatar_url
-                                            ? <img src={p.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                                            : getInitials(p.profile.full_name, p.profile.email).charAt(0)}
-                                        </div>
-                                        <span className="text-[11px] text-muted-foreground flex-1 truncate">
-                                          {p.profile.full_name || p.profile.email}
-                                        </span>
-                                        <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0', pCfg.bgColor, pCfg.textColor)}>
-                                          {pCfg.label}
-                                        </span>
+                              {/* Participant avatars — shown when the activity is shared */}
+                              {activity.participants && activity.participants.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-border/40 flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[10px] text-muted-foreground">👥</span>
+                                  {activity.participants.map(p => (
+                                    <div key={p.invitee_id} className="flex items-center gap-1">
+                                      <div
+                                        className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white shrink-0"
+                                        style={{ backgroundColor: p.profile.color || '#6366f1' }}
+                                        title={p.profile.full_name || p.profile.email || ''}
+                                      >
+                                        {p.profile.avatar_url
+                                          ? <img src={p.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                                          : getInitials(p.profile.full_name, p.profile.email).charAt(0)}
                                       </div>
-                                    )
-                                  })}
-                                </div>
-                              )}
-
-                              {/* Owner status row — shown to participants */}
-                              {isParticipant && activity.profile && (
-                                <div className="mt-2 pt-2 border-t border-border/40">
-                                  <div className="flex items-center gap-1.5">
-                                    <div
-                                      className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white shrink-0"
-                                      style={{ backgroundColor: activity.profile.color || '#6366f1' }}
-                                    >
-                                      {activity.profile.avatar_url
-                                        ? <img src={activity.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                                        : getInitials(activity.profile.full_name, activity.profile.email).charAt(0)}
+                                      <span className="text-[10px] text-muted-foreground truncate max-w-[60px]">
+                                        {p.profile.full_name?.split(' ')[0] || p.profile.email?.split('@')[0]}
+                                      </span>
                                     </div>
-                                    <span className="text-[11px] text-muted-foreground flex-1 truncate">
-                                      {activity.profile.full_name || activity.profile.email} (organizador)
-                                    </span>
-                                    <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0', STATUS_CONFIG[activity.status].bgColor, STATUS_CONFIG[activity.status].textColor)}>
-                                      {STATUS_CONFIG[activity.status].label}
-                                    </span>
-                                  </div>
+                                  ))}
                                 </div>
                               )}
 

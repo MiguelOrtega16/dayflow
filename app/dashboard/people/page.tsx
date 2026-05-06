@@ -19,6 +19,23 @@ export default function PeoplePage() {
 
   useEffect(() => { loadData() }, [])
 
+  // Real-time: reload when any calendar share involving this user changes
+  useEffect(() => {
+    if (!currentUser) return
+    const channel = supabase
+      .channel(`people-${currentUser.id}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'shared_calendars',
+        filter: `owner_id=eq.${currentUser.id}`,
+      }, () => loadData())
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'shared_calendars',
+        filter: `shared_with_id=eq.${currentUser.id}`,
+      }, () => loadData())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [currentUser?.id])
+
   useEffect(() => {
     if (searchQuery.length < 2) { setSearchResults([]); return }
     const t = setTimeout(async () => {

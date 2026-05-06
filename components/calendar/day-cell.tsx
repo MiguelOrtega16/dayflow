@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Plus, X } from 'lucide-react'
 import { cn, STATUS_CONFIG, getInitials, formatTime } from '@/lib/utils'
-import { deleteActivity, updateActivityStatus, updateParticipantStatus } from '@/lib/api'
+import { deleteActivity, updateActivityStatus } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile } from '@/types'
 
 interface DayCellProps {
@@ -37,13 +37,6 @@ const STATUS_PILL_BG: Record<ActivityStatus, string> = {
   skipped:     'bg-gray-100   dark:bg-gray-600/20',
 }
 
-const STATUS_DOT: Record<ActivityStatus, string> = {
-  todo:        'bg-slate-400',
-  in_progress: 'bg-amber-400',
-  done:        'bg-emerald-500',
-  blocked:     'bg-red-500',
-  skipped:     'bg-gray-400',
-}
 
 const MAX_VISIBLE = 5
 
@@ -67,7 +60,7 @@ export function DayCell({
   const isWeekend    = date.getDay() === 0 || date.getDay() === 6
   const isRightEdge  = date.getDay() >= 5
 
-  const done     = activities.filter(a => (a.invitation_id ? (a.participant_status ?? a.status) : a.status) === 'done').length
+  const done     = activities.filter(a => a.status === 'done').length
   const total    = activities.length
   const progress = total > 0 ? (done / total) * 100 : 0
 
@@ -86,11 +79,7 @@ export function DayCell({
 
   const handleQuickStatus = async (activity: Activity, status: ActivityStatus) => {
     closeContextMenu()
-    if (activity.invitation_id) {
-      await updateParticipantStatus(activity.invitation_id, status, currentUserId)
-    } else {
-      await updateActivityStatus(activity.id, status, currentUserId)
-    }
+    await updateActivityStatus(activity.id, status, currentUserId)
     onActivityUpdated()
   }
 
@@ -318,15 +307,10 @@ function ActivityPill({
   onEditActivity: (a: Activity) => void
   onContextMenu: (e: React.MouseEvent, a: Activity) => void
 }) {
-  const isParticipant   = !!activity.invitation_id
-  // Participants see their own status; owners see the activity's global status
-  const effectiveStatus = isParticipant ? (activity.participant_status ?? activity.status) : activity.status
-  const statusCfg       = STATUS_CONFIG[effectiveStatus]
-  const userProfile     = allUsers.find(u => u.profile.id === activity.user_id)?.profile
-  const userColor       = userProfile?.color || '#6366f1'
-  const isOwn           = activity.user_id === currentUserId
-  const canInteract     = isOwn || isParticipant
-  const hasParticipants = !isParticipant && (activity.participants?.length ?? 0) > 0
+  const statusCfg   = STATUS_CONFIG[activity.status]
+  const userProfile = allUsers.find(u => u.profile.id === activity.user_id)?.profile
+  const userColor   = userProfile?.color || '#6366f1'
+  const canInteract = activity.user_id === currentUserId || !!activity.invitation_id
 
   return (
     <div
@@ -335,21 +319,21 @@ function ActivityPill({
       className={cn(
         'relative flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs transition-opacity overflow-hidden',
         canInteract ? 'cursor-pointer hover:opacity-80' : 'cursor-default hover:opacity-70',
-        STATUS_PILL_BG[effectiveStatus],
-        effectiveStatus === 'done'    && 'opacity-60',
-        effectiveStatus === 'skipped' && 'opacity-40',
+        STATUS_PILL_BG[activity.status],
+        activity.status === 'done'    && 'opacity-60',
+        activity.status === 'skipped' && 'opacity-40',
         deleting && 'opacity-30 pointer-events-none',
       )}
       style={{ borderLeft: `2.5px solid ${userColor}` }}
       title={`${userProfile ? (userProfile.full_name || userProfile.email) + ': ' : ''}${activity.title} · ${statusCfg.label}${activity.start_time ? ' · ' + formatTime(activity.start_time) : ''}`}
     >
       <span className={cn('text-[9px] font-bold shrink-0 leading-none', statusCfg.textColor)}>
-        {STATUS_CHAR[effectiveStatus]}
+        {STATUS_CHAR[activity.status]}
       </span>
 
       {activity.emoji && <span className="text-[10px] shrink-0 leading-none">{activity.emoji}</span>}
 
-      <span className={cn('font-medium flex-1 truncate leading-tight', effectiveStatus === 'done' && 'line-through')}>
+      <span className={cn('font-medium flex-1 truncate leading-tight', activity.status === 'done' && 'line-through')}>
         {activity.title}
       </span>
 
@@ -359,21 +343,22 @@ function ActivityPill({
         </span>
       )}
 
-      {/* Participant status dots — shown on owner's pill, one dot per accepted invitee */}
-      {hasParticipants && (
+      {/* Participant avatar dots — profile color circles, one per accepted invitee */}
+      {(activity.participants?.length ?? 0) > 0 && (
         <span className="flex items-center gap-[2px] shrink-0">
           {activity.participants!.slice(0, 4).map(p => (
             <span
               key={p.invitee_id}
-              className={cn('w-1.5 h-1.5 rounded-full', STATUS_DOT[p.participant_status])}
-              title={`${p.profile.full_name || p.profile.email}: ${STATUS_CONFIG[p.participant_status].label}`}
+              className="w-2 h-2 rounded-full border border-background/50 shrink-0"
+              style={{ backgroundColor: p.profile.color || '#6366f1' }}
+              title={p.profile.full_name || p.profile.email || ''}
             />
           ))}
         </span>
       )}
 
-      {isParticipant && (
-        <span className="text-[8px] shrink-0 opacity-70" title="Eres participante">👥</span>
+      {activity.invitation_id && (
+        <span className="text-[8px] shrink-0 opacity-60" title="Eres participante">👥</span>
       )}
 
       {expanded && activity.goal && (
@@ -391,8 +376,7 @@ function ActivityPill({
         </span>
       )}
 
-      {/* In-progress completion bar */}
-      {effectiveStatus === 'in_progress' && activity.completion_percentage > 0 && (
+      {activity.status === 'in_progress' && activity.completion_percentage > 0 && (
         <div className="absolute bottom-0 left-0 h-[2px] bg-amber-400 rounded-sm"
           style={{ width: `${activity.completion_percentage}%` }} />
       )}
