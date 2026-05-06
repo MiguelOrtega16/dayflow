@@ -419,7 +419,7 @@ export async function markAllNotificationsRead(userId: string) {
     .eq('recipient_id', userId)
     .eq('is_read', false)
 
-  if (error) throw error
+  if (error) console.error('[markAllNotificationsRead]', error)
 }
 
 // ─── Activity Title Suggestions ───────────────────────────────────────────────

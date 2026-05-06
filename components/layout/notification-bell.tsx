@@ -106,7 +106,11 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
   }
 
   const handleMarkAllRead = async () => {
-    await markAllNotificationsRead(userId)
+    try {
+      await markAllNotificationsRead(userId)
+    } catch (err) {
+      console.error('[NotificationBell] markAllRead failed:', err)
+    }
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     setUnreadCount(0)
   }
