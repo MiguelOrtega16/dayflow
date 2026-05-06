@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/components/layout/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
+import { NavigationProgress } from '@/components/layout/navigation-progress'
 
 export const metadata: Metadata = {
   title: 'DayFlow — Metas y actividades diarias compartidas',
@@ -36,6 +37,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <NavigationProgress />
           {children}
           <Toaster />
         </ThemeProvider>

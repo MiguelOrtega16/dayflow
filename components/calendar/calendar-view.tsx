@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, subMonths, addWeeks, subWeeks, addDays, subDays,
@@ -203,6 +203,23 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     setModalInitialTime({ start, end })
     setShowAddModal(true)
   }
+
+  // ── Swipe gesture handling (mobile) ──────────────────────────────────────────
+  const touchStartX = useRef(0)
+  const touchStartY = useRef(0)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const dx = touchStartX.current - e.changedTouches[0].clientX
+    const dy = Math.abs(touchStartY.current - e.changedTouches[0].clientY)
+    // Only count horizontal swipes — ignore vertical scrolls
+    if (Math.abs(dx) < 50 || dy > 80) return
+    navigate(dx > 0 ? 'next' : 'prev')
+  }
   const closeModal = () => { setShowAddModal(false); setEditingActivity(null); setModalInitialTime(null) }
 
   // ── Shared day-detail panel props ────────────────────────────────────────────
@@ -275,8 +292,11 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           )}
         />
 
-        {/* Compact grid — height scales with number of week rows so 5/6-row months don't overflow */}
-        <div className="shrink-0 border-b border-border" style={{
+        {/* Compact grid — swipeable on mobile */}
+        <div
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className="shrink-0 border-b border-border" style={{
           height: (() => {
             if (mode !== 'month') return '25dvh'
             const rows = eachDayOfInterval({
@@ -346,7 +366,10 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
         {/* Desktop day view — time grid */}
         {mode === 'day' && (
-          <div className="flex-1 overflow-hidden">
+          <div
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            className="flex-1 overflow-hidden">
             <TimeGridView
               days={[selectedDate]}
               activities={activities}
@@ -360,7 +383,10 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
         )}
 
         {/* Calendar grid — month / week */}
-        {mode !== 'day' && <div className="flex-1 overflow-auto p-1.5 sm:p-4">
+        {mode !== 'day' && <div
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className="flex-1 overflow-auto p-1.5 sm:p-4">
           {/* Week day headers */}
           <div className={cn('grid mb-2', isMobileWeek ? 'grid-cols-3' : 'grid-cols-7')}>
             {weekDayHeaders.map((day, i) => (
