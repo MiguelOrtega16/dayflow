@@ -6,7 +6,7 @@ import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForwa
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime, getInitials, formatRelativeTime } from '@/lib/utils'
 import { updateActivityStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile, ActivityComment } from '@/types'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 interface DayDetailPanelProps {
@@ -67,17 +67,19 @@ export function DayDetailPanel({
   useEffect(() => {
     const ids = activities.map(a => a.id)
     if (ids.length === 0) { setCommentCounts({}); return }
-    supabase
-      .from('activity_comments')
-      .select('activity_id')
-      .in('activity_id', ids)
-      .then(({ data }) => {
+    const load = async () => {
+      try {
+        const { data } = await supabase
+          .from('activity_comments')
+          .select('activity_id')
+          .in('activity_id', ids)
         if (!data) return
         const counts: Record<string, number> = {}
         for (const row of data) counts[row.activity_id] = (counts[row.activity_id] || 0) + 1
         setCommentCounts(counts)
-      })
-      .catch(() => {})
+      } catch {}
+    }
+    load()
   }, [activities.map(a => a.id).join(',')])
 
   const isTodayDate = isToday(date)
