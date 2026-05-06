@@ -148,6 +148,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
     }
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     setUnreadCount(0)
+    setOpen(false)
   }
 
   const handleActivityInvitation = async (n: Notification, accept: boolean) => {

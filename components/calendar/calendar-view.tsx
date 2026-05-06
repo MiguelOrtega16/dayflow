@@ -41,6 +41,8 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   const [activeUserIds, setActiveUserIds] = useState<string[]>([])
   // Detected client-side after hydration; starts false (SSR-safe)
   const [isMobile, setIsMobile] = useState(false)
+  // Live copy of shared calendars — the server prop is static; this refreshes in real-time
+  const [liveSharedCalendars, setLiveSharedCalendars] = useState(sharedCalendars)
   const supabase = createClient()
 
   useEffect(() => {
@@ -51,10 +53,32 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Build list of all visible users
+  // Refresh shared calendars from the DB (called on realtime events & dayflow:refresh)
+  const refreshSharedCalendars = useCallback(async () => {
+    if (!currentUser) return
+    const { data } = await supabase
+      .from('shared_calendars')
+      .select('*, owner:profiles!shared_calendars_owner_id_fkey(*), shared_with:profiles!shared_calendars_shared_with_id_fkey(*)')
+      .or(`owner_id.eq.${currentUser.id},shared_with_id.eq.${currentUser.id}`)
+      .eq('status', 'accepted')
+    if (data) setLiveSharedCalendars(data)
+  }, [currentUser?.id])
+
+  useEffect(() => {
+    if (!currentUser) return
+    const channel = supabase
+      .channel(`shared-cals-${currentUser.id}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'shared_calendars',
+      }, () => refreshSharedCalendars())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [currentUser?.id, refreshSharedCalendars])
+
+  // Build list of all visible users from the live snapshot
   const allUsers: { profile: Profile; isOwn: boolean }[] = []
   if (currentUser) allUsers.push({ profile: currentUser, isOwn: true })
-  sharedCalendars.forEach(sc => {
+  liveSharedCalendars.forEach((sc: any) => {
     if (sc.owner_id === currentUser?.id && sc.shared_with) {
       allUsers.push({ profile: sc.shared_with, isOwn: false })
     } else if (sc.shared_with_id === currentUser?.id && sc.owner) {
@@ -123,10 +147,10 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   // Listen for global signals dispatched after accepting an activity invitation
   // from the notification bell (which has no direct access to this component).
   useEffect(() => {
-    const onRefresh = () => fetchActivities()
+    const onRefresh = () => { fetchActivities(); refreshSharedCalendars() }
     window.addEventListener('dayflow:refresh', onRefresh)
     return () => window.removeEventListener('dayflow:refresh', onRefresh)
-  }, [fetchActivities])
+  }, [fetchActivities, refreshSharedCalendars])
 
   useEffect(() => {
     const onNavigate = (e: Event) => {

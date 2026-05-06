@@ -29,7 +29,8 @@ export default function StatsPage() {
     else if (range === 'month') startDate = format(subDays(today, 29), 'yyyy-MM-dd')
     else startDate = format(subDays(today, 89), 'yyyy-MM-dd')
 
-    const { data } = await supabase
+    // 1. Own activities
+    const { data: ownData } = await supabase
       .from('activities')
       .select('*')
       .eq('user_id', user.id)
@@ -37,7 +38,33 @@ export default function StatsPage() {
       .lte('date', endDate)
       .order('date', { ascending: true })
 
-    setActivities(data || [])
+    // 2. Activities the user was invited to and accepted
+    const { data: invitations } = await supabase
+      .from('activity_invitations')
+      .select('activity_id')
+      .eq('invitee_id', user.id)
+      .eq('status', 'accepted')
+
+    let sharedData: Activity[] = []
+    if (invitations && invitations.length > 0) {
+      const ids = invitations.map(i => i.activity_id)
+      const { data: invited } = await supabase
+        .from('activities')
+        .select('*')
+        .in('id', ids)
+        .gte('date', startDate)
+        .lte('date', endDate)
+      sharedData = (invited || []) as Activity[]
+    }
+
+    // Merge, deduplicate
+    const seen = new Set<string>()
+    const merged: Activity[] = []
+    for (const a of [...(ownData || []), ...sharedData]) {
+      if (!seen.has(a.id)) { seen.add(a.id); merged.push(a as Activity) }
+    }
+
+    setActivities(merged)
     setLoading(false)
   }
 
@@ -76,7 +103,7 @@ export default function StatsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Tus estadísticas</h1>
-          <p className="text-muted-foreground">Rastrea tu productividad a lo largo del tiempo</p>
+          <p className="text-muted-foreground">Incluye tus actividades propias y las compartidas contigo</p>
         </div>
 
         <div className="flex items-center bg-muted rounded-xl p-1">

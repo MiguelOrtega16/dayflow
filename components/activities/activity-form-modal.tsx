@@ -7,7 +7,7 @@ import { cn, CATEGORY_CONFIG, STATUS_CONFIG } from '@/lib/utils'
 import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
   getActivityTitleSuggestions, getActivityInvitations, inviteToActivity,
-  cancelActivityInvitation, searchUsers,
+  cancelActivityInvitation, searchUsers, getSharedCalendarUsers,
 } from '@/lib/api'
 import type {
   Activity, ActivityStatus, ActivityCategory, RecurrenceType,
@@ -93,11 +93,25 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [pendingInvitees, setPendingInvitees] = useState<Profile[]>([])
   const [inviteSearch, setInviteSearch]       = useState('')
   const [inviteResults, setInviteResults]     = useState<Profile[]>([])
+  // IDs of users with whom the current user has an accepted calendar share
+  const [sharedUserIds, setSharedUserIds]     = useState<string[] | null>(null)
 
   useEffect(() => {
     if (currentUser) getGoals(currentUser.id).then(setGoals).catch(() => {})
     if (isEditing && activity?.id) getActivityInvitations(activity.id).then(setInvitations).catch(() => {})
   }, [currentUser?.id, activity?.id])
+
+  useEffect(() => {
+    if (!currentUser) return
+    getSharedCalendarUsers(currentUser.id)
+      .then(shares => {
+        const ids = (shares || []).map((sc: any) =>
+          sc.owner_id === currentUser.id ? sc.shared_with_id : sc.owner_id
+        ).filter(Boolean)
+        setSharedUserIds(ids)
+      })
+      .catch(() => setSharedUserIds([]))
+  }, [currentUser?.id])
 
   // Title suggestions
   useEffect(() => {
@@ -117,14 +131,16 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     ...pendingInvitees.map(u => u.id),
   ])
   useEffect(() => {
-    if (!currentUser || inviteSearch.length < 2) { setInviteResults([]); return }
+    if (!currentUser || inviteSearch.length < 2 || !sharedUserIds?.length) { setInviteResults([]); return }
     const t = setTimeout(() => {
       searchUsers(inviteSearch, currentUser.id)
-        .then(r => setInviteResults((r || []).filter(u => !alreadyInvitedIds.has(u.id))))
+        .then(r => setInviteResults(
+          (r || []).filter(u => sharedUserIds.includes(u.id) && !alreadyInvitedIds.has(u.id))
+        ))
         .catch(() => {})
     }, 300)
     return () => clearTimeout(t)
-  }, [inviteSearch, currentUser?.id, invitations.length, pendingInvitees.length])
+  }, [inviteSearch, currentUser?.id, invitations.length, pendingInvitees.length, sharedUserIds])
 
   const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
     e?.preventDefault()
@@ -419,26 +435,56 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 </div>
               )}
 
-              {/* ── Participantes + visibility ── */}
+              {/* ── Visibility toggle ── */}
               <div className="border-t border-border/50 pt-4">
-                <div className="flex items-center justify-between mb-3">
+                <button
+                  type="button"
+                  onClick={() => setIsPublic(!isPublic)}
+                  className={cn(
+                    'w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors',
+                    isPublic
+                      ? 'border-primary/40 bg-primary/5 text-primary'
+                      : 'border-border bg-muted/30 text-muted-foreground'
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{isPublic ? '👁' : '🔒'}</span>
+                    <div className="text-left">
+                      <p className="text-sm font-medium">{isPublic ? 'Visible' : 'Privado'}</p>
+                      <p className="text-[11px] opacity-70">
+                        {isPublic
+                          ? 'Las personas con las que compartes tu calendario pueden verla y comentarla, pero no modificarla'
+                          : 'Solo tú puedes ver esta actividad'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={cn('w-9 h-5 rounded-full transition-colors relative shrink-0', isPublic ? 'bg-primary' : 'bg-muted-foreground/30')}>
+                    <div className={cn('absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform', isPublic ? 'translate-x-4' : 'translate-x-0.5')} />
+                  </div>
+                </button>
+              </div>
+
+              {/* ── Invitar personas ── */}
+              <div className="border-t border-border/50 pt-4">
+                <div className="mb-2">
                   <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                     <UserPlus className="w-3 h-3" /> Invitar personas
                   </span>
-                  {/* Visibility toggle lives here — semantically tied to sharing */}
-                  <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
-                    <div onClick={() => setIsPublic(!isPublic)}
-                      className={cn('w-8 h-4 rounded-full transition-colors relative', isPublic ? 'bg-primary' : 'bg-muted')}
-                    >
-                      <div className={cn('absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform', isPublic ? 'translate-x-4' : 'translate-x-0.5')} />
-                    </div>
-                    <span className="text-xs text-muted-foreground">{isPublic ? 'Visible' : 'Privado'}</span>
-                  </label>
+                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                    Los invitados pueden ver <strong>y modificar</strong> esta actividad
+                  </p>
                 </div>
-                <input type="text" value={inviteSearch} onChange={e => setInviteSearch(e.target.value)}
-                  placeholder="Busca por nombre, usuario o correo…"
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                />
+
+                {sharedUserIds !== null && sharedUserIds.length === 0 ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-xl px-3 py-2.5">
+                    Para invitar a alguien, primero comparte tu calendario con esa persona en la sección <strong>Personas</strong>.
+                  </p>
+                ) : (
+                  <input type="text" value={inviteSearch} onChange={e => setInviteSearch(e.target.value)}
+                    placeholder="Busca entre tus contactos…"
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                )}
                 {inviteResults.length > 0 && (
                   <div className="mt-1 border border-border rounded-xl overflow-hidden">
                     {inviteResults.map(u => (

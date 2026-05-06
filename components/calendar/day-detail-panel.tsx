@@ -58,9 +58,27 @@ export function DayDetailPanel({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [openCommentId, setOpenCommentId] = useState<string | null>(null)
   const [commentsMap, setCommentsMap] = useState<Record<string, ActivityComment[]>>({})
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
   const [newCommentText, setNewCommentText] = useState<Record<string, string>>({})
   const [commentLoading, setCommentLoading] = useState<Record<string, boolean>>({})
   const supabase = createClient()
+
+  // Pre-fetch comment counts for all visible activities
+  useEffect(() => {
+    const ids = activities.map(a => a.id)
+    if (ids.length === 0) { setCommentCounts({}); return }
+    supabase
+      .from('activity_comments')
+      .select('activity_id')
+      .in('activity_id', ids)
+      .then(({ data }) => {
+        if (!data) return
+        const counts: Record<string, number> = {}
+        for (const row of data) counts[row.activity_id] = (counts[row.activity_id] || 0) + 1
+        setCommentCounts(counts)
+      })
+      .catch(() => {})
+  }, [activities.map(a => a.id).join(',')])
 
   const isTodayDate = isToday(date)
   const dateLabel = isTodayDate ? 'Hoy' : format(date, 'EEEE', { locale: es })
@@ -124,6 +142,7 @@ export function DayDetailPanel({
     try {
       const comment = await createActivityComment(activityId, currentUserId, text)
       setCommentsMap(prev => ({ ...prev, [activityId]: [...(prev[activityId] || []), comment] }))
+      setCommentCounts(prev => ({ ...prev, [activityId]: (prev[activityId] || 0) + 1 }))
       setNewCommentText(prev => ({ ...prev, [activityId]: '' }))
     } catch {}
   }
@@ -382,12 +401,17 @@ export function DayDetailPanel({
                                   <button
                                     onClick={() => handleToggleComments(activity.id)}
                                     className={cn(
-                                      'w-6 h-6 flex items-center justify-center rounded-md transition-colors text-muted-foreground',
+                                      'flex items-center gap-0.5 px-1 h-6 rounded-md transition-colors text-muted-foreground',
                                       isCommentOpen ? 'bg-primary/10 text-primary' : 'hover:bg-background/60 hover:text-foreground'
                                     )}
                                     title="Comentarios"
                                   >
                                     <MessageCircle className="w-3.5 h-3.5" />
+                                    {(commentCounts[activity.id] ?? 0) > 0 && (
+                                      <span className="text-[9px] font-bold leading-none">
+                                        {commentCounts[activity.id]}
+                                      </span>
+                                    )}
                                   </button>
                                 )}
 
