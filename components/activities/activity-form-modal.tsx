@@ -142,7 +142,8 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
       const evidenceUrl = activity?.evidence_image_url || null
 
       const payload: Record<string, unknown> = {
-        user_id:            currentUser.id,
+        // On edit, preserve the original owner — never transfer ownership when a participant saves
+        user_id:            isEditing ? activity!.user_id : currentUser.id,
         title:              title.trim(),
         description:        description.trim() || null,
         date:               selectedDate,

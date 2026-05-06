@@ -175,7 +175,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
       const next = addDays(selectedDate, d)
       setSelectedDate(next); setCurrentDate(next)
     } else if (isMobileWeek) {
-      const next = addDays(selectedDate, d * 3)
+      const next = addDays(selectedDate, d * 7)
       setSelectedDate(next); setCurrentDate(next)
     } else {
       setCurrentDate(d > 0 ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1))

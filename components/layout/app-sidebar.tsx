@@ -8,9 +8,9 @@ import { cn, getInitials } from '@/lib/utils'
 import { useTheme } from './theme-provider'
 import type { Profile } from '@/types'
 import {
-  CalendarDays, LayoutDashboard, Users, Settings,
+  LayoutDashboard, Users, Settings,
   LogOut, Sun, Moon, ChevronLeft, ChevronRight,
-  Target, BarChart2
+  Target, BarChart2, CalendarDays
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -46,9 +46,7 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
         'flex items-center gap-2.5 px-4 h-16 border-b border-border shrink-0',
         collapsed && 'justify-center px-0'
       )}>
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
-          <CalendarDays className="w-4 h-4 text-primary-foreground" />
-        </div>
+        <img src="/icon-512.png" alt="DayFlow" className="w-8 h-8 rounded-lg shrink-0 object-cover" />
         {!collapsed && (
           <span className="font-semibold text-xl tracking-tight">DayFlow</span>
         )}

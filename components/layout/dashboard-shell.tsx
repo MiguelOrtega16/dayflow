@@ -42,9 +42,8 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* ── Top bar — mobile only; desktop uses the sidebar + CalendarHeader bell ── */}
-        <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border bg-card shrink-0">
-          {/* Left: hamburger + logo on mobile; empty on desktop (sidebar handles branding) */}
+        {/* ── Top bar — mobile only ── */}
+        <header className="md:hidden relative flex items-center justify-between px-4 h-14 border-b border-border bg-card shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-foreground transition-colors"
@@ -53,7 +52,12 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* Right: notification bell — always top-right */}
+          {/* Centred logo */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+            <img src="/icon-512.png" alt="" className="w-7 h-7 rounded-lg object-cover" />
+            <span className="font-semibold text-base tracking-tight">DayFlow</span>
+          </div>
+
           {profile?.id && (
             <NotificationBell userId={profile.id} topBar />
           )}
