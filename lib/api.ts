@@ -218,6 +218,30 @@ export function generateRecurrenceDates(
 
 export async function updateActivity(id: string, updates: Partial<Activity>, updaterId?: string) {
   const supabase = createClient()
+
+  // Defense-in-depth permission check — the primary guard is the Supabase RLS policy,
+  // but this catches the case where the policy isn't applied on the production DB.
+  if (updaterId) {
+    const { data: act } = await supabase
+      .from('activities')
+      .select('user_id')
+      .eq('id', id)
+      .single()
+
+    if (act && act.user_id !== updaterId) {
+      // Allow only if the caller has an accepted invitation for this activity
+      const { data: inv } = await supabase
+        .from('activity_invitations')
+        .select('id')
+        .eq('activity_id', id)
+        .eq('invitee_id', updaterId)
+        .eq('status', 'accepted')
+        .maybeSingle()
+
+      if (!inv) throw new Error('Sin permiso para editar esta actividad.')
+    }
+  }
+
   const { data, error } = await supabase
     .from('activities')
     .update(updates)

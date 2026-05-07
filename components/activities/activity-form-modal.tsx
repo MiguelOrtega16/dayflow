@@ -157,6 +157,11 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
     if (!title.trim()) { setTitleTouched(true); setSaveError('El título no puede estar vacío.'); return }
     if (!currentUser)  { setSaveError('Sesión expirada. Recarga la página.'); return }
+    // Only the owner or an accepted invitee may edit an existing activity
+    if (isEditing && activity!.user_id !== currentUser.id && !activity!.invitation_id) {
+      setSaveError('No tienes permiso para editar esta actividad.')
+      return
+    }
 
     setSaving(true)
     setSaveError(null)

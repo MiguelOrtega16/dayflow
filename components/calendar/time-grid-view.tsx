@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { format, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { cn, STATUS_CONFIG } from '@/lib/utils'
-import { updateActivityStatus, updateParticipantStatus, deleteActivity } from '@/lib/api'
+import { updateActivityStatus, deleteActivity } from '@/lib/api'
 import type { Activity, ActivityStatus } from '@/types'
 
 const HOUR_HEIGHT = 56
@@ -21,6 +21,43 @@ function timeToMin(t: string) {
 function fmt12(t: string) {
   const [h, m] = t.split(':').map(Number)
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+}
+
+// ── Overlap layout ────────────────────────────────────────────────────────────
+// Assigns each activity a column index and total column count so overlapping
+// events are displayed side-by-side (Google Calendar style).
+interface ActivityLayout { activity: Activity; col: number; numCols: number }
+
+function computeLayout(activities: Activity[]): ActivityLayout[] {
+  if (activities.length === 0) return []
+
+  // Sort by start time; longer events first when start times match
+  const sorted = [...activities].sort((a, b) => {
+    const sa = timeToMin(a.start_time!), sb = timeToMin(b.start_time!)
+    if (sa !== sb) return sa - sb
+    const ea = a.end_time ? timeToMin(a.end_time) : sa + 60
+    const eb = b.end_time ? timeToMin(b.end_time) : sb + 60
+    return (eb - sb) - (ea - sa)
+  })
+
+  // Place each activity in the first column that doesn't overlap it
+  const placed: { activity: Activity; col: number; end: number }[] = []
+  for (const act of sorted) {
+    const start = timeToMin(act.start_time!)
+    const end   = act.end_time ? timeToMin(act.end_time) : start + 60
+    const usedCols = new Set(placed.filter(p => p.end > start).map(p => p.col))
+    let col = 0
+    while (usedCols.has(col)) col++
+    placed.push({ activity: act, col, end })
+  }
+
+  // numCols for each activity = widest column span in its overlap cluster
+  return placed.map(({ activity, col, end }) => {
+    const start = timeToMin(activity.start_time!)
+    const cluster = placed.filter(p => timeToMin(p.activity.start_time!) < end && p.end > start)
+    const numCols = Math.max(...cluster.map(p => p.col + 1))
+    return { activity, col, numCols }
+  })
 }
 
 interface CtxMenu { activity: Activity; x: number; y: number }
@@ -68,13 +105,12 @@ export function TimeGridView({
 
   const closeCtx = () => setCtx(null)
 
+  const canInteract = (a: Activity) =>
+    a.user_id === currentUserId || !!a.invitation_id
+
   const handleStatus = async (activity: Activity, status: ActivityStatus) => {
     closeCtx()
-    if (activity.invitation_id && currentUserId) {
-      await updateParticipantStatus(activity.invitation_id, status, currentUserId)
-    } else {
-      await updateActivityStatus(activity.id, status, currentUserId)
-    }
+    await updateActivityStatus(activity.id, status, currentUserId)
     onActivityUpdated?.()
   }
 
@@ -126,11 +162,15 @@ export function TimeGridView({
               <div key={format(day, 'yyyy-MM-dd')} className="flex-1 p-0.5 border-l border-border/40 first:border-l-0 min-h-[22px]">
                 {events.map(a => {
                   const c = userColor(a.user_id)
+                  const interactive = canInteract(a)
                   return (
                     <button key={a.id} data-event
-                      onClick={e => { e.stopPropagation(); onEditActivity(a) }}
+                      onClick={e => { e.stopPropagation(); if (interactive) onEditActivity(a) }}
                       onContextMenu={e => openCtx(e, a)}
-                      className="w-full text-left text-[10px] font-medium rounded px-1 py-0.5 mb-0.5 break-words"
+                      className={cn(
+                        'w-full text-left text-[10px] font-medium rounded px-1 py-0.5 mb-0.5 break-words',
+                        interactive ? 'cursor-pointer' : 'cursor-default'
+                      )}
                       style={{ backgroundColor: c + '28', color: c }}
                     >
                       {a.emoji} {a.title}
@@ -178,18 +218,31 @@ export function TimeGridView({
                   </div>
                 )}
 
-                {timed.map(a => {
-                  const startMin = timeToMin(a.start_time!)
-                  const endMin   = a.end_time ? timeToMin(a.end_time) : startMin + 60
-                  const top      = (startMin / 60) * HOUR_HEIGHT
-                  const height   = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22)
-                  const c        = userColor(a.user_id)
+                {computeLayout(timed).map(({ activity: a, col, numCols }) => {
+                  const startMin    = timeToMin(a.start_time!)
+                  const endMin      = a.end_time ? timeToMin(a.end_time) : startMin + 60
+                  const top         = (startMin / 60) * HOUR_HEIGHT
+                  const height      = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22)
+                  const c           = userColor(a.user_id)
+                  const interactive = canInteract(a)
+                  // Column geometry: divide available width equally, 4 px total gap per slot
+                  const leftPct  = col / numCols * 100
+                  const widthPct = 1  / numCols * 100
                   return (
                     <button key={a.id} data-event
-                      onClick={e => { e.stopPropagation(); onEditActivity(a) }}
+                      onClick={e => { e.stopPropagation(); if (interactive) onEditActivity(a) }}
                       onContextMenu={e => openCtx(e, a)}
-                      className="absolute left-0.5 right-0.5 rounded-md px-1 py-0.5 text-left overflow-hidden z-10 cursor-pointer"
-                      style={{ top, height, backgroundColor: c + '28', borderLeft: `3px solid ${c}` }}
+                      className={cn(
+                        'absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden z-10',
+                        interactive ? 'cursor-pointer hover:brightness-95' : 'cursor-default'
+                      )}
+                      style={{
+                        top, height,
+                        left:  `calc(${leftPct}% + 2px)`,
+                        width: `calc(${widthPct}% - 4px)`,
+                        backgroundColor: c + '28',
+                        borderLeft: `3px solid ${c}`,
+                      }}
                     >
                       <p className="text-[10px] font-semibold leading-tight break-words" style={{ color: c }}>
                         {a.emoji} {a.title}
@@ -229,11 +282,13 @@ export function TimeGridView({
               </button>
             )}
 
-            {/* Status change */}
-            {ctx.activity.user_id === currentUserId && (
+            {/* Status change — owner or accepted invitee */}
+            {(ctx.activity.user_id === currentUserId || !!ctx.activity.invitation_id) && (
               <>
                 <div className="border-t border-border my-1" />
-                <p className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Cambiar estado</p>
+                <p className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  {ctx.activity.invitation_id ? 'Mi estado' : 'Cambiar estado'}
+                </p>
                 {(Object.keys(STATUS_CHAR) as ActivityStatus[]).map(s => (
                   <button key={s} onClick={() => handleStatus(ctx.activity, s)}
                     className={cn(
