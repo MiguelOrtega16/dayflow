@@ -95,7 +95,7 @@ export async function GET(request: Request) {
       if (count > 4) lines.push(`…y ${count - 4} más`)
       const body = lines.join('\n')
 
-      await sendFCM(token, title, body)
+      await sendFCM(token, title, body, { type: 'activity_reminder', date: todayStr })
       sent++
     })
   )

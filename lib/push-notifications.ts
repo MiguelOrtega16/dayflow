@@ -1,7 +1,10 @@
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
+import { initLocalNotificationListeners } from '@/lib/activity-reminders'
 
 export async function initPushNotifications(userId: string) {
+  // Start local-notification tap listener in parallel (independent of FCM)
+  initLocalNotificationListeners()
   // Only runs inside the native Android/iOS app — no-op in browser
   if (!Capacitor.isNativePlatform()) return
 
