@@ -14,7 +14,7 @@ const config: CapacitorConfig = {
   // Dev  → points at your local Next.js dev server (npm run dev must be running)
   // Prod → points at your live Vercel deployment
   server: {
-    url:       isProd ? 'https://dayflow-self-sigma.vercel.app' : 'http://localhost:3000',
+    url:       isProd ? 'https://day-flow.co' : 'http://localhost:3000',
     cleartext: !isProd,   // allow plain HTTP only for local dev
   },
 

@@ -562,7 +562,7 @@ export async function inviteToActivity(activityId: string, inviterId: string, in
     title:       'Nueva invitación a actividad',
     message:     `<strong>${inviterName}</strong> te invitó a participar en: <strong>${actTitle}</strong>. Abre DayFlow para aceptar o declinar.`,
     ctaText:     'Ver en DayFlow',
-    ctaUrl:      `${process.env.NEXT_PUBLIC_APP_URL || 'https://dayflow.vercel.app'}/dashboard`,
+    ctaUrl:      `${process.env.NEXT_PUBLIC_APP_URL || 'https://day-flow.co'}/dashboard`,
   })
 
   sendPushNotification({
@@ -696,7 +696,7 @@ export async function shareCalendar(ownerId: string, sharedWithId: string, canEd
     title:       'Invitación de calendario compartido',
     message:     `<strong>${ownerName}</strong> te ha invitado a ver su calendario en DayFlow. Acepta la invitación para empezar a colaborar.`,
     ctaText:     'Ver en DayFlow',
-    ctaUrl:      `${process.env.NEXT_PUBLIC_APP_URL || 'https://dayflow.vercel.app'}/dashboard/people`,
+    ctaUrl:      `${process.env.NEXT_PUBLIC_APP_URL || 'https://day-flow.co'}/dashboard/people`,
   })
 
   sendPushNotification({

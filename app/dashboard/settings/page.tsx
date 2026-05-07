@@ -10,9 +10,7 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
-  const [bio, setBio] = useState('')
   const [color, setColor] = useState('#6366f1')
-  const [emailNotifications, setEmailNotifications] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const router = useRouter()
@@ -30,9 +28,7 @@ export default function SettingsPage() {
       setProfile(data)
       setFullName(data.full_name || '')
       setUsername(data.username || '')
-      setBio(data.bio || '')
       setColor(data.color || '#6366f1')
-      setEmailNotifications(data.email_notifications ?? true)
     }
   }
 
@@ -42,7 +38,7 @@ export default function SettingsPage() {
     setSaving(true)
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: fullName, username: username || null, bio: bio || null, color, email_notifications: emailNotifications })
+      .update({ full_name: fullName, username: username || null, color })
       .eq('id', profile.id)
     setSaving(false)
     if (!error) {
@@ -107,17 +103,6 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">Biografía</label>
-            <textarea
-              value={bio}
-              onChange={e => setBio(e.target.value)}
-              placeholder="Cuéntanos un poco sobre ti..."
-              rows={2}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
-            />
-          </div>
-
-          <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1.5">Color de calendario</label>
             <div className="flex flex-wrap gap-2">
               {USER_COLORS.map(c => (
@@ -135,30 +120,6 @@ export default function SettingsPage() {
                 />
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* Email notifications */}
-        <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold">Notificaciones</h2>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Notificaciones por correo</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Recibe un email cuando alguien te invite a una actividad o comparta su calendario contigo
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setEmailNotifications(p => !p)}
-              className="relative shrink-0 ml-4"
-              aria-checked={emailNotifications}
-              role="switch"
-            >
-              <div className={`w-10 h-5 rounded-full transition-colors ${emailNotifications ? 'bg-primary' : 'bg-muted-foreground/30'}`}>
-                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${emailNotifications ? 'translate-x-5' : 'translate-x-0.5'}`} />
-              </div>
-            </button>
           </div>
         </div>
 

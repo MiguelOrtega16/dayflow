@@ -18,14 +18,14 @@ export function buildEmailHtml(title: string, message: string, ctaText?: string,
       ${cta}
     </div>
     <div style="padding:16px 32px 24px;color:#505068;font-size:12px">
-      Puedes desactivar las notificaciones por correo en <strong>Configuración</strong> dentro de DayFlow.
+      Este es un mensaje automático de DayFlow. Por favor no respondas a este correo.
     </div>
   </div>
 </body>
 </html>`
 }
 
-export async function sendNotificationEmail(_payload: {
+export async function sendNotificationEmail(payload: {
   recipientId: string
   senderName: string
   subject: string
@@ -34,26 +34,19 @@ export async function sendNotificationEmail(_payload: {
   ctaText?: string
   ctaUrl?: string
 }) {
-  // ── Email sending is disabled until a custom domain is configured with Resend ──
-  // To re-enable: remove the early return below and set RESEND_API_KEY + RESEND_FROM_EMAIL
-  // in your production environment variables.
-  return
-
-  /* eslint-disable no-unreachable */
-  const bodyHtml = buildEmailHtml(_payload.title, _payload.message, _payload.ctaText, _payload.ctaUrl)
+  const bodyHtml = buildEmailHtml(payload.title, payload.message, payload.ctaText, payload.ctaUrl)
   try {
     await fetch('/api/notify-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        recipientId: _payload.recipientId,
-        senderName:  _payload.senderName,
-        subject:     _payload.subject,
+        recipientId: payload.recipientId,
+        senderName:  payload.senderName,
+        subject:     payload.subject,
         bodyHtml,
       }),
     })
   } catch {
     // Email is best-effort — never block the main action
   }
-  /* eslint-enable no-unreachable */
 }

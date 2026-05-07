@@ -4,13 +4,14 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState<string | null>(null)
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
   const router   = useRouter()
   const supabase = createClient()
 
@@ -21,7 +22,12 @@ export default function LoginPage() {
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      setError(error.message)
+      // Surface a friendlier message when email confirmation is pending
+      if (error.message.toLowerCase().includes('email not confirmed')) {
+        setError('Tu correo aún no ha sido confirmado. Revisa tu bandeja de entrada y haz clic en el enlace de activación.')
+      } else {
+        setError(error.message)
+      }
       setLoading(false)
     } else {
       router.push('/dashboard')
@@ -96,15 +102,31 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Contraseña</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow placeholder:text-muted-foreground"
-              />
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium">Contraseña</label>
+                <Link href="/auth/forgot-password" className="text-xs text-primary hover:underline">
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full rounded-xl border border-input bg-background px-4 py-3 pr-11 text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow placeholder:text-muted-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <button
               type="submit"

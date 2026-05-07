@@ -30,8 +30,7 @@ export async function POST(request: Request) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       from: fromAddress,
-      // to: [profile.email],
-      to: "miguel.ortega16@hotmail.com",
+      to: [profile.email],
       subject,
       html: bodyHtml,
     }),
