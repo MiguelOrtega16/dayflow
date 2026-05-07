@@ -1,32 +1,49 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, Loader2 } from 'lucide-react'
+
+const COOLDOWN_SECONDS = 60
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail]   = useState('')
-  const [loading, setLoading] = useState(false)
-  const [sent, setSent]     = useState(false)
-  const [error, setError]   = useState<string | null>(null)
+  const [email, setEmail]       = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [sent, setSent]         = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+  const [cooldown, setCooldown] = useState(0)
   const supabase = createClient()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Count down the resend cooldown every second
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const id = setInterval(() => setCooldown(s => s - 1), 1000)
+    return () => clearInterval(id)
+  }, [cooldown])
+
+  const sendEmail = async () => {
     setLoading(true)
     setError(null)
-
     const redirectTo = `${window.location.origin}/auth/callback`
-
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
     setLoading(false)
-
     if (error) {
       setError(error.message)
     } else {
       setSent(true)
+      setCooldown(COOLDOWN_SECONDS)
     }
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    sendEmail()
+  }
+
+  const handleResend = () => {
+    if (cooldown > 0 || loading) return
+    sendEmail()
   }
 
   if (sent) {
@@ -41,7 +58,32 @@ export default function ForgotPasswordPage() {
             Enviamos un enlace para restablecer tu contraseña a{' '}
             <strong>{email}</strong>. Expira en 1 hora.
           </p>
-          <Link href="/auth/login" className="text-primary hover:underline font-medium">
+
+          {error && (
+            <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-3 mb-4 text-sm">
+              {error}
+            </div>
+          )}
+
+          {/* Resend button with cooldown */}
+          <button
+            onClick={handleResend}
+            disabled={cooldown > 0 || loading}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mb-4"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Enviando…
+              </>
+            ) : cooldown > 0 ? (
+              `Reenviar correo (${cooldown}s)`
+            ) : (
+              'Reenviar correo'
+            )}
+          </button>
+
+          <Link href="/auth/login" className="text-sm text-primary hover:underline font-medium">
             Volver al inicio de sesión
           </Link>
         </div>
@@ -86,9 +128,16 @@ export default function ForgotPasswordPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary text-primary-foreground rounded-xl py-3 font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl py-3 font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Enviando…' : 'Enviar enlace de restablecimiento'}
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Enviando…
+              </>
+            ) : (
+              'Enviar enlace de restablecimiento'
+            )}
           </button>
         </form>
 
