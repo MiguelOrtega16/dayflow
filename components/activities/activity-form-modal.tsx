@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { X, Clock, Smile, Target, UserPlus, CheckCircle2, XCircle } from 'lucide-react'
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG } from '@/lib/utils'
@@ -30,6 +31,7 @@ type Tab = 'basic' | 'recurrence'
 
 export function ActivityFormModal({ date, activity, currentUser, onClose, onSaved, initialStartTime, initialEndTime }: ActivityFormModalProps) {
   const isEditing = !!activity
+  const router = useRouter()
 
   // Core fields
   const [title, setTitle]             = useState(activity?.title || '')
@@ -500,7 +502,12 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
                 {sharedUserIds !== null && sharedUserIds.length === 0 ? (
                   <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-xl px-3 py-2.5">
-                    Para invitar a alguien, primero comparte tu calendario con esa persona en la sección <strong>Personas</strong>.
+                    Para invitar a alguien, primero comparte tu calendario con esa persona en la sección{' '}
+                    <button
+                      type="button"
+                      className="font-bold underline hover:opacity-70 transition-opacity"
+                      onClick={() => { onClose(); router.push('/dashboard/people') }}
+                    >Personas</button>.
                   </p>
                 ) : (
                   <input type="text" value={inviteSearch} onChange={e => setInviteSearch(e.target.value)}

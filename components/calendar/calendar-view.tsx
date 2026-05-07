@@ -164,6 +164,16 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     return () => window.removeEventListener('dayflow:navigate', onNavigate)
   }, [])
 
+  // Pick up a date stored by push-notification deep links (fires after full-page reload)
+  useEffect(() => {
+    const gotoDate = sessionStorage.getItem('dayflow:gotoDate')
+    if (!gotoDate) return
+    sessionStorage.removeItem('dayflow:gotoDate')
+    const d = new Date(gotoDate + 'T12:00:00')
+    setCurrentDate(d)
+    setSelectedDate(d)
+  }, [])
+
   const getDaysForView = (): Date[] => {
     if (mode === 'month') {
       const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 })

@@ -28,20 +28,37 @@ export async function initPushNotifications(userId: string) {
       window.dispatchEvent(new CustomEvent('dayflow:refresh'))
     })
 
-    // User taps a notification from background/closed state
-    PushNotifications.addListener('pushNotificationActionPerformed', () => {
-      window.dispatchEvent(new CustomEvent('dayflow:refresh'))
+    // User taps a notification from background/closed state — navigate to the right page
+    PushNotifications.addListener('pushNotificationActionPerformed', (action: any) => {
+      const data: Record<string, string> = action.notification?.data ?? {}
+      const type = data.type ?? ''
+      const date = data.date ?? ''
+
+      const PEOPLE_TYPES = ['calendar_share_invite', 'calendar_share_accepted', 'calendar_share_declined']
+      const CALENDAR_TYPES = ['activity_invitation', 'invitation_accepted', 'status_update', 'task_completed', 'new_activity', 'activity_reminder']
+
+      if (PEOPLE_TYPES.includes(type)) {
+        window.location.href = '/dashboard/people'
+      } else if (CALENDAR_TYPES.includes(type)) {
+        if (date) sessionStorage.setItem('dayflow:gotoDate', date)
+        window.location.href = '/dashboard'
+      } else {
+        window.dispatchEvent(new CustomEvent('dayflow:refresh'))
+      }
     })
   } catch (err) {
     console.error('[Push] init error:', err)
   }
 }
 
-// Called server-side via the /api/send-push route
+// Called from API helpers — never blocks the calling action (fire-and-forget)
 export async function sendPushNotification(payload: {
   recipientId: string
   title: string
   body: string
+  type?: string
+  date?: string
+  activityId?: string
 }) {
   try {
     await fetch('/api/send-push', {

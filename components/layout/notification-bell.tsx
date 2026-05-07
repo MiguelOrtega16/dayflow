@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Bell, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -77,7 +78,8 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
   const [notifications, setNotifications]   = useState<Notification[]>([])
   const [unreadCount, setUnreadCount]       = useState(0)
   const [open, setOpen]                     = useState(false)
-  const [responding, setResponding]         = useState<string | null>(null)
+  const [responding, setResponding]         = useState<{ id: string; action: 'accept' | 'decline' } | null>(null)
+  const router = useRouter()
   const dropdownRef = useRef<HTMLDivElement>(null)
   const channelName = useRef(`notifications-${userId}-${Math.random().toString(36).slice(2)}`)
   const supabase    = createClient()
@@ -133,6 +135,22 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
     }
   }, [])
 
+  // Polling fallback every 15 s — covers cases where Realtime subscription
+  // is blocked by RLS or not enabled for the notifications table in Supabase
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') load()
+    }, 15_000)
+    return () => clearInterval(id)
+  }, [userId])
+
+  // Also reload when the rest of the app signals a data refresh
+  useEffect(() => {
+    const handle = () => load()
+    window.addEventListener('dayflow:refresh', handle)
+    return () => window.removeEventListener('dayflow:refresh', handle)
+  }, [userId])
+
   const handleMarkRead = async (n: Notification) => {
     if (n.is_read) return
     await markNotificationRead(n.id)
@@ -153,7 +171,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
 
   const handleActivityInvitation = async (n: Notification, accept: boolean) => {
     if (!n.activity_id) return
-    setResponding(n.id)
+    setResponding({ id: n.id, action: accept ? 'accept' : 'decline' })
     try {
       // Find pending invitation for this activity
       const { data: inv } = await supabase
@@ -173,12 +191,16 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
       setUnreadCount(prev => Math.max(0, prev - 1))
 
       if (accept) {
-        // Signal the calendar to refresh and navigate to the activity date
+        const actDate = (inv as any)?.activity?.date as string | undefined
         window.dispatchEvent(new CustomEvent('dayflow:refresh'))
-        const actDate = (inv as any)?.activity?.date
         if (actDate) {
+          // Store the date so the calendar picks it up even if we navigate away first
+          sessionStorage.setItem('dayflow:gotoDate', actDate)
           window.dispatchEvent(new CustomEvent('dayflow:navigate', { detail: { date: actDate } }))
         }
+        setOpen(false)
+        router.push('/dashboard')
+        return
       }
 
       load()
@@ -191,7 +213,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
   }
 
   const handleCalendarShare = async (n: Notification, accept: boolean) => {
-    setResponding(n.id)
+    setResponding({ id: n.id, action: accept ? 'accept' : 'decline' })
     try {
       // Find pending calendar share for this actor→recipient pair
       const { data } = await supabase
@@ -208,6 +230,13 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
       await markNotificationRead(n.id)
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x))
       setUnreadCount(prev => Math.max(0, prev - 1))
+
+      if (accept) {
+        setOpen(false)
+        router.push('/dashboard/people')
+        return
+      }
+      load()
     } catch {} finally {
       setResponding(null)
     }
@@ -274,7 +303,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
             ) : (
               notifications.map(n => {
                 const isAction = ACTION_TYPES.has(n.type) && !n.is_read
-                const isLoading = responding === n.id
+                const isLoading = responding?.id === n.id
 
                 return (
                   <div
@@ -324,7 +353,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
                           disabled={isLoading}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                         >
-                          {isLoading
+                          {isLoading && responding?.action === 'accept'
                             ? <Loader2 className="w-3 h-3 animate-spin" />
                             : <CheckCircle2 className="w-3 h-3" />}
                           Aceptar
@@ -336,7 +365,9 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
                           disabled={isLoading}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-muted disabled:opacity-50 transition-colors"
                         >
-                          <XCircle className="w-3 h-3" />
+                          {isLoading && responding?.action === 'decline'
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : <XCircle className="w-3 h-3" />}
                           Declinar
                         </button>
                       </div>

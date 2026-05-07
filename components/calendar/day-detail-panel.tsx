@@ -6,7 +6,7 @@ import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForwa
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime, getInitials, formatRelativeTime } from '@/lib/utils'
 import { updateActivityStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile, ActivityComment } from '@/types'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 interface DayDetailPanelProps {
@@ -62,6 +62,8 @@ export function DayDetailPanel({
   const [newCommentText, setNewCommentText] = useState<Record<string, string>>({})
   const [commentLoading, setCommentLoading] = useState<Record<string, boolean>>({})
   const supabase = createClient()
+  // Ref so the Realtime callback always reads the current openCommentId without stale closure
+  const openCommentIdRef = useRef<string | null>(null)
 
   // Pre-fetch comment counts for all visible activities
   useEffect(() => {
@@ -81,6 +83,58 @@ export function DayDetailPanel({
     }
     load()
   }, [activities.map(a => a.id).join(',')])
+
+  // Keep ref in sync so Realtime callback always sees the latest value
+  useEffect(() => { openCommentIdRef.current = openCommentId }, [openCommentId])
+
+  // Realtime: update counts and live-append messages when another user comments
+  useEffect(() => {
+    const activityIds = activities.map(a => a.id)
+    if (activityIds.length === 0) return
+
+    const channel = supabase
+      .channel(`day-comments-${currentUserId}-${date.toISOString().split('T')[0]}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'activity_comments',
+      }, async (payload: any) => {
+        const { activity_id, id, user_id } = payload.new
+        if (!activityIds.includes(activity_id)) return
+
+        // Reload counts for all visible activities — avoids double-counting with optimistic updates
+        try {
+          const { data } = await supabase
+            .from('activity_comments')
+            .select('activity_id')
+            .in('activity_id', activityIds)
+          if (data) {
+            const counts: Record<string, number> = {}
+            for (const row of data) counts[row.activity_id] = (counts[row.activity_id] || 0) + 1
+            setCommentCounts(counts)
+          }
+        } catch {}
+
+        // If the comment section is open and the comment is from someone else, fetch and append it
+        if (openCommentIdRef.current === activity_id && user_id !== currentUserId) {
+          try {
+            const { data: comment } = await supabase
+              .from('activity_comments')
+              .select('*, profile:profiles(*)')
+              .eq('id', id)
+              .single()
+            if (comment) {
+              setCommentsMap(prev => {
+                const existing = prev[activity_id] || []
+                if (existing.some(c => c.id === id)) return prev
+                return { ...prev, [activity_id]: [...existing, comment as ActivityComment] }
+              })
+            }
+          } catch {}
+        }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [activities.map(a => a.id).join(','), currentUserId])
 
   const isTodayDate = isToday(date)
   const dateLabel = isTodayDate ? 'Hoy' : format(date, 'EEEE', { locale: es })

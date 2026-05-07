@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { sendFCM, getFirebaseMessaging } from '@/lib/firebase-admin'
 
 export async function POST(request: Request) {
-  const { recipientId, title, body } = await request.json()
+  const { recipientId, title, body, type, date, activityId } = await request.json()
   if (!recipientId || !title) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 })
   }
@@ -24,6 +24,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ skipped: 'no FCM token for recipient' })
   }
 
-  await sendFCM(profile.fcm_token, title, body ?? '')
+  const extraData: Record<string, string> = {}
+  if (type)       extraData.type       = type
+  if (date)       extraData.date       = date
+  if (activityId) extraData.activityId = activityId
+
+  await sendFCM(profile.fcm_token, title, body ?? '', extraData)
   return NextResponse.json({ sent: true })
 }

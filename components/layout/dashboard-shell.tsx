@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Menu } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Menu, Loader2 } from 'lucide-react'
 import { AppSidebar } from './app-sidebar'
 import { NotificationBell } from './notification-bell'
 import { cn } from '@/lib/utils'
@@ -15,10 +15,47 @@ interface DashboardShellProps {
 
 export function DashboardShell({ profile, children }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [pullDist, setPullDist]       = useState(0)
+  const [refreshing, setRefreshing]   = useState(false)
+  const mainRef   = useRef<HTMLElement>(null)
+  const startYRef = useRef(0)
 
   useEffect(() => {
     if (profile?.id) initPushNotifications(profile.id)
   }, [profile?.id])
+
+  // Pull-to-refresh — mobile only, triggers a full page reload
+  useEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+
+    const onTouchStart = (e: TouchEvent) => {
+      startYRef.current = e.touches[0].clientY
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (el.scrollTop > 0) { setPullDist(0); return }
+      const dy = e.touches[0].clientY - startYRef.current
+      setPullDist(dy > 0 ? Math.min(dy * 0.45, 68) : 0)
+    }
+    const onTouchEnd = (e: TouchEvent) => {
+      const dy = e.changedTouches[0].clientY - startYRef.current
+      if (dy > 72 && el.scrollTop === 0) {
+        setRefreshing(true)
+        setTimeout(() => window.location.reload(), 180)
+      } else {
+        setPullDist(0)
+      }
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove',  onTouchMove,  { passive: true })
+    el.addEventListener('touchend',   onTouchEnd,   { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove',  onTouchMove)
+      el.removeEventListener('touchend',   onTouchEnd)
+    }
+  }, [])
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -63,7 +100,20 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
           )}
         </header>
 
-        <main className="flex-1 overflow-auto min-w-0">
+        <main ref={mainRef} className="flex-1 overflow-auto min-w-0">
+          {/* Pull-to-refresh indicator — mobile only */}
+          <div
+            className={cn(
+              'md:hidden flex items-center justify-center overflow-hidden transition-[height] duration-100',
+              (pullDist > 0 || refreshing) ? 'opacity-100' : 'opacity-0'
+            )}
+            style={{ height: refreshing ? 48 : pullDist > 0 ? pullDist : 0 }}
+          >
+            <Loader2 className={cn(
+              'w-5 h-5 text-primary transition-opacity',
+              (refreshing || pullDist > 48) ? 'animate-spin opacity-100' : 'opacity-40'
+            )} />
+          </div>
           {children}
         </main>
       </div>

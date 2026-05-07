@@ -515,12 +515,13 @@ export async function inviteToActivity(activityId: string, inviterId: string, in
   const { data: inv, error } = await supabase
     .from('activity_invitations')
     .insert({ activity_id: activityId, inviter_id: inviterId, invitee_id: inviteeId })
-    .select(`*, inviter:profiles!activity_invitations_inviter_id_fkey(*), activity:activities(title)`)
+    .select(`*, inviter:profiles!activity_invitations_inviter_id_fkey(*), activity:activities(title, date)`)
     .single()
   if (error) throw error
 
   const inviterName = (inv as any).inviter?.full_name || (inv as any).inviter?.email || 'Alguien'
-  const actTitle   = (inv as any).activity?.title || 'una actividad'
+  const actTitle    = (inv as any).activity?.title || 'una actividad'
+  const actDate     = (inv as any).activity?.date  as string | undefined
 
   await supabase.from('notifications').insert({
     recipient_id: inviteeId,
@@ -544,6 +545,8 @@ export async function inviteToActivity(activityId: string, inviterId: string, in
     recipientId: inviteeId,
     title: '👋 Nueva invitación',
     body:  `${inviterName} te invitó a: ${actTitle}`,
+    type:  'activity_invitation',
+    date:  actDate || undefined,
   })
 
   return inv as ActivityInvitation
@@ -676,6 +679,7 @@ export async function shareCalendar(ownerId: string, sharedWithId: string, canEd
     recipientId: sharedWithId,
     title: '📅 Calendario compartido',
     body:  `${ownerName} quiere compartir su calendario contigo`,
+    type:  'calendar_share_invite',
   })
 
   return share

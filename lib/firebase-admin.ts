@@ -16,14 +16,19 @@ export async function getFirebaseMessaging() {
   }
 }
 
-export async function sendFCM(token: string, title: string, body: string) {
+export async function sendFCM(
+  token: string,
+  title: string,
+  body: string,
+  extraData?: Record<string, string>,
+) {
   const messaging = await getFirebaseMessaging()
   if (!messaging) return
   try {
     await messaging.send({
       token,
       notification: { title, body },
-      data: { url: '/dashboard' },
+      data: { url: '/dashboard', ...extraData },
       android: { priority: 'high' },
       apns:    { payload: { aps: { sound: 'default', badge: 1 } } },
     })
