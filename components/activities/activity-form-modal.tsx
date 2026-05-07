@@ -51,11 +51,16 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
   const handleStartTimeChange = (val: string) => {
     setStartTime(val)
-    if (val && endTime && toMin(endTime) <= toMin(val)) setEndTime(addHour(val))
+    setEndTimeError(false)
+    if (val && (!endTime || toMin(endTime) <= toMin(val))) setEndTime(addHour(val))
   }
 
   const handleEndTimeChange = (val: string) => {
-    if (val && startTime && toMin(val) <= toMin(startTime)) return
+    if (val && startTime && toMin(val) <= toMin(startTime)) {
+      setEndTimeError(true)
+      return
+    }
+    setEndTimeError(false)
     setEndTime(val)
   }
   const [isPublic, setIsPublic]       = useState(activity?.is_public ?? true)
@@ -78,6 +83,8 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [showTitleEmoji, setShowTitleEmoji]   = useState(false)
   const [activeTab, setActiveTab]         = useState<Tab>('basic')
   const [goals, setGoals]                 = useState<Goal[]>([])
+  const [titleTouched, setTitleTouched]   = useState(false)
+  const [endTimeError, setEndTimeError]   = useState(false)
 
   const titleRef = useRef<HTMLInputElement>(null)
 
@@ -146,7 +153,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     e?.preventDefault()
     console.log('[ActivityForm] submit — title:', title, 'user:', currentUser?.id ?? 'NULL')
 
-    if (!title.trim()) { setSaveError('El título no puede estar vacío.'); return }
+    if (!title.trim()) { setTitleTouched(true); setSaveError('El título no puede estar vacío.'); return }
     if (!currentUser)  { setSaveError('Sesión expirada. Recarga la página.'); return }
 
     setSaving(true)
@@ -303,40 +310,53 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
           {activeTab === 'basic' && (
             <>
               {/* Title with autocomplete + inline emoji picker */}
-              <div className="relative flex items-center gap-2">
-                <input ref={titleRef} type="text" value={title} onChange={e => setTitle(e.target.value)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                  placeholder="¿Qué quieres lograr?" required autoFocus
-                  className="flex-1 text-base font-medium bg-transparent border-none outline-none placeholder:text-muted-foreground/60 min-w-0 disabled:opacity-60"
-                />
-                <div className="relative shrink-0">
-                  <button type="button" onClick={() => setShowTitleEmoji(p => !p)}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                    title="Insertar emoji en el título"
-                  >
-                    <Smile className="w-4 h-4" />
-                  </button>
-                  {showTitleEmoji && (
-                    <div className="absolute top-9 right-0 z-20 bg-popover border border-border rounded-xl p-2 shadow-lg grid grid-cols-8 gap-1 w-52">
-                      {EMOJIS.map(e => (
-                        <button key={e} type="button"
-                          onClick={ev => { ev.stopPropagation(); insertTitleEmoji(e) }}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-base transition-colors"
-                        >{e}</button>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Título <span className="text-destructive">*</span>
+                </label>
+                <div className={cn(
+                  'relative flex items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors',
+                  titleTouched && !title.trim()
+                    ? 'border-destructive ring-1 ring-destructive/40'
+                    : 'border-input focus-within:ring-2 focus-within:ring-ring'
+                )}>
+                  <input ref={titleRef} type="text" value={title} onChange={e => setTitle(e.target.value)}
+                    onBlur={() => { setTitleTouched(true); setTimeout(() => setShowSuggestions(false), 150) }}
+                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                    placeholder="¿Qué quieres lograr?" required autoFocus
+                    className="flex-1 text-base font-medium bg-transparent border-none outline-none placeholder:text-muted-foreground/60 min-w-0 disabled:opacity-60"
+                  />
+                  <div className="relative shrink-0">
+                    <button type="button" onClick={() => setShowTitleEmoji(p => !p)}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      title="Insertar emoji en el título"
+                    >
+                      <Smile className="w-4 h-4" />
+                    </button>
+                    {showTitleEmoji && (
+                      <div className="absolute top-9 right-0 z-20 bg-popover border border-border rounded-xl p-2 shadow-lg grid grid-cols-8 gap-1 w-52">
+                        {EMOJIS.map(e => (
+                          <button key={e} type="button"
+                            onClick={ev => { ev.stopPropagation(); insertTitleEmoji(e) }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-base transition-colors"
+                          >{e}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-8 z-20 mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
+                      {suggestions.map(s => (
+                        <button key={s} type="button"
+                          onMouseDown={() => { setTitle(s); setShowSuggestions(false) }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors truncate"
+                        >{s}</button>
                       ))}
                     </div>
                   )}
                 </div>
-                {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-8 z-20 mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
-                    {suggestions.map(s => (
-                      <button key={s} type="button"
-                        onMouseDown={() => { setTitle(s); setShowSuggestions(false) }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors truncate"
-                      >{s}</button>
-                    ))}
-                  </div>
+                {titleTouched && !title.trim() && (
+                  <p className="text-xs text-destructive mt-1">El título es requerido</p>
                 )}
               </div>
 
@@ -382,6 +402,9 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                     <Clock className="w-3 h-3" /> Hora fin
                   </label>
                   <TimePicker value={endTime} onChange={handleEndTimeChange} placeholder="--" />
+                  {endTimeError && (
+                    <p className="text-xs text-destructive mt-1">Debe ser posterior a la de inicio</p>
+                  )}
                 </div>
               </div>
 
