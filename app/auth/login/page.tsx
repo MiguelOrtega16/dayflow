@@ -9,9 +9,14 @@ import { CalendarDays, Eye, EyeOff } from 'lucide-react'
 export default function LoginPage() {
   const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState<string | null>(null)
+  const [loading, setLoading]           = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  // Surface errors forwarded from the auth callback (e.g. expired confirmation link)
+  const searchParams = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search) : null
+  const [error, setError] = useState<string | null>(
+    searchParams?.get('error') ? decodeURIComponent(searchParams.get('error')!) : null
+  )
   const router   = useRouter()
   const supabase = createClient()
 
