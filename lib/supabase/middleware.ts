@@ -32,7 +32,14 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && request.nextUrl.pathname.startsWith('/auth')) {
+  // Allow these even when authenticated: callback must run to exchange codes,
+  // reset-password must be reachable with the recovery session active.
+  const authBypass = ['/auth/callback', '/auth/reset-password']
+  if (
+    user &&
+    request.nextUrl.pathname.startsWith('/auth') &&
+    !authBypass.some(p => request.nextUrl.pathname.startsWith(p))
+  ) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
