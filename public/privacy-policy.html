@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy – Dayflow</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f9fafb;
+      color: #111827;
+      line-height: 1.7;
+    }
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 1.25rem; font-weight: 700; color: #111827; }
+    header span { font-size: 0.875rem; color: #6b7280; }
+    .lang-switcher {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+    }
+    .lang-switcher button {
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: #374151;
+      transition: background 0.15s;
+    }
+    .lang-switcher button.active {
+      background: #6366f1;
+      color: #fff;
+      border-color: #6366f1;
+    }
+    main {
+      max-width: 760px;
+      margin: 40px auto;
+      padding: 0 24px 80px;
+    }
+    .section { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 28px 32px; margin-bottom: 16px; }
+    h2 { font-size: 1rem; font-weight: 700; color: #111827; margin-bottom: 12px; }
+    p { font-size: 0.9375rem; color: #374151; margin-bottom: 10px; }
+    p:last-child { margin-bottom: 0; }
+    ul { padding-left: 20px; margin-bottom: 10px; }
+    li { font-size: 0.9375rem; color: #374151; margin-bottom: 6px; }
+    a { color: #6366f1; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      background: #ede9fe;
+      color: #5b21b6;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    footer { text-align: center; font-size: 0.8rem; color: #9ca3af; padding: 24px; }
+    [lang-content] { display: none; }
+    [lang-content].visible { display: block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div style="width:36px;height:36px;background:#6366f1;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1rem;">D</div>
+  <div>
+    <h1>Dayflow</h1>
+    <span>Privacy Policy</span>
+  </div>
+  <div class="lang-switcher">
+    <button class="active" onclick="setLang('en')">English</button>
+    <button onclick="setLang('es')">Español</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ═══════════════════════════ ENGLISH ═══════════════════════════ -->
+  <div lang-content="en" class="visible">
+
+    <div class="section">
+      <span class="badge">Last updated: May 8, 2025</span>
+      <h2>Introduction</h2>
+      <p>Chanca Studio ("we", "us", or "our") operates the Dayflow mobile application (the "App"). This Privacy Policy explains how we collect, use, and protect your personal information when you use Dayflow.</p>
+      <p>By using the App, you agree to the collection and use of information in accordance with this policy.</p>
+    </div>
+
+    <div class="section">
+      <h2>Information We Collect</h2>
+      <p>We collect the following types of data:</p>
+      <ul>
+        <li><strong>Account information:</strong> your email address, full name, and profile photo (optional) when you register.</li>
+        <li><strong>User-generated content:</strong> activities, tasks, goals, calendar entries, and any descriptions or notes you create inside the App.</li>
+        <li><strong>Usage data:</strong> interactions within the App such as completing tasks, sharing calendars, and accepting invitations — used solely to power App features.</li>
+        <li><strong>Device token:</strong> a Firebase push-notification token to deliver reminders to your device.</li>
+      </ul>
+      <p>We do <strong>not</strong> collect location data, financial information, or any sensitive personal information.</p>
+    </div>
+
+    <div class="section">
+      <h2>How We Use Your Information</h2>
+      <ul>
+        <li>To create and manage your account.</li>
+        <li>To provide the calendar, goals, and statistics features.</li>
+        <li>To enable shared calendars and collaboration between users.</li>
+        <li>To send you push notifications and reminders you have configured.</li>
+        <li>To improve the App's performance and fix issues.</li>
+      </ul>
+      <p>We do <strong>not</strong> sell your data or use it for advertising purposes.</p>
+    </div>
+
+    <div class="section">
+      <h2>Data Sharing</h2>
+      <p>Your data is only shared in the following cases:</p>
+      <ul>
+        <li><strong>With other Dayflow users:</strong> when you share a calendar or invite someone to an activity, the relevant data is visible to those specific users.</li>
+        <li><strong>Supabase:</strong> our database and authentication provider. Data is stored securely on Supabase infrastructure. See <a href="https://supabase.com/privacy" target="_blank">supabase.com/privacy</a>.</li>
+        <li><strong>Firebase (Google):</strong> used solely to deliver push notifications. See <a href="https://firebase.google.com/support/privacy" target="_blank">firebase.google.com/support/privacy</a>.</li>
+      </ul>
+      <p>We do not share your data with any other third parties.</p>
+    </div>
+
+    <div class="section">
+      <h2>Data Security</h2>
+      <p>All data is transmitted over HTTPS (TLS encryption). We rely on Supabase's enterprise-grade security for data storage, including row-level security policies that ensure users can only access their own data.</p>
+    </div>
+
+    <div class="section">
+      <h2>Data Retention</h2>
+      <p>Your data is retained for as long as your account is active. If you delete your account, your personal data and all associated content (tasks, goals, calendar entries) will be permanently deleted from our systems.</p>
+    </div>
+
+    <div class="section">
+      <h2>Your Rights</h2>
+      <p>You have the right to:</p>
+      <ul>
+        <li><strong>Access</strong> the personal data we hold about you.</li>
+        <li><strong>Correct</strong> inaccurate data via the Settings screen in the App.</li>
+        <li><strong>Delete</strong> your account and all associated data by contacting us or using the account deletion option in Settings.</li>
+        <li><strong>Export</strong> your data upon request.</li>
+      </ul>
+      <p>To exercise any of these rights, contact us at <a href="mailto:hello@day-flow.co">hello@day-flow.co</a>.</p>
+    </div>
+
+    <div class="section">
+      <h2>Children's Privacy</h2>
+      <p>Dayflow is not directed at children under the age of 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal data, please contact us and we will delete it promptly.</p>
+    </div>
+
+    <div class="section">
+      <h2>Changes to This Policy</h2>
+      <p>We may update this Privacy Policy from time to time. We will notify you of any significant changes by updating the "Last updated" date at the top of this page. Continued use of the App after changes constitutes acceptance of the updated policy.</p>
+    </div>
+
+    <div class="section">
+      <h2>Contact Us</h2>
+      <p>If you have any questions about this Privacy Policy, please contact us:</p>
+      <ul>
+        <li>Email: <a href="mailto:hello@day-flow.co">hello@day-flow.co</a></li>
+        <li>Website: <a href="https://day-flow.co" target="_blank">day-flow.co</a></li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════ ESPAÑOL ═══════════════════════════ -->
+  <div lang-content="es">
+
+    <div class="section">
+      <span class="badge">Última actualización: 8 de mayo de 2025</span>
+      <h2>Introducción</h2>
+      <p>Chanca Studio ("nosotros" o "nuestro") opera la aplicación móvil Dayflow (la "App"). Esta Política de Privacidad explica cómo recopilamos, usamos y protegemos tu información personal cuando usas Dayflow.</p>
+      <p>Al usar la App, aceptas la recopilación y el uso de información conforme a esta política.</p>
+    </div>
+
+    <div class="section">
+      <h2>Información que recopilamos</h2>
+      <p>Recopilamos los siguientes tipos de datos:</p>
+      <ul>
+        <li><strong>Información de cuenta:</strong> tu correo electrónico, nombre completo y foto de perfil (opcional) al registrarte.</li>
+        <li><strong>Contenido generado por el usuario:</strong> actividades, tareas, metas, entradas de calendario y cualquier descripción o nota que crees dentro de la App.</li>
+        <li><strong>Datos de uso:</strong> interacciones dentro de la App como completar tareas, compartir calendarios y aceptar invitaciones — usados únicamente para ofrecer las funciones de la App.</li>
+        <li><strong>Token de dispositivo:</strong> un token de notificaciones push de Firebase para enviarte recordatorios.</li>
+      </ul>
+      <p><strong>No</strong> recopilamos datos de ubicación, información financiera ni ningún dato personal sensible.</p>
+    </div>
+
+    <div class="section">
+      <h2>Cómo usamos tu información</h2>
+      <ul>
+        <li>Para crear y gestionar tu cuenta.</li>
+        <li>Para ofrecer las funciones de calendario, metas y estadísticas.</li>
+        <li>Para habilitar calendarios compartidos y colaboración entre usuarios.</li>
+        <li>Para enviarte notificaciones push y recordatorios que hayas configurado.</li>
+        <li>Para mejorar el rendimiento de la App y corregir errores.</li>
+      </ul>
+      <p><strong>No</strong> vendemos tus datos ni los usamos con fines publicitarios.</p>
+    </div>
+
+    <div class="section">
+      <h2>Compartir datos</h2>
+      <p>Tus datos solo se comparten en los siguientes casos:</p>
+      <ul>
+        <li><strong>Con otros usuarios de Dayflow:</strong> cuando compartes un calendario o invitas a alguien a una actividad, esos datos son visibles para esos usuarios específicos.</li>
+        <li><strong>Supabase:</strong> nuestro proveedor de base de datos y autenticación. Los datos se almacenan de forma segura en la infraestructura de Supabase. Ver <a href="https://supabase.com/privacy" target="_blank">supabase.com/privacy</a>.</li>
+        <li><strong>Firebase (Google):</strong> usado únicamente para entregar notificaciones push. Ver <a href="https://firebase.google.com/support/privacy" target="_blank">firebase.google.com/support/privacy</a>.</li>
+      </ul>
+      <p>No compartimos tus datos con ningún otro tercero.</p>
+    </div>
+
+    <div class="section">
+      <h2>Seguridad de los datos</h2>
+      <p>Todos los datos se transmiten mediante HTTPS (cifrado TLS). Nos apoyamos en la seguridad de nivel empresarial de Supabase para el almacenamiento, incluyendo políticas de seguridad a nivel de fila que garantizan que los usuarios solo puedan acceder a sus propios datos.</p>
+    </div>
+
+    <div class="section">
+      <h2>Retención de datos</h2>
+      <p>Tus datos se conservan mientras tu cuenta esté activa. Si eliminas tu cuenta, tus datos personales y todo el contenido asociado (tareas, metas, entradas de calendario) serán eliminados permanentemente de nuestros sistemas.</p>
+    </div>
+
+    <div class="section">
+      <h2>Tus derechos</h2>
+      <p>Tienes derecho a:</p>
+      <ul>
+        <li><strong>Acceder</strong> a los datos personales que tenemos sobre ti.</li>
+        <li><strong>Corregir</strong> datos inexactos desde la pantalla de Configuración en la App.</li>
+        <li><strong>Eliminar</strong> tu cuenta y todos los datos asociados contactándonos o usando la opción de eliminación de cuenta en Configuración.</li>
+        <li><strong>Exportar</strong> tus datos bajo solicitud.</li>
+      </ul>
+      <p>Para ejercer cualquiera de estos derechos, contáctanos en <a href="mailto:hello@day-flow.co">hello@day-flow.co</a>.</p>
+    </div>
+
+    <div class="section">
+      <h2>Privacidad de menores</h2>
+      <p>Dayflow no está dirigido a menores de 13 años. No recopilamos conscientemente información personal de menores de 13 años. Si crees que un menor nos ha proporcionado datos personales, contáctanos y los eliminaremos de inmediato.</p>
+    </div>
+
+    <div class="section">
+      <h2>Cambios a esta política</h2>
+      <p>Podemos actualizar esta Política de Privacidad ocasionalmente. Te notificaremos sobre cambios significativos actualizando la fecha de "Última actualización" en la parte superior de esta página. El uso continuo de la App tras los cambios implica la aceptación de la política actualizada.</p>
+    </div>
+
+    <div class="section">
+      <h2>Contáctanos</h2>
+      <p>Si tienes preguntas sobre esta Política de Privacidad, contáctanos:</p>
+      <ul>
+        <li>Correo: <a href="mailto:hello@day-flow.co">hello@day-flow.co</a></li>
+        <li>Sitio web: <a href="https://day-flow.co" target="_blank">day-flow.co</a></li>
+      </ul>
+    </div>
+
+  </div>
+
+</main>
+
+<footer>
+  &copy; 2025 Chanca Studio · <a href="https://day-flow.co">day-flow.co</a>
+</footer>
+
+<script>
+  function setLang(lang) {
+    document.querySelectorAll('[lang-content]').forEach(el => {
+      el.classList.toggle('visible', el.getAttribute('lang-content') === lang);
+    });
+    document.querySelectorAll('.lang-switcher button').forEach(btn => {
+      btn.classList.toggle('active', btn.textContent.toLowerCase().includes(lang === 'en' ? 'english' : 'español'));
+    });
+  }
+</script>
+
+</body>
+</html>
