@@ -62,7 +62,7 @@ export async function scheduleActivityReminders(activities: Activity[]) {
       toSchedule.push({
         id:        uuidToIntId(act.id),
         title:     `⏰ En 30 minutos: ${act.emoji ? act.emoji + ' ' : ''}${act.title}`,
-        body:      act.description?.trim() || 'Tienes una actividad próxima',
+        body:      act.description?.trim() || 'Tu siguiente actividad se acerca. ¡Tú puedes! 💪',
         channelId: 'activity-reminders',
         schedule:  { at: new Date(notifyAt), allowWhileIdle: true },
         extra:     { type: 'activity_reminder', date: act.date, activityId: act.id },

@@ -41,15 +41,21 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   const [modalInitialTime, setModalInitialTime] = useState<{ start: string; end: string } | null>(null)
   const [activeUserIds, setActiveUserIds] = useState<string[]>([])
   // Detected client-side after hydration; starts false (SSR-safe)
-  const [isMobile, setIsMobile] = useState(false)
+  const [isMobile, setIsMobile]   = useState(false)
+  // Tablet: 768–1279 px — uses bottom panel instead of right-side panel
+  const [isTablet, setIsTablet]   = useState(false)
   // Live copy of shared calendars — the server prop is static; this refreshes in real-time
   const [liveSharedCalendars, setLiveSharedCalendars] = useState(sharedCalendars)
   const supabase = createClient()
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
+    const check = () => {
+      const w = window.innerWidth
+      setIsMobile(w < 768)
+      setIsTablet(w >= 768 && w < 1280)
+      if (w < 768) setMode('week')
+    }
     check()
-    if (window.innerWidth < 768) setMode('week')
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
@@ -397,7 +403,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   }
 
   return (
-    <div className="flex h-full">
+    <div className={cn('flex h-full', isTablet && mode !== 'day' ? 'flex-col' : 'flex-row')}>
       {/* Main calendar area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <CalendarHeader
@@ -497,19 +503,36 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
         </div>}
       </div>
 
-      {/* ── Desktop: right-side detail panel — hidden in day mode ── */}
-      {mode !== 'day' && <div className="hidden md:flex w-80 shrink-0 border-l border-border">
-        <DayDetailPanel
-          date={selectedDate}
-          activities={getActivitiesForDate(selectedDate)}
-          currentUserId={currentUser?.id || ''}
-          currentUserColor={currentUser?.color || '#6366f1'}
-          allUsers={allUsers}
-          onAddActivity={() => setShowAddModal(true)}
-          onEditActivity={setEditingActivity}
-          onActivityUpdated={fetchActivities}
-        />
-      </div>}
+      {/* ── Detail panel — bottom on tablet, right side on desktop ── */}
+      {mode !== 'day' && (
+        isTablet ? (
+          <div className="shrink-0 border-t border-border overflow-hidden" style={{ height: '35dvh' }}>
+            <DayDetailPanel
+              date={selectedDate}
+              activities={getActivitiesForDate(selectedDate)}
+              currentUserId={currentUser?.id || ''}
+              currentUserColor={currentUser?.color || '#6366f1'}
+              allUsers={allUsers}
+              onAddActivity={() => setShowAddModal(true)}
+              onEditActivity={setEditingActivity}
+              onActivityUpdated={fetchActivities}
+            />
+          </div>
+        ) : (
+          <div className="hidden md:flex w-80 shrink-0 border-l border-border">
+            <DayDetailPanel
+              date={selectedDate}
+              activities={getActivitiesForDate(selectedDate)}
+              currentUserId={currentUser?.id || ''}
+              currentUserColor={currentUser?.color || '#6366f1'}
+              allUsers={allUsers}
+              onAddActivity={() => setShowAddModal(true)}
+              onEditActivity={setEditingActivity}
+              onActivityUpdated={fetchActivities}
+            />
+          </div>
+        )
+      )}
 
       {/* Add/Edit Activity Modal */}
       {(showAddModal || editingActivity) && (
