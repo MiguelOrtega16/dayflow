@@ -84,14 +84,14 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/50 z-40 xl:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <div className={cn(
-        'shrink-0 md:flex',
+        'shrink-0 xl:flex',
         sidebarOpen ? 'flex fixed inset-y-0 left-0 z-50' : 'hidden'
       )}>
         <AppSidebar profile={profile} onNavClick={() => setSidebarOpen(false)} />
@@ -101,7 +101,7 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* ── Top bar — mobile only ── */}
-        <header className="md:hidden relative flex items-center justify-between px-4 h-14 border-b border-border bg-card shrink-0">
+        <header className="xl:hidden relative flex items-center justify-between px-4 h-14 border-b border-border bg-card shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-foreground transition-colors"
@@ -125,7 +125,7 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
           {/* Pull-to-refresh indicator — mobile only */}
           <div
             className={cn(
-              'md:hidden flex items-center justify-center overflow-hidden transition-[height] duration-100',
+              'xl:hidden flex items-center justify-center overflow-hidden transition-[height] duration-100',
               (pullDist > 0 || refreshing) ? 'opacity-100' : 'opacity-0'
             )}
             style={{ height: refreshing ? 48 : pullDist > 0 ? pullDist : 0 }}
