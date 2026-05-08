@@ -140,3 +140,45 @@
     @apply animate-shimmer;
   }
 }
+
+/* ── App loading splash ──────────────────────────────────────────────────────── */
+#app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: hsl(var(--background));
+  transition: opacity 0.35s ease;
+}
+
+.app-splash-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  object-fit: cover;
+}
+
+.app-splash-title {
+  margin-top: 14px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: hsl(var(--foreground));
+}
+
+.app-splash-spinner {
+  margin-top: 28px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2.5px solid hsl(var(--primary) / 0.25);
+  border-top-color: hsl(var(--primary));
+  animation: app-spin 0.75s linear infinite;
+}
+
+@keyframes app-spin {
+  to { transform: rotate(360deg); }
+}
