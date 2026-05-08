@@ -293,7 +293,11 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onAddActivity={() => setShowAddModal(true)}
           userId={currentUser?.id}
         />
-        <div className="flex-1 overflow-hidden">
+        <div
+          className="flex-1 overflow-hidden"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           <TimeGridView
             days={[selectedDate]}
             activities={activities}
