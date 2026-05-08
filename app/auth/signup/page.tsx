@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { CalendarDays, Eye, EyeOff } from 'lucide-react'
+import { translateAuthError } from '@/lib/auth-errors'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
@@ -31,7 +32,7 @@ export default function SignupPage() {
     })
 
     if (error) {
-      setError(error.message)
+      setError(translateAuthError(error.message))
       setLoading(false)
     } else if (data.session) {
       // Email confirmation disabled — user is immediately authenticated

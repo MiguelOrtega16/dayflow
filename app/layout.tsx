@@ -39,13 +39,6 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
       <body>
-        {/* Splash — pure HTML/CSS, visible before JS loads, dismissed on first mount */}
-        <div id="app-splash">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icon-512.png" alt="" className="app-splash-icon" />
-          <span className="app-splash-title">DayFlow</span>
-          <div className="app-splash-spinner" />
-        </div>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { CalendarDays, Eye, EyeOff } from 'lucide-react'
+import { translateAuthError } from '@/lib/auth-errors'
 
 export default function LoginPage() {
   const [email, setEmail]     = useState('')
@@ -14,9 +15,10 @@ export default function LoginPage() {
   // Surface errors forwarded from the auth callback (e.g. expired confirmation link)
   const searchParams = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search) : null
-  const [error, setError] = useState<string | null>(
-    searchParams?.get('error') ? decodeURIComponent(searchParams.get('error')!) : null
-  )
+  const [error, setError] = useState<string | null>(() => {
+    const raw = searchParams?.get('error')
+    return raw ? translateAuthError(decodeURIComponent(raw)) : null
+  })
   const router   = useRouter()
   const supabase = createClient()
 
@@ -27,12 +29,7 @@ export default function LoginPage() {
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      // Surface a friendlier message when email confirmation is pending
-      if (error.message.toLowerCase().includes('email not confirmed')) {
-        setError('Tu correo aún no ha sido confirmado. Revisa tu bandeja de entrada y haz clic en el enlace de activación.')
-      } else {
-        setError(error.message)
-      }
+      setError(translateAuthError(error.message))
       setLoading(false)
     } else {
       router.push('/dashboard')

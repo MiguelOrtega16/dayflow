@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { CalendarDays, Loader2 } from 'lucide-react'
+import { translateAuthError } from '@/lib/auth-errors'
 
 const COOLDOWN_SECONDS = 60
 
@@ -29,7 +30,7 @@ export default function ForgotPasswordPage() {
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
     setLoading(false)
     if (error) {
-      setError(error.message)
+      setError(translateAuthError(error.message))
     } else {
       setSent(true)
       setCooldown(COOLDOWN_SECONDS)

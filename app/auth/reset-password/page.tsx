@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { CalendarDays, Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react'
+import { translateAuthError } from '@/lib/auth-errors'
 
 export default function ResetPasswordPage() {
   const [password, setPassword]         = useState('')
@@ -57,7 +58,7 @@ export default function ResetPasswordPage() {
     setLoading(false)
 
     if (error) {
-      setError(error.message)
+      setError(translateAuthError(error.message))
     } else {
       router.push('/dashboard')
       router.refresh()
