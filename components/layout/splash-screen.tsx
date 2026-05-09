@@ -7,6 +7,16 @@ export function SplashScreen() {
   const [fading, setFading]   = useState(false)
 
   useEffect(() => {
+    // Dismiss the Capacitor native splash now that the WebView has rendered content.
+    // launchAutoHide:false keeps it covering the black WebView-loading gap;
+    // we hide it here so both splashes fade out together.
+    import('@capacitor/core').then(({ Capacitor }) => {
+      if (!Capacitor.isNativePlatform()) return
+      import('@capacitor/splash-screen').then(({ SplashScreen }) => {
+        SplashScreen.hide({ fadeOutDuration: 350 })
+      })
+    })
+
     setFading(true)
     const t = setTimeout(() => setVisible(false), 380)
     return () => clearTimeout(t)

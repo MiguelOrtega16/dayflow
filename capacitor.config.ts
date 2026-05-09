@@ -23,7 +23,11 @@ const config: CapacitorConfig = {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
     SplashScreen: {
-      launchShowDuration: 0,
+      launchAutoHide: false,
+      backgroundColor: '#f9f7f6',
+      androidSplashResourceName: 'splash',
+      splashFullScreen: true,
+      splashImmersive: true,
     },
   },
 

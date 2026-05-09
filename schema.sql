@@ -599,8 +599,9 @@ exception when duplicate_object then null; end $$;
 -- ============================================================
 -- ROLE GRANTS
 -- ============================================================
-grant usage on schema public to anon, authenticated;
+grant usage on schema public to anon, authenticated, service_role;
 
+-- Client roles (RLS policies enforce row-level access)
 grant select              on public.profiles              to anon, authenticated;
 grant insert, update      on public.profiles              to authenticated;
 grant select, insert, update, delete on public.goals               to authenticated;
@@ -611,6 +612,21 @@ grant select, insert, update, delete on public.activity_comments    to authentic
 grant select, insert, update, delete on public.activity_invitations to authenticated;
 
 grant usage on all sequences in schema public to authenticated;
+
+-- service_role: server-only admin key (Vercel env vars), never reaches clients.
+-- Granted only what each server-side route actually needs; RLS is bypassed for this role.
+-- Cron routes
+grant select         on public.activities           to service_role;
+grant select         on public.activity_invitations to service_role;
+grant select, update on public.profiles             to service_role;
+-- Delete-account route
+grant delete on public.notifications        to service_role;
+grant delete on public.activity_comments    to service_role;
+grant delete on public.activity_invitations to service_role;
+grant delete on public.shared_calendars     to service_role;
+grant delete on public.activities           to service_role;
+grant delete on public.goals                to service_role;
+grant delete on public.profiles             to service_role;
 
 -- ============================================================
 -- STORAGE

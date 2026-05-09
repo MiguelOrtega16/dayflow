@@ -17,6 +17,22 @@ import type {
 
 const EMOJIS = ['🎯', '✅', '📚', '💪', '🏃', '🧘', '💻', '🎨', '📝', '🔧', '🌱', '⭐', '🚀', '💡', '🎵', '🍎']
 
+function nextHalfHour(): string {
+  const now = new Date()
+  const h = now.getHours()
+  const m = now.getMinutes()
+  if (m < 30) return `${String(h).padStart(2, '0')}:30`
+  const nh = h + 1
+  if (nh >= 24) return '23:30'
+  return `${String(nh).padStart(2, '0')}:00`
+}
+
+function addMins(time: string, mins: number): string {
+  const [h, m] = time.split(':').map(Number)
+  const total = Math.min(h * 60 + m + mins, 23 * 60 + 30)
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
 interface ActivityFormModalProps {
   date: Date
   activity?: Activity | null
@@ -41,20 +57,18 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [category, setCategory]       = useState<ActivityCategory>(activity?.category || 'task')
   const [goalId, setGoalId]           = useState<string>(activity?.goal_id || '')
   const [emoji, setEmoji]             = useState(activity?.emoji || '')
-  const [startTime, setStartTime]     = useState(activity?.start_time || initialStartTime || '')
-  const [endTime, setEndTime]         = useState(activity?.end_time   || initialEndTime   || '')
+  const defaultStart = !isEditing && !initialStartTime ? nextHalfHour() : (activity?.start_time || initialStartTime || '')
+  const defaultEnd   = !isEditing && !initialEndTime   ? addMins(defaultStart, 60) : (activity?.end_time || initialEndTime || '')
+
+  const [startTime, setStartTime]     = useState(defaultStart)
+  const [endTime, setEndTime]         = useState(defaultEnd)
 
   const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
-  const addHour = (t: string) => {
-    const [h, m] = t.split(':').map(Number)
-    const nh = Math.min(23, h + 1)
-    return `${String(nh).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-  }
 
   const handleStartTimeChange = (val: string) => {
     setStartTime(val)
     setEndTimeError(false)
-    if (val && (!endTime || toMin(endTime) <= toMin(val))) setEndTime(addHour(val))
+    if (val && (!endTime || toMin(endTime) <= toMin(val))) setEndTime(addMins(val, 60))
   }
 
   const handleEndTimeChange = (val: string) => {
