@@ -19,6 +19,8 @@ create table if not exists public.profiles (
   bio text,
   color text not null default '#6366f1',
   email_notifications boolean not null default false,
+  fcm_token text,
+  timezone text,
   created_at timestamptz default now() not null,
   updated_at timestamptz default now() not null
 );
@@ -26,6 +28,7 @@ create table if not exists public.profiles (
 -- Upgrade path: add columns that were added after initial release
 alter table public.profiles add column if not exists email_notifications boolean not null default false;
 alter table public.profiles add column if not exists fcm_token text;
+alter table public.profiles add column if not exists timezone text;
 
 alter table public.profiles enable row level security;
 

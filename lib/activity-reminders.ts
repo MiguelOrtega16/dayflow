@@ -24,58 +24,14 @@ async function ensureChannel(LocalNotifications: any) {
 }
 
 /**
- * Cancels all previously scheduled reminders and reschedules fresh ones
- * for every activity in `activities` that has a start_time in the future.
- * No-op outside the native Capacitor app.
+ * Disabled: local notifications replaced with server-side FCM push.
+ * Server-side notifications are more reliable on Android due to Doze mode + exact alarm handling.
+ * Cron endpoint `/api/cron/activity-30min-reminders` sends FCM 30 minutes before each activity.
+ * This function kept for backwards compatibility but is now a no-op.
  */
 export async function scheduleActivityReminders(activities: Activity[]) {
   if (!Capacitor.isNativePlatform()) return
-
-  try {
-    const { LocalNotifications } = await import('@capacitor/local-notifications')
-
-    const perm = await LocalNotifications.requestPermissions()
-    if (perm.display !== 'granted') return
-
-    await ensureChannel(LocalNotifications)
-
-    // Cancel every previously scheduled reminder so edits / deletions are respected
-    const { notifications: pending } = await LocalNotifications.getPending()
-    if (pending.length > 0) {
-      await LocalNotifications.cancel({ notifications: pending })
-    }
-
-    const now = Date.now()
-    const toSchedule: LocalNotificationSchema[] = []
-
-    for (const act of activities) {
-      if (!act.start_time || !act.date) continue
-
-      // Build a local Date from the activity's date + start_time
-      const [h, m] = act.start_time.split(':').map(Number)
-      const actDate = new Date(act.date + 'T00:00:00')
-      actDate.setHours(h, m, 0, 0)
-
-      const notifyAt = actDate.getTime() - 30 * 60 * 1000 // 30 min before
-      if (notifyAt <= now) continue
-
-      toSchedule.push({
-        id:        uuidToIntId(act.id),
-        title:     `⏰ En 30 minutos: ${act.emoji ? act.emoji + ' ' : ''}${act.title}`,
-        body:      act.description?.trim() || 'Tu siguiente actividad se acerca. ¡Tú puedes! 💪',
-        channelId: 'activity-reminders',
-        schedule:  { at: new Date(notifyAt), allowWhileIdle: true },
-        extra:     { type: 'activity_reminder', date: act.date, activityId: act.id },
-      })
-    }
-
-    if (toSchedule.length > 0) {
-      await LocalNotifications.schedule({ notifications: toSchedule })
-      console.log(`[ActivityReminders] scheduled ${toSchedule.length} reminder(s)`)
-    }
-  } catch (err) {
-    console.error('[ActivityReminders] error:', err)
-  }
+  // Activity reminders are now handled via server-side FCM push notifications
 }
 
 /** Wire up the tap handler so tapping a local reminder opens the right day. */

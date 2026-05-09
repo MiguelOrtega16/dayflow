@@ -730,9 +730,9 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
 
   return (
     <div className="flex items-center gap-1">
-      <input type="text" inputMode="numeric" value={local.h} placeholder="--"
+      <input type="text" inputMode="numeric" maxLength={2} value={local.h} placeholder="--"
         onChange={e => {
-          const v = e.target.value.replace(/\D/g, '').slice(0, 2)
+          const v = e.target.value.replace(/\D/g, '')
           const n = parseInt(v)
           if (v === '' || (!isNaN(n) && n >= 0 && n <= 12)) update('h', v)
         }}
@@ -742,9 +742,9 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
         className={inputCls}
       />
       <span className="text-xs font-bold text-muted-foreground shrink-0">:</span>
-      <input type="text" inputMode="numeric" value={local.m} placeholder="00"
+      <input type="text" inputMode="numeric" maxLength={2} value={local.m} placeholder="00"
         onChange={e => {
-          const v = e.target.value.replace(/\D/g, '').slice(0, 2)
+          const v = e.target.value.replace(/\D/g, '')
           const n = parseInt(v)
           if (v === '' || (!isNaN(n) && n <= 59)) update('m', v)
         }}

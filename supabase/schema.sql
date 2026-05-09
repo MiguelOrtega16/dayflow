@@ -19,12 +19,16 @@ create table if not exists public.profiles (
   bio text,
   color text not null default '#6366f1',
   email_notifications boolean not null default false,
+  fcm_token text,
+  timezone text,
   created_at timestamptz default now() not null,
   updated_at timestamptz default now() not null
 );
 
 -- Upgrade path: add columns that were added after initial release
 alter table public.profiles add column if not exists email_notifications boolean not null default false;
+alter table public.profiles add column if not exists fcm_token text;
+alter table public.profiles add column if not exists timezone text;
 
 alter table public.profiles enable row level security;
 
@@ -237,6 +241,27 @@ create index if not exists activities_status_idx     on public.activities(status
 
 alter table public.activities enable row level security;
 
+drop policy if exists "Users can view own activities" on public.activities;
+create policy "Users can view own activities"
+  on public.activities for select to authenticated
+  using (
+    user_id = auth.uid()
+    or (
+      is_public = true
+      and exists (
+        select 1 from public.shared_calendars sc
+        where sc.shared_with_id = auth.uid()
+          and sc.owner_id = activities.user_id
+          and sc.status = 'accepted'
+      )
+    )
+    or exists (
+      select 1 from public.activity_invitations ai
+      where ai.activity_id = activities.id
+        and ai.invitee_id = auth.uid()
+    )
+  );
+
 drop policy if exists "Users can insert own activities" on public.activities;
 create policy "Users can insert own activities"
   on public.activities for insert to authenticated
@@ -245,7 +270,15 @@ create policy "Users can insert own activities"
 drop policy if exists "Users can update own activities" on public.activities;
 create policy "Users can update own activities"
   on public.activities for update to authenticated
-  using (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    or exists (
+      select 1 from public.activity_invitations ai
+      where ai.activity_id = activities.id
+        and ai.invitee_id = auth.uid()
+        and ai.status = 'accepted'
+    )
+  );
 
 drop policy if exists "Users can delete own activities" on public.activities;
 create policy "Users can delete own activities"
@@ -271,33 +304,26 @@ do $$ begin
     check (status in ('pending', 'accepted', 'declined'));
 exception when duplicate_object then null; end $$;
 
+alter table public.activity_invitations
+  add column if not exists participant_status text not null default 'todo';
+
+do $$ begin
+  alter table public.activity_invitations add constraint activity_invitations_participant_status_check
+    check (participant_status in ('todo', 'in_progress', 'done', 'blocked', 'skipped'));
+exception when duplicate_object then null; end $$;
+
+-- Allow invitees to update their own participant_status
+drop policy if exists "Participants can update their status" on public.activity_invitations;
+create policy "Participants can update their status"
+  on public.activity_invitations for update to authenticated
+  using (invitee_id = auth.uid())
+  with check (invitee_id = auth.uid());
+
 create index if not exists act_inv_activity_idx on public.activity_invitations(activity_id);
 create index if not exists act_inv_invitee_idx  on public.activity_invitations(invitee_id);
 create index if not exists act_inv_inviter_idx  on public.activity_invitations(inviter_id);
 
 alter table public.activity_invitations enable row level security;
-
-drop policy if exists "Users can view own activities" on public.activities;
-create policy "Users can view own activities"
-  on public.activities for select to authenticated
-  using (
-    user_id = auth.uid()
-    or (
-      is_public = true
-      and exists (
-        select 1 from public.shared_calendars sc
-        where sc.shared_with_id = auth.uid()
-          and sc.owner_id = activities.user_id
-          and sc.status = 'accepted'
-      )
-    )
-    or exists (
-      select 1 from public.activity_invitations ai
-      where ai.activity_id = activities.id
-        and ai.invitee_id = auth.uid()
-    )
-  );
-
 
 drop policy if exists "See own activity invitations" on public.activity_invitations;
 create policy "See own activity invitations"
@@ -403,7 +429,8 @@ alter table public.notifications
   check (type in (
     'status_update', 'task_completed', 'goal_completed', 'goal_progress', 'new_activity',
     'activity_invitation', 'invitation_accepted', 'invitation_declined',
-    'calendar_share_invite', 'calendar_share_accepted', 'calendar_share_declined'
+    'calendar_share_invite', 'calendar_share_accepted', 'calendar_share_declined',
+    'activity_reminder'
   ));
 
 create index if not exists notifications_recipient_idx
