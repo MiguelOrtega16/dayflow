@@ -7,7 +7,9 @@
       "Bash(python -c ' *)",
       "PowerShell(Select-String \"SUPABASE\" \"e:\\\\PersonalProjects\\\\dayflow\\\\.env.local\" | Select-Object -ExpandProperty Line | ForEach-Object { \\($_ -split \"=\"\\)[0] })",
       "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(p.dependencies['@capacitor/splash-screen'] ?? 'NOT INSTALLED'\\)\")",
-      "Bash(node -e \"const p = require\\('./package.json'\\); const caps = Object.keys\\(p.dependencies\\).filter\\(k => k.startsWith\\('@capacitor'\\)\\); console.log\\(caps.join\\('\\\\n'\\)\\)\")"
+      "Bash(node -e \"const p = require\\('./package.json'\\); const caps = Object.keys\\(p.dependencies\\).filter\\(k => k.startsWith\\('@capacitor'\\)\\); console.log\\(caps.join\\('\\\\n'\\)\\)\")",
+      "Bash(Get-ChildItem -Path \"e:\\\\PersonalProjects\\\\dayflow\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ]
   }
 }

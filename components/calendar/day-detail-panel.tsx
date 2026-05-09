@@ -2,7 +2,7 @@
 
 import { format, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2 } from 'lucide-react'
+import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2, ChevronDown, Loader2 } from 'lucide-react'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime, getInitials, formatRelativeTime } from '@/lib/utils'
 import { updateActivityStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile, ActivityComment } from '@/types'
@@ -61,9 +61,30 @@ export function DayDetailPanel({
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
   const [newCommentText, setNewCommentText] = useState<Record<string, string>>({})
   const [commentLoading, setCommentLoading] = useState<Record<string, boolean>>({})
+  const [collapsedUsers, setCollapsedUsers] = useState<Set<string>>(new Set())
+  const [transitioning, setTransitioning] = useState(false)
   const supabase = createClient()
   // Ref so the Realtime callback always reads the current openCommentId without stale closure
   const openCommentIdRef = useRef<string | null>(null)
+  const prevDateStr = useRef(format(date, 'yyyy-MM-dd'))
+
+  // Brief fade when switching days
+  useEffect(() => {
+    const str = format(date, 'yyyy-MM-dd')
+    if (str === prevDateStr.current) return
+    prevDateStr.current = str
+    setTransitioning(true)
+    const t = setTimeout(() => setTransitioning(false), 220)
+    return () => clearTimeout(t)
+  }, [date])
+
+  const toggleUserCollapse = (userId: string) => {
+    setCollapsedUsers(prev => {
+      const next = new Set(prev)
+      next.has(userId) ? next.delete(userId) : next.add(userId)
+      return next
+    })
+  }
 
   // Pre-fetch comment counts for all visible activities
   useEffect(() => {
@@ -421,7 +442,7 @@ export function DayDetailPanel({
 
                   {openMenuId === activity.id && (
                     <div
-                      className="absolute right-0 top-7 z-50 w-56 bg-popover border border-border rounded-xl shadow-lg py-1 text-sm"
+                      className="absolute right-0 top-7 z-50 w-52 bg-popover border border-border rounded-xl shadow-lg py-1 text-sm"
                       onClick={e => e.stopPropagation()}
                     >
                       <button
@@ -430,6 +451,33 @@ export function DayDetailPanel({
                       >
                         ✏️ Editar
                       </button>
+                      <div className="border-t border-border my-1" />
+                      <p className="px-3 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Estado</p>
+                      {STATUS_CYCLE.map(s => {
+                        const cfg = STATUS_CONFIG[s]
+                        const Icon = STATUS_ICON[s]
+                        const isCurrent = activity.status === s
+                        return (
+                          <button
+                            key={s}
+                            onClick={async () => {
+                              if (!isCurrent) {
+                                await updateActivityStatus(activity.id, s)
+                                onActivityUpdated()
+                              }
+                              setOpenMenuId(null)
+                            }}
+                            className={cn(
+                              'w-full flex items-center gap-2 px-3 py-1.5 transition-colors',
+                              isCurrent ? 'bg-muted font-medium' : 'hover:bg-muted'
+                            )}
+                          >
+                            <Icon className={cn('w-3.5 h-3.5 shrink-0', cfg.color)} />
+                            <span>{cfg.label}</span>
+                            {isCurrent && <span className="ml-auto text-[10px] text-muted-foreground">✓</span>}
+                          </button>
+                        )
+                      })}
                       <div className="border-t border-border my-1" />
                       <button
                         onClick={() => handleDelete(activity)}
@@ -536,9 +584,12 @@ export function DayDetailPanel({
       <div className="px-4 py-4 border-b border-border">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className={cn('text-xl font-semibold capitalize', isTodayDate && 'text-primary')}>
-              {dateLabel}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className={cn('text-xl font-semibold capitalize', isTodayDate && 'text-primary')}>
+                {dateLabel}
+              </h2>
+              {transitioning && <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />}
+            </div>
             <p className="text-sm text-muted-foreground capitalize">{dateSubLabel}</p>
           </div>
           <button
@@ -567,7 +618,7 @@ export function DayDetailPanel({
       </div>
 
       {/* Lista de actividades */}
-      <div className="flex-1 overflow-y-auto">
+      <div className={cn('flex-1 overflow-y-auto transition-opacity duration-200', transitioning && 'opacity-40 pointer-events-none')}>
         {total === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-6">
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
@@ -582,8 +633,11 @@ export function DayDetailPanel({
             {/* ── Section 1: My activities ── */}
             <div>
               {showSectionHeaders && myProfile && (
-                <div className="flex items-center gap-2 mb-2 px-1 py-1 rounded-lg"
-                  style={{ backgroundColor: myProfile.color + '15' }}>
+                <button
+                  onClick={() => toggleUserCollapse(currentUserId)}
+                  className="w-full flex items-center gap-2 mb-2 px-1 py-1 rounded-lg"
+                  style={{ backgroundColor: myProfile.color + '15' }}
+                >
                   <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
                     style={{ backgroundColor: myProfile.color }}>
                     {myProfile.avatar_url
@@ -596,77 +650,100 @@ export function DayDetailPanel({
                       {myActivities.filter(a => a.status === 'done').length}/{myActivities.length}
                     </span>
                   )}
+                  <ChevronDown className={cn('w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200', collapsedUsers.has(currentUserId) && '-rotate-90')} />
+                </button>
+              )}
+              {!collapsedUsers.has(currentUserId) && (
+                <div className="space-y-1.5">
+                  {myActivities.length === 0 ? (
+                    <button onClick={onAddActivity} className="activity-card-ghost w-full text-sm">
+                      <Plus className="w-4 h-4 mr-1" /> Agregar actividad
+                    </button>
+                  ) : (
+                    myActivities.map(a => renderActivityCard(a, myProfile?.color || currentUserColor))
+                  )}
                 </div>
               )}
-              <div className="space-y-1.5">
-                {myActivities.length === 0 ? (
-                  <button onClick={onAddActivity} className="activity-card-ghost w-full text-sm">
-                    <Plus className="w-4 h-4 mr-1" /> Agregar actividad
-                  </button>
-                ) : (
-                  myActivities.map(a => renderActivityCard(a, myProfile?.color || currentUserColor))
-                )}
-              </div>
             </div>
 
             {/* ── Section 2: Shared activities (I'm a participant) ── */}
-            {sharedGroups.map((group, gi) => (
-              <div key={group.profile?.id ?? `shared-${gi}`}>
-                <div className="flex items-center gap-2 mb-2 px-1 py-1 rounded-lg"
-                  style={{ backgroundColor: (group.profile?.color || '#6366f1') + '15' }}>
-                  {/* Overlapping avatars: owner + me */}
-                  <div className="flex items-center">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 ring-2 ring-background"
-                      style={{ backgroundColor: group.profile?.color || '#6366f1' }}>
-                      {group.profile?.avatar_url
-                        ? <img src={group.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                        : getInitials(group.profile?.full_name, group.profile?.email)}
-                    </div>
-                    {myProfile && (
-                      <div className="-ml-2 w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 ring-2 ring-background"
-                        style={{ backgroundColor: myProfile.color || currentUserColor }}>
-                        {myProfile.avatar_url
-                          ? <img src={myProfile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                          : getInitials(myProfile.full_name, myProfile.email).charAt(0)}
+            {sharedGroups.map((group, gi) => {
+              const sectionId = (group.profile?.id ?? `shared-${gi}`) + ':shared'
+              const collapsed  = collapsedUsers.has(sectionId)
+              return (
+                <div key={group.profile?.id ?? `shared-${gi}`}>
+                  <button
+                    onClick={() => toggleUserCollapse(sectionId)}
+                    className="w-full flex items-center gap-2 mb-2 px-1 py-1 rounded-lg"
+                    style={{ backgroundColor: (group.profile?.color || '#6366f1') + '15' }}
+                  >
+                    {/* Overlapping avatars: owner + me */}
+                    <div className="flex items-center shrink-0">
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ring-2 ring-background"
+                        style={{ backgroundColor: group.profile?.color || '#6366f1' }}>
+                        {group.profile?.avatar_url
+                          ? <img src={group.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                          : getInitials(group.profile?.full_name, group.profile?.email)}
                       </div>
-                    )}
-                  </div>
-                  <span className="text-xs font-semibold ml-1" style={{ color: group.profile?.color || '#6366f1' }}>
-                    {group.profile?.full_name?.split(' ')[0] || group.profile?.email || 'Compartida'} & Tú
-                  </span>
-                  <span className="ml-auto text-[10px] text-muted-foreground font-medium">
-                    {group.activities.filter(a => a.status === 'done').length}/{group.activities.length}
-                  </span>
+                      {myProfile && (
+                        <div className="-ml-2 w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white ring-2 ring-background"
+                          style={{ backgroundColor: myProfile.color || currentUserColor }}>
+                          {myProfile.avatar_url
+                            ? <img src={myProfile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                            : getInitials(myProfile.full_name, myProfile.email).charAt(0)}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold ml-1" style={{ color: group.profile?.color || '#6366f1' }}>
+                      {group.profile?.full_name?.split(' ')[0] || group.profile?.email || 'Compartida'} & Tú
+                    </span>
+                    <span className="ml-auto text-[10px] text-muted-foreground font-medium">
+                      {group.activities.filter(a => a.status === 'done').length}/{group.activities.length}
+                    </span>
+                    <ChevronDown className={cn('w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200', collapsed && '-rotate-90')} />
+                  </button>
+                  {!collapsed && (
+                    <div className="space-y-1.5">
+                      {group.activities.map(a => renderActivityCard(a, group.profile?.color || '#6366f1'))}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-1.5">
-                  {group.activities.map(a => renderActivityCard(a, group.profile?.color || '#6366f1'))}
-                </div>
-              </div>
-            ))}
+              )
+            })}
 
             {/* ── Section 3: Other users' solo activities ── */}
-            {othersGroups.map(group => (
-              <div key={group.profile.id}>
-                <div className="flex items-center gap-2 mb-2 px-1 py-1 rounded-lg"
-                  style={{ backgroundColor: group.profile.color + '15' }}>
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                    style={{ backgroundColor: group.profile.color }}>
-                    {group.profile.avatar_url
-                      ? <img src={group.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                      : getInitials(group.profile.full_name, group.profile.email)}
-                  </div>
-                  <span className="text-xs font-semibold" style={{ color: group.profile.color }}>
-                    {group.profile.full_name || group.profile.email}
-                  </span>
-                  <span className="ml-auto text-[10px] text-muted-foreground font-medium">
-                    {group.activities.filter(a => a.status === 'done').length}/{group.activities.length}
-                  </span>
+            {othersGroups.map(group => {
+              const sectionId = group.profile.id + ':solo'
+              const collapsed  = collapsedUsers.has(sectionId)
+              return (
+                <div key={group.profile.id}>
+                  <button
+                    onClick={() => toggleUserCollapse(sectionId)}
+                    className="w-full flex items-center gap-2 mb-2 px-1 py-1 rounded-lg"
+                    style={{ backgroundColor: group.profile.color + '15' }}
+                  >
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                      style={{ backgroundColor: group.profile.color }}>
+                      {group.profile.avatar_url
+                        ? <img src={group.profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                        : getInitials(group.profile.full_name, group.profile.email)}
+                    </div>
+                    <span className="text-xs font-semibold" style={{ color: group.profile.color }}>
+                      {group.profile.full_name || group.profile.email}
+                    </span>
+                    <span className="ml-auto text-[10px] text-muted-foreground font-medium">
+                      {group.activities.filter(a => a.status === 'done').length}/{group.activities.length}
+                    </span>
+                    <ChevronDown className={cn('w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200', collapsed && '-rotate-90')} />
+                  </button>
+                  {!collapsed && (
+                    <div className="space-y-1.5">
+                      {group.activities.map(a => renderActivityCard(a, group.profile.color || '#6366f1'))}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-1.5">
-                  {group.activities.map(a => renderActivityCard(a, group.profile.color || '#6366f1'))}
-                </div>
-              </div>
-            ))}
+              )
+            })}
 
           </div>
         )}
