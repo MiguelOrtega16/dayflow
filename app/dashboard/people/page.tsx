@@ -128,19 +128,21 @@ export default function PeoplePage() {
             {pendingIncoming.map(sc => {
               const owner = sc.owner as Profile
               return (
-                <div key={sc.id} className="flex items-center gap-3 bg-background/60 rounded-xl p-3">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
-                    style={{ backgroundColor: owner?.color || '#6366f1' }}>
-                    {owner?.avatar_url
-                      ? <img src={owner.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                      : getInitials(owner?.full_name, owner?.email)}
+                <div key={sc.id} className="bg-background/60 rounded-xl p-3 space-y-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
+                      style={{ backgroundColor: owner?.color || '#6366f1' }}>
+                      {owner?.avatar_url
+                        ? <img src={owner.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                        : getInitials(owner?.full_name, owner?.email)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{owner?.full_name || owner?.username || 'Desconocido'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{owner?.email}</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">quiere compartir su calendario contigo</p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{owner?.full_name || owner?.username || 'Desconocido'}</p>
-                    <p className="text-xs text-muted-foreground">{owner?.email}</p>
-                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">quiere compartir su calendario contigo</p>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex gap-2 pl-12">
                     <button
                       onClick={() => handleRespond(sc.id, true)}
                       disabled={responding === sc.id}
@@ -186,8 +188,8 @@ export default function PeoplePage() {
             {searchResults.map(user => {
               const already = isAlreadyShared(user.id)
               return (
-                <div key={user.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 transition-colors border-b border-border last:border-b-0">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                <div key={user.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-muted/50 transition-colors border-b border-border last:border-b-0">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
                     style={{ backgroundColor: user.color }}>
                     {user.avatar_url
                       ? <img src={user.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
@@ -201,7 +203,7 @@ export default function PeoplePage() {
                     onClick={() => !already && handleShare(user)}
                     disabled={already}
                     className={cn(
-                      'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                      'shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
                       already ? 'bg-muted text-muted-foreground cursor-default' : 'bg-primary text-primary-foreground hover:bg-primary/90'
                     )}
                   >
@@ -236,8 +238,8 @@ export default function PeoplePage() {
                       : getInitials(user?.full_name, user?.email)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{user?.full_name || user?.username || 'Desconocido'}</p>
-                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                    <p className="text-sm font-medium truncate">{user?.full_name || user?.username || 'Desconocido'}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                     <p className={cn('text-xs font-medium mt-0.5', STATUS_COLOR[sc.status || 'pending'])}>
                       {STATUS_LABEL[sc.status || 'pending']}
                     </p>
@@ -273,10 +275,10 @@ export default function PeoplePage() {
                       : getInitials(owner?.full_name, owner?.email)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{owner?.full_name || owner?.username || 'Desconocido'}</p>
-                    <p className="text-xs text-muted-foreground">{owner?.email}</p>
+                    <p className="text-sm font-medium truncate">{owner?.full_name || owner?.username || 'Desconocido'}</p>
+                    <p className="text-xs text-muted-foreground truncate">{owner?.email}</p>
                   </div>
-                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">Viendo</span>
+                  <span className="shrink-0 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">Viendo</span>
                 </div>
               )
             })}

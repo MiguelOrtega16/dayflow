@@ -100,27 +100,29 @@ export default function GoalsPage() {
   return (
     <div className="p-6 max-w-2xl mx-auto">
       {/* Encabezado */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1">Metas</h1>
-          <p className="text-sm text-muted-foreground">
-            Resultados a largo plazo basados en tareas vinculadas
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {totalGoals > 0 && (
-            <div className="text-right">
-              <div className="text-2xl font-bold text-primary">{overallPct}%</div>
-              <div className="text-xs text-muted-foreground">{doneGoals}/{totalGoals} logradas</div>
-            </div>
-          )}
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Nueva meta
-          </button>
+      <div className="mb-8">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold mb-1">Metas</h1>
+            <p className="text-sm text-muted-foreground">
+              Resultados a largo plazo basados en tareas vinculadas
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {totalGoals > 0 && (
+              <div className="text-right">
+                <div className="text-2xl font-bold text-primary">{overallPct}%</div>
+                <div className="text-xs text-muted-foreground">{doneGoals}/{totalGoals} logradas</div>
+              </div>
+            )}
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Nueva meta
+            </button>
+          </div>
         </div>
       </div>
 
