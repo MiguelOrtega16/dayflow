@@ -471,6 +471,17 @@ export async function markNotificationRead(id: string) {
   if (error) throw error
 }
 
+export async function markCalendarShareNotificationRead(recipientId: string, actorId: string) {
+  const supabase = createClient()
+  await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('recipient_id', recipientId)
+    .eq('actor_id', actorId)
+    .eq('type', 'calendar_share_invite')
+    .eq('is_read', false)
+}
+
 export async function markAllNotificationsRead(userId: string) {
   const supabase = createClient()
   const { error } = await supabase

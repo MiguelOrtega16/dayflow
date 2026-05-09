@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { searchUsers, shareCalendar, removeCalendarShare, getSharedCalendarUsers, respondToCalendarShare } from '@/lib/api'
+import { searchUsers, shareCalendar, removeCalendarShare, getSharedCalendarUsers, respondToCalendarShare, markCalendarShareNotificationRead } from '@/lib/api'
 import { cn, getInitials } from '@/lib/utils'
 import { Search, UserPlus, X, Check, Users, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import type { Profile, SharedCalendar } from '@/types'
@@ -78,7 +78,12 @@ export default function PeoplePage() {
     if (!currentUser) return
     setResponding(shareId)
     try {
+      const share = sharedCalendars.find(sc => sc.id === shareId)
       await respondToCalendarShare(shareId, accept, currentUser.id)
+      // Mark the corresponding bell notification as read so Accept/Decline buttons disappear
+      if (share) {
+        await markCalendarShareNotificationRead(currentUser.id, share.owner_id)
+      }
       loadData()
     } finally {
       setResponding(null)

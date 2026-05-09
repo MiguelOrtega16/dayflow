@@ -84,12 +84,21 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
   // Build list of all visible users from the live snapshot
   const allUsers: { profile: Profile; isOwn: boolean }[] = []
-  if (currentUser) allUsers.push({ profile: currentUser, isOwn: true })
+  const seenUserIds = new Set<string>()
+  if (currentUser) {
+    allUsers.push({ profile: currentUser, isOwn: true })
+    seenUserIds.add(currentUser.id)
+  }
   liveSharedCalendars.forEach((sc: any) => {
+    let profile: Profile | null = null
     if (sc.owner_id === currentUser?.id && sc.shared_with) {
-      allUsers.push({ profile: sc.shared_with, isOwn: false })
+      profile = sc.shared_with
     } else if (sc.shared_with_id === currentUser?.id && sc.owner) {
-      allUsers.push({ profile: sc.owner, isOwn: false })
+      profile = sc.owner
+    }
+    if (profile && !seenUserIds.has(profile.id)) {
+      allUsers.push({ profile, isOwn: false })
+      seenUserIds.add(profile.id)
     }
   })
 
