@@ -310,6 +310,32 @@ function ActivityPill({
   const userColor   = userProfile?.color || '#6366f1'
   const canInteract = activity.user_id === currentUserId || !!activity.invitation_id
 
+  if (activity.category === 'reminder') {
+    return (
+      <div
+        onClick={e => { e.stopPropagation(); if (canInteract) onEditActivity(activity); else onClick() }}
+        onContextMenu={e => onContextMenu(e, activity)}
+        className={cn(
+          'relative flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs overflow-hidden transition-opacity',
+          'bg-purple-50 dark:bg-purple-500/10 border border-dashed border-purple-300 dark:border-purple-500/50',
+          canInteract ? 'cursor-pointer hover:opacity-80' : 'cursor-default',
+          deleting && 'opacity-30 pointer-events-none',
+        )}
+        title={`🔔 ${activity.title}${activity.start_time ? ' · ' + formatTime(activity.start_time) : ''}`}
+      >
+        <span className="text-[9px] shrink-0 leading-none">🔔</span>
+        <span className="font-medium flex-1 break-words leading-tight text-purple-700 dark:text-purple-300 truncate">
+          {activity.title}
+        </span>
+        {activity.start_time && (
+          <span className="text-[9px] text-purple-500 dark:text-purple-400 shrink-0 font-medium tabular-nums">
+            {formatTime(activity.start_time)}
+          </span>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div
       onClick={e => { e.stopPropagation(); if (canInteract) onEditActivity(activity); else onClick() }}

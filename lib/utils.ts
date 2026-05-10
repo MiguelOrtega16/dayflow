@@ -66,10 +66,11 @@ export const CATEGORY_CONFIG: Record<ActivityCategory, {
   emoji: string
   color: string
 }> = {
-  task: { label: 'Tarea', emoji: '✓', color: 'text-blue-600' },
-  habit: { label: 'Hábito', emoji: '🔄', color: 'text-green-600' },
-  event: { label: 'Evento', emoji: '📅', color: 'text-orange-600' },
-  note: { label: 'Nota', emoji: '📝', color: 'text-gray-600' },
+  task:     { label: 'Tarea',         emoji: '✓',  color: 'text-blue-600'   },
+  habit:    { label: 'Hábito',        emoji: '🔄', color: 'text-green-600'  },
+  event:    { label: 'Evento',        emoji: '📅', color: 'text-orange-600' },
+  note:     { label: 'Nota',          emoji: '📝', color: 'text-gray-600'   },
+  reminder: { label: 'Recordatorio',  emoji: '🔔', color: 'text-purple-600' },
 }
 
 export const USER_COLORS = [

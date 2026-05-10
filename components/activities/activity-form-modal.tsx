@@ -68,7 +68,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const handleStartTimeChange = (val: string) => {
     setStartTime(val)
     setEndTimeError(false)
-    if (val && (!endTime || toMin(endTime) <= toMin(val))) setEndTime(addMins(val, 60))
+    if (!isReminder && val && (!endTime || toMin(endTime) <= toMin(val))) setEndTime(addMins(val, 60))
   }
 
   const handleEndTimeChange = (val: string) => {
@@ -91,6 +91,9 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
   const [recurrenceCount, setRecurrenceCount]   = useState(10)
   const [daysOfWeek, setDaysOfWeek]             = useState<number[]>([])
+  // Reminder-specific: how many consecutive days to repeat (maps to daily recurrence)
+  const [reminderDays, setReminderDays]         = useState(1)
+  const isReminder = category === 'reminder'
 
   // UI state
   const [saving, setSaving]               = useState(false)
@@ -171,6 +174,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
     if (!title.trim()) { setTitleTouched(true); setSaveError('El título no puede estar vacío.'); return }
     if (!currentUser)  { setSaveError('Sesión expirada. Recarga la página.'); return }
+    if (isReminder && !startTime) { setSaveError('Los recordatorios requieren una hora.'); return }
     // Only the owner or an accepted invitee may edit an existing activity
     if (isEditing && activity!.user_id !== currentUser.id && !activity!.invitation_id) {
       setSaveError('No tienes permiso para editar esta actividad.')
@@ -198,28 +202,32 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
         goal_id:            goalId || null,
         emoji:              emoji || null,
         start_time:         startTime || null,
-        end_time:           endTime || null,
-        is_public:          isPublic,
+        end_time:           isReminder ? null : (endTime || null),
+        is_public:          isReminder ? false : isPublic,
         completion_percentage: completionPct,
         tags,
-        recurrence_type:    recurrenceType,
-        recurrence_config:  recurrenceType !== 'none' ? {
-          end_date:    recurrenceEndDate || undefined,
-          occurrences: recurrenceEndDate ? undefined : recurrenceCount,
-          days_of_week: recurrenceType === 'custom' ? daysOfWeek : undefined,
-        } : null,
+        recurrence_type:    isReminder ? (reminderDays > 1 ? 'daily' : 'none') : recurrenceType,
+        recurrence_config:  isReminder
+          ? (reminderDays > 1 ? { occurrences: reminderDays } : null)
+          : recurrenceType !== 'none' ? {
+              end_date:    recurrenceEndDate || undefined,
+              occurrences: recurrenceEndDate ? undefined : recurrenceCount,
+              days_of_week: recurrenceType === 'custom' ? daysOfWeek : undefined,
+            } : null,
         color:              null,
         parent_activity_id: activity?.parent_activity_id || null,
         ...(activity?.invited_from_activity_id ? { invited_from_activity_id: activity.invited_from_activity_id } : {}),
         ...(evidenceUrl ? { evidence_image_url: evidenceUrl } : {}),
       }
 
+      const effectiveRecurrenceType = payload.recurrence_type as RecurrenceType
+
       let savedId: string | null = null
       if (isEditing) {
         await updateActivity(activity.id, payload as any, currentUser?.id)
         savedId = activity.id
-      } else if (recurrenceType !== 'none') {
-        const parent = await createRecurringActivities(payload as any, recurrenceType, (payload.recurrence_config as any)!)
+      } else if (effectiveRecurrenceType !== 'none') {
+        const parent = await createRecurringActivities(payload as any, effectiveRecurrenceType, (payload.recurrence_config as any)!)
         savedId = parent?.id ?? null
       } else {
         const created = await createActivity(payload as any)
@@ -314,7 +322,9 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
         {/* Tabs */}
         <div className="flex border-b border-border px-5">
-          {([{ key: 'basic', label: 'Básico' }, { key: 'recurrence', label: 'Repetición' }] as const).map(({ key, label }) => (
+          {([{ key: 'basic', label: 'Básico' }, { key: 'recurrence', label: 'Repetición' }] as const)
+            .filter(({ key }) => !(isReminder && key === 'recurrence'))
+            .map(({ key, label }) => (
             <button key={key} type="button" onClick={() => setActiveTab(key)}
               className={cn('px-3 py-2.5 text-sm font-medium border-b-2 transition-colors',
                 activeTab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -410,27 +420,60 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                   className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
-              {/* Time row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> Hora inicio
-                  </label>
-                  <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> Hora fin
-                  </label>
-                  <TimePicker value={endTime} onChange={handleEndTimeChange} placeholder="--" />
-                  {endTimeError && (
-                    <p className="text-xs text-destructive mt-1">Debe ser posterior a la de inicio</p>
-                  )}
-                </div>
-              </div>
+              {/* Time row — for reminders: time + days counter side by side */}
+              {isReminder ? (
+                <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border bg-muted/20">
+                  {/* Time */}
+                  <div className="shrink-0">
+                    <p className="text-[10px] font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> Hora <span className="text-primary font-bold">*</span>
+                    </p>
+                    <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
+                  </div>
 
-              {/* Status */}
-              <div>
+                  {/* Divider */}
+                  <div className="w-px self-stretch bg-border mx-1" />
+
+                  {/* Days */}
+                  <div className="flex-1">
+                    <p className="text-[10px] font-medium text-muted-foreground mb-1.5">Repetir</p>
+                    <div className="flex items-center gap-2">
+                      <button type="button"
+                        onClick={() => setReminderDays(d => Math.max(1, d - 1))}
+                        className="w-7 h-7 rounded-lg border border-border flex items-center justify-center text-sm font-bold hover:bg-muted transition-colors shrink-0"
+                      >−</button>
+                      <span className="text-sm font-semibold tabular-nums min-w-[4rem] text-center">
+                        {reminderDays} {reminderDays === 1 ? 'día' : 'días'}
+                      </span>
+                      <button type="button"
+                        onClick={() => setReminderDays(d => Math.min(90, d + 1))}
+                        className="w-7 h-7 rounded-lg border border-border flex items-center justify-center text-sm font-bold hover:bg-muted transition-colors shrink-0"
+                      >+</button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> Hora inicio
+                    </label>
+                    <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> Hora fin
+                    </label>
+                    <TimePicker value={endTime} onChange={handleEndTimeChange} placeholder="--" />
+                    {endTimeError && (
+                      <p className="text-xs text-destructive mt-1">Debe ser posterior a la de inicio</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Status — hidden for reminders */}
+              {!isReminder && <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Estado</label>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                   {(Object.keys(STATUS_CONFIG) as ActivityStatus[]).map(s => (
@@ -443,7 +486,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                     >{STATUS_CONFIG[s].label}</button>
                   ))}
                 </div>
-              </div>
+              </div>}
 
               {/* Completion (only in_progress) */}
               {status === 'in_progress' && (
@@ -464,8 +507,8 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
               {/* Evidence hidden — feature preserved in DB/API but not exposed in UI */}
 
-              {/* Goal */}
-              {goals.length > 0 && (
+              {/* Goal — hidden for reminders */}
+              {!isReminder && goals.length > 0 && (
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
                     <Target className="w-3 h-3" /> Vincular a meta
@@ -480,7 +523,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               )}
 
               {/* ── Visibility toggle ── */}
-              <div className="border-t border-border/50 pt-4">
+              {!isReminder && <div className="border-t border-border/50 pt-4">
                 <button
                   type="button"
                   onClick={() => setIsPublic(!isPublic)}
@@ -506,10 +549,10 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                     <div className={cn('absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform', isPublic ? 'translate-x-4' : 'translate-x-0.5')} />
                   </div>
                 </button>
-              </div>
+              </div>}
 
               {/* ── Invitar personas ── */}
-              <div className="border-t border-border/50 pt-4">
+              {!isReminder && <div className="border-t border-border/50 pt-4">
                 <div className="mb-2">
                   <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                     <UserPlus className="w-3 h-3" /> Invitar personas
@@ -612,7 +655,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                     })}
                   </div>
                 )}
-              </div>
+              </div>}
             </>
           )}
 
@@ -712,7 +755,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 // ─── TimePicker (12h format, text inputs) ─────────────────────────────────────
 function TimePicker({ value, onChange }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const parse = (v: string) => {
-    if (!v) return { h: '', m: '', p: 'AM' as 'AM' | 'PM' }
+    if (!v) return { h: '', m: '', p: (new Date().getHours() >= 12 ? 'PM' : 'AM') as 'AM' | 'PM' }
     const [hRaw, mRaw] = v.split(':')
     const h24 = parseInt(hRaw)
     return {

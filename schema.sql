@@ -210,7 +210,7 @@ exception when duplicate_object then null; end $$;
 
 do $$ begin
   alter table public.activities add constraint activities_category_check
-    check (category in ('task', 'habit', 'event', 'note'));
+    check (category in ('task', 'habit', 'event', 'note', 'reminder'));
 exception when duplicate_object then null; end $$;
 
 do $$ begin
@@ -430,7 +430,7 @@ alter table public.notifications
     'status_update', 'task_completed', 'goal_completed', 'goal_progress', 'new_activity',
     'activity_invitation', 'invitation_accepted', 'invitation_declined',
     'calendar_share_invite', 'calendar_share_accepted', 'calendar_share_declined',
-    'activity_reminder'
+    'activity_reminder', 'reminder'
   ));
 
 create index if not exists notifications_recipient_idx
@@ -500,12 +500,21 @@ begin
     return new;
   end if;
 
+  -- Skip child recurring activities — only the parent row generates a notification
+  if tg_op = 'INSERT' and new.parent_activity_id is not null then
+    return new;
+  end if;
+
   select coalesce(full_name, email) into actor_name
   from public.profiles where id = new.user_id;
 
   if tg_op = 'INSERT' then
-    notif_type    := 'new_activity';
-    notif_message := actor_name || ' agregó una nueva actividad: ' || new.title;
+    notif_type := 'new_activity';
+    if new.recurrence_type <> 'none' then
+      notif_message := actor_name || ' agregó actividad recurrente: ' || new.title;
+    else
+      notif_message := actor_name || ' agregó una nueva actividad: ' || new.title;
+    end if;
   elsif new.status = 'done' then
     notif_type    := 'task_completed';
     notif_message := actor_name || ' completó: ' || new.title;

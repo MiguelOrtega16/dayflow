@@ -219,35 +219,36 @@ export function TimeGridView({
                 )}
 
                 {computeLayout(timed).map(({ activity: a, col, numCols }) => {
+                  const isReminder  = a.category === 'reminder'
                   const startMin    = timeToMin(a.start_time!)
-                  const endMin      = a.end_time ? timeToMin(a.end_time) : startMin + 60
+                  const endMin      = !isReminder && a.end_time ? timeToMin(a.end_time) : startMin + (isReminder ? 0 : 60)
                   const top         = (startMin / 60) * HOUR_HEIGHT
-                  const height      = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22)
-                  const c           = userColor(a.user_id)
+                  const height      = isReminder ? 20 : Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22)
+                  const c           = isReminder ? '#9333ea' : userColor(a.user_id)
                   const interactive = canInteract(a)
-                  // Column geometry: divide available width equally, 4 px total gap per slot
-                  const leftPct  = col / numCols * 100
-                  const widthPct = 1  / numCols * 100
+                  const leftPct     = col / numCols * 100
+                  const widthPct    = 1  / numCols * 100
                   return (
                     <button key={a.id} data-event
                       onClick={e => { e.stopPropagation(); if (interactive) onEditActivity(a) }}
                       onContextMenu={e => openCtx(e, a)}
                       className={cn(
                         'absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden z-10',
-                        interactive ? 'cursor-pointer hover:brightness-95' : 'cursor-default'
+                        interactive ? 'cursor-pointer hover:brightness-95' : 'cursor-default',
+                        isReminder && 'border border-dashed border-purple-400 dark:border-purple-500',
                       )}
                       style={{
                         top, height,
                         left:  `calc(${leftPct}% + 2px)`,
                         width: `calc(${widthPct}% - 4px)`,
-                        backgroundColor: c + '28',
-                        borderLeft: `3px solid ${c}`,
+                        backgroundColor: isReminder ? '#9333ea18' : c + '28',
+                        borderLeft: isReminder ? '3px dashed #9333ea' : `3px solid ${c}`,
                       }}
                     >
-                      <p className="text-[10px] font-semibold leading-tight break-words" style={{ color: c }}>
-                        {a.emoji} {a.title}
+                      <p className="text-[10px] font-semibold leading-tight truncate" style={{ color: c }}>
+                        {isReminder ? '🔔' : a.emoji} {a.title}
                       </p>
-                      {height >= 36 && (
+                      {!isReminder && height >= 36 && (
                         <p className="text-[9px] leading-tight mt-0.5" style={{ color: c + 'bb' }}>
                           {fmt12(a.start_time!)}{a.end_time && ` – ${fmt12(a.end_time)}`}
                         </p>

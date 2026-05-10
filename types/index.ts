@@ -1,6 +1,6 @@
 export type ActivityStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'skipped'
 export type ActivityPriority = 'low' | 'medium' | 'high' | 'critical'
-export type ActivityCategory = 'task' | 'habit' | 'event' | 'note'
+export type ActivityCategory = 'task' | 'habit' | 'event' | 'note' | 'reminder'
 export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly' | 'weekdays' | 'custom'
 export type InvitationStatus = 'pending' | 'accepted' | 'declined'
 export type TaskCategory = 'task' | 'habit' | 'event' | 'note'
