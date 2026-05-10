@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Plus, Target, ChevronDown, ChevronRight, Trash2, CheckCircle2, Circle, MoreHorizontal } from 'lucide-react'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { cn } from '@/lib/utils'
 import { getGoals, createGoal, updateGoal, deleteGoal } from '@/lib/api'
 import { STATUS_CONFIG, PRIORITY_CONFIG } from '@/lib/utils'
@@ -98,7 +99,10 @@ export default function GoalsPage() {
       {/* Encabezado */}
       <div className="flex items-start justify-between gap-3 mb-8">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold mb-1">Metas</h1>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-semibold">Metas</h1>
+            <InfoTooltip text="Gestiona tus objetivos a largo plazo. Crea metas y vincúlalas a actividades del calendario para medir tu progreso. Una meta se completa cuando la marcas como 'Lograda'." />
+          </div>
           <p className="text-sm text-muted-foreground">
             Resultados a largo plazo basados en tareas vinculadas
           </p>

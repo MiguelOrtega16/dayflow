@@ -3,6 +3,20 @@ import { createClient } from '@supabase/supabase-js'
 import { sendFCM } from '@/lib/firebase-admin'
 import { localToUTC, localDateStr } from '@/lib/tz-utils'
 
+const MOTIVATIONAL = [
+  '¡Tú puedes! 💪',
+  '¡Vas genial! 🚀',
+  '¡Sigue adelante! ⭐',
+  '¡A por ello! 🎯',
+  '¡Hoy es tu día! ☀️',
+  '¡Cada paso cuenta! 🌟',
+  '¡Tu esfuerzo vale la pena! 💫',
+  '¡No te rindas! 🔥',
+  '¡Un paso más hacia tu meta! 🏆',
+  '¡Estás haciendo un gran trabajo! 👏',
+]
+const randomMotivation = () => MOTIVATIONAL[Math.floor(Math.random() * MOTIVATIONAL.length)]
+
 function isAuthorized(request: Request) {
   const auth = request.headers.get('authorization')
   return auth === `Bearer ${process.env.CRON_SECRET}`
@@ -29,7 +43,7 @@ export async function GET(request: Request) {
 
   const { data: activities, error } = await supabase
     .from('activities')
-    .select('id, title, emoji, user_id, start_time, date, category')
+    .select('id, title, emoji, description, user_id, start_time, date, category')
     .in('date', dates)
     .not('start_time', 'is', null)
 
@@ -101,7 +115,7 @@ export async function GET(request: Request) {
           await sendFCM(
             token,
             `🔔 ${act.title}`,
-            'Tu recordatorio llegó.',
+            randomMotivation(),
             { type: 'activity_reminder', date: act.date, activityId: act.id },
           )
           sent++
@@ -120,7 +134,7 @@ export async function GET(request: Request) {
           await sendFCM(
             token,
             `⏰ En ${act.minutesBefore} minutos: ${label}`,
-            'Tu siguiente actividad se acerca. ¡Tú puedes! 💪',
+            randomMotivation(),
             { type: 'activity_30min_reminder', date: act.date, activityId: act.id },
           )
           sent++

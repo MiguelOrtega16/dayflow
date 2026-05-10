@@ -6,6 +6,7 @@ import { format, subDays, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, getInitials } from '@/lib/utils'
 import type { Activity, Profile } from '@/types'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 
 // Solid colors for progress bars (can't use Tailwind classes in inline styles)
 const STATUS_BAR_COLOR: Record<string, string> = {
@@ -147,7 +148,10 @@ export default function StatsPage() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold mb-0.5">Estadísticas</h1>
+          <div className="flex items-center gap-2 mb-0.5">
+            <h1 className="text-2xl font-semibold">Estadísticas</h1>
+            <InfoTooltip text="Analiza tu productividad en el período seleccionado (semana, mes o 3 meses). Ve cuántas actividades completaste, cuántas siguen pendientes y cómo se distribuyen por categoría y colaboradores." />
+          </div>
           <p className="text-sm text-muted-foreground">Actividades propias y compartidas contigo</p>
         </div>
         <div className="flex items-center bg-muted rounded-xl p-1">
@@ -155,7 +159,7 @@ export default function StatsPage() {
             <button key={r} onClick={() => setRange(r)}
               className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
                 range === r ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-              {r === 'week' ? '7d' : r === 'month' ? '30d' : '90d'}
+              {r === 'week' ? '7 días' : r === 'month' ? '30 días' : '90 días'}
             </button>
           ))}
         </div>
@@ -167,7 +171,7 @@ export default function StatsPage() {
           { label: 'Total',         value: total,              icon: '📋' },
           { label: 'Completadas',   value: done,               icon: '✅' },
           { label: 'Tasa',          value: `${completionRate}%`, icon: '📊' },
-          { label: 'Racha actual',  value: `${streak}d`,       icon: '🔥' },
+          { label: 'Racha actual',  value: `${streak} días`,   icon: '🔥' },
         ].map(({ label, value, icon }) => (
           <div key={label} className="bg-card border border-border rounded-2xl p-4">
             <div className="text-2xl mb-1">{icon}</div>

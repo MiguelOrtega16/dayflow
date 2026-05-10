@@ -64,7 +64,7 @@ export async function GET(request: Request) {
   const localDates = Array.from(new Set(dateByTz.values()))
   const { data: activities, error } = await supabase
     .from('activities')
-    .select('id, title, emoji, user_id, start_time, date')
+    .select('id, title, emoji, description, user_id, start_time, date')
     .in('user_id', eligibleIds)
     .in('date', localDates)
     .not('start_time', 'is', null)

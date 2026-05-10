@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { format } from 'date-fns'
+import { format, subDays, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { getActivitiesForRange, updateActivityStatus } from '@/lib/api'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG } from '@/lib/utils'
 import type { Activity, ActivityStatus, Profile } from '@/types'
 import { CheckCircle2, Circle, Play, Ban, SkipForward } from 'lucide-react'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 
 const STATUS_ICONS = {
   todo: Circle,
@@ -23,11 +24,10 @@ export default function OverviewPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
+  const [range, setRange] = useState<'today' | '7days' | '30days' | '90days'>('today')
   const supabase = createClient()
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [range])
 
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -35,7 +35,9 @@ export default function OverviewPage() {
     const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     setProfile(p)
     const today = format(new Date(), 'yyyy-MM-dd')
-    const data = await getActivitiesForRange(today, today, [user.id], user.id)
+    const days = range === '7days' ? 6 : range === '30days' ? 29 : range === '90days' ? 89 : 0
+    const start = format(subDays(new Date(), days), 'yyyy-MM-dd')
+    const data = await getActivitiesForRange(start, today, [user.id], user.id)
     setActivities(data)
     setLoading(false)
   }
@@ -65,18 +67,36 @@ export default function OverviewPage() {
     <div className="p-6 max-w-2xl mx-auto">
       {/* Saludo */}
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold mb-1">
-          {greeting}, {profile?.full_name?.split(' ')[0] || 'ahí'} 👋
-        </h1>
-        <p className="text-muted-foreground capitalize">
-          {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
-        </p>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-2xl font-semibold">
+                {greeting}, {profile?.full_name?.split(' ')[0] || 'ahí'} 👋
+              </h1>
+              <InfoTooltip text="Vista rápida de tus actividades del período seleccionado. Muestra tu progreso general, tareas pendientes y completadas, agrupadas por estado y categoría." />
+            </div>
+            <p className="text-muted-foreground capitalize">
+              {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
+            </p>
+          </div>
+          <div className="flex items-center bg-muted rounded-xl p-1 shrink-0">
+            {(['today', '7days', '30days', '90days'] as const).map(r => (
+              <button key={r} onClick={() => setRange(r)}
+                className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                  range === r ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                {r === 'today' ? 'Hoy' : r === '7days' ? '7 días' : r === '30days' ? '30 días' : '90 días'}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Progreso del día */}
       <div className="bg-card border border-border rounded-2xl p-5 mb-6">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold">Progreso de hoy</h2>
+          <h2 className="font-semibold">
+            {range === 'today' ? 'Progreso de hoy' : range === '7days' ? 'Últimos 7 días' : range === '30days' ? 'Últimos 30 días' : 'Últimos 90 días'}
+          </h2>
           <span className="text-2xl font-bold text-primary">{pct}%</span>
         </div>
         <div className="h-2.5 bg-muted rounded-full overflow-hidden mb-3">
@@ -95,7 +115,7 @@ export default function OverviewPage() {
               </span>
             )
           })}
-          {total === 0 && <span>Sin actividades por hoy</span>}
+          {total === 0 && <span>Sin actividades{range === 'today' ? ' por hoy' : ' en este período'}</span>}
         </div>
       </div>
 
@@ -107,7 +127,7 @@ export default function OverviewPage() {
       ) : total === 0 ? (
         <div className="text-center py-12">
           <div className="text-4xl mb-3">✦</div>
-          <p className="text-muted-foreground">Aún no hay actividades para hoy.</p>
+          <p className="text-muted-foreground">{range === 'today' ? 'Aún no hay actividades para hoy.' : 'Sin actividades en este período.'}</p>
           <p className="text-sm text-muted-foreground/70 mt-1">¡Ve al Calendario para agregar algunas!</p>
         </div>
       ) : (
@@ -146,6 +166,11 @@ export default function OverviewPage() {
                             {CATEGORY_CONFIG[activity.category].emoji}
                           </span>
                         </div>
+                        {range !== 'today' && (
+                          <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                            {format(parseISO(activity.date), "d 'de' MMMM", { locale: es })}
+                          </p>
+                        )}
                         {activity.description && (
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{activity.description}</p>
                         )}

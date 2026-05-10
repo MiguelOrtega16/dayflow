@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { searchUsers, shareCalendar, removeCalendarShare, getSharedCalendarUsers, respondToCalendarShare, markCalendarShareNotificationRead } from '@/lib/api'
 import { cn, getInitials } from '@/lib/utils'
 import { Search, UserPlus, X, Check, Users, Clock, CheckCircle2, XCircle } from 'lucide-react'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import type { Profile, SharedCalendar } from '@/types'
 
 export default function PeoplePage() {
@@ -113,7 +114,10 @@ export default function PeoplePage() {
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold mb-1">Personas</h1>
+        <div className="flex items-center gap-2 mb-1">
+          <h1 className="text-2xl font-semibold">Personas</h1>
+          <InfoTooltip text="Comparte tu calendario con otras personas para que vean tus actividades públicas, o acepta invitaciones para ver las suyas. Los calendarios compartidos aparecen en tu vista diaria junto al tuyo." />
+        </div>
         <p className="text-muted-foreground">Comparte tu calendario y ve las actividades de otros</p>
       </div>
 
@@ -278,7 +282,13 @@ export default function PeoplePage() {
                     <p className="text-sm font-medium truncate">{owner?.full_name || owner?.username || 'Desconocido'}</p>
                     <p className="text-xs text-muted-foreground truncate">{owner?.email}</p>
                   </div>
-                  <span className="shrink-0 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">Viendo</span>
+                  <button
+                    onClick={() => handleRemove(sc.id)}
+                    className="shrink-0 text-xs text-muted-foreground hover:text-destructive border border-border hover:border-destructive/40 px-2.5 py-1 rounded-lg transition-colors"
+                    title="Dejar de ver este calendario"
+                  >
+                    Dejar de ver
+                  </button>
                 </div>
               )
             })}
