@@ -27,7 +27,7 @@ export default function OverviewPage() {
   const [range, setRange] = useState<'today' | '7days' | '30days' | '90days'>('today')
   const supabase = createClient()
 
-  useEffect(() => { loadData() }, [range])
+  useEffect(() => { setLoading(true); loadData() }, [range])
 
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -91,38 +91,60 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* Progreso del día */}
-      <div className="bg-card border border-border rounded-2xl p-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold">
-            {range === 'today' ? 'Progreso de hoy' : range === '7days' ? 'Últimos 7 días' : range === '30days' ? 'Últimos 30 días' : 'Últimos 90 días'}
-          </h2>
-          <span className="text-2xl font-bold text-primary">{pct}%</span>
+      {/* Progreso del período */}
+      {loading ? (
+        <div className="bg-card border border-border rounded-2xl p-5 mb-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="h-4 w-32 rounded shimmer" />
+            <div className="h-7 w-12 rounded shimmer" />
+          </div>
+          <div className="h-2.5 rounded-full shimmer" />
+          <div className="flex gap-3">
+            {[1, 2, 3].map(i => <div key={i} className="h-3 w-20 rounded shimmer" />)}
+          </div>
         </div>
-        <div className="h-2.5 bg-muted rounded-full overflow-hidden mb-3">
-          <div
-            className="h-full bg-primary rounded-full transition-all duration-700"
-            style={{ width: `${pct}%` }}
-          />
+      ) : (
+        <div className="bg-card border border-border rounded-2xl p-5 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold">
+              {range === 'today' ? 'Progreso de hoy' : range === '7days' ? 'Últimos 7 días' : range === '30days' ? 'Últimos 30 días' : 'Últimos 90 días'}
+            </h2>
+            <span className="text-2xl font-bold text-primary">{pct}%</span>
+          </div>
+          <div className="h-2.5 bg-muted rounded-full overflow-hidden mb-3">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-700"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+            {Object.entries(grouped).filter(([, acts]) => acts.length > 0).map(([status, acts]) => {
+              const cfg = STATUS_CONFIG[status as ActivityStatus]
+              return (
+                <span key={status} className="flex items-center gap-1">
+                  <span className={cn('w-2 h-2 rounded-full', cfg.dotColor)} />
+                  {acts.length} {cfg.label.toLowerCase()}
+                </span>
+              )
+            })}
+            {total === 0 && <span>Sin actividades{range === 'today' ? ' por hoy' : ' en este período'}</span>}
+          </div>
         </div>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          {Object.entries(grouped).filter(([, acts]) => acts.length > 0).map(([status, acts]) => {
-            const cfg = STATUS_CONFIG[status as ActivityStatus]
-            return (
-              <span key={status} className="flex items-center gap-1">
-                <span className={cn('w-2 h-2 rounded-full', cfg.dotColor)} />
-                {acts.length} {cfg.label.toLowerCase()}
-              </span>
-            )
-          })}
-          {total === 0 && <span>Sin actividades{range === 'today' ? ' por hoy' : ' en este período'}</span>}
-        </div>
-      </div>
+      )}
 
       {/* Lista agrupada por estado */}
       {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl shimmer" />)}
+        <div className="space-y-3">
+          <div className="h-3 w-24 rounded shimmer" />
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-border/40">
+              <div className="w-4 h-4 rounded-full shrink-0 mt-0.5 shimmer" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3.5 rounded shimmer" style={{ width: `${55 + (i * 13) % 35}%` }} />
+                <div className="h-2.5 w-24 rounded shimmer" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : total === 0 ? (
         <div className="text-center py-12">
