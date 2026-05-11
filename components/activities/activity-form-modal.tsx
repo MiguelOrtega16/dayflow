@@ -43,7 +43,6 @@ interface ActivityFormModalProps {
   initialEndTime?: string
 }
 
-type Tab = 'basic' | 'recurrence'
 
 export function ActivityFormModal({ date, activity, currentUser, onClose, onSaved, initialStartTime, initialEndTime }: ActivityFormModalProps) {
   const isEditing = !!activity
@@ -81,7 +80,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   }
   const [isPublic, setIsPublic]       = useState(activity?.is_public ?? false)
   const [completionPct, setCompletionPct] = useState(activity?.completion_percentage || 0)
-  const [tagsInput, setTagsInput]     = useState(activity?.tags?.join(', ') || '')
+  const tagsInput = activity?.tags?.join(', ') || ''
   // Hidden but preserved on edit so existing priority/notes aren't lost
   const existingPriority = activity?.priority || 'medium'
   const existingNotes    = activity?.notes    || null
@@ -89,7 +88,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   // Recurrence
   const [recurrenceType, setRecurrenceType]     = useState<RecurrenceType>(activity?.recurrence_type || 'none')
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
-  const [recurrenceCount, setRecurrenceCount]   = useState(10)
+  const [recurrenceCount, setRecurrenceCount]   = useState(1)
   const [daysOfWeek, setDaysOfWeek]             = useState<number[]>([])
   const isReminder = category === 'reminder'
 
@@ -98,7 +97,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [saveError, setSaveError]         = useState<string | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showTitleEmoji, setShowTitleEmoji]   = useState(false)
-  const [activeTab, setActiveTab]         = useState<Tab>('basic')
   const [goals, setGoals]                 = useState<Goal[]>([])
   const [titleTouched, setTitleTouched]   = useState(false)
   const [endTimeError, setEndTimeError]   = useState(false)
@@ -166,7 +164,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     return () => clearTimeout(t)
   }, [inviteSearch, currentUser?.id, invitations.length, pendingInvitees.length, sharedUserIds])
 
-  const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+  const handleSubmit = async (e?: React.SyntheticEvent) => {
     e?.preventDefault()
     console.log('[ActivityForm] submit — title:', title, 'user:', currentUser?.id ?? 'NULL')
 
@@ -306,7 +304,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               )}
             </button>
             <h2 className="text-lg font-semibold">
-              {isEditing ? `Editar ${CATEGORY_CONFIG[category].label.toLowerCase()}` : `Nueva${category === 'reminder' || category === 'note' ? 'a' : ''} ${CATEGORY_CONFIG[category].label.toLowerCase()}`}
+              {isEditing ? `Editar ${CATEGORY_CONFIG[category].label.toLowerCase()}` : `${['task','note'].includes(category) ? 'Nueva' : 'Nuevo'} ${CATEGORY_CONFIG[category].label.toLowerCase()}`}
             </h2>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors">
@@ -493,9 +491,9 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                     </div>
                     {!recurrenceEndDate && (
                       <div className="flex items-center justify-between">
-                        <label className="text-xs text-muted-foreground">O número de repeticiones</label>
-                        <input type="number" min={2} max={365} value={recurrenceCount}
-                          onChange={e => setRecurrenceCount(Math.max(2, Math.min(365, Number(e.target.value) || 2)))}
+                        <label className="text-xs text-muted-foreground">Número de veces</label>
+                        <input type="number" min={1} max={365} value={recurrenceCount}
+                          onChange={e => setRecurrenceCount(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
                           className="w-20 text-center rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
                         />
                       </div>
@@ -699,42 +697,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-// ─── DateInput (dd/mm/yyyy text inputs) ───────────────────────────────────────
-function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const parse = (v: string) => {
-    if (!v) return { d: '', m: '', y: '' }
-    const [y, mo, da] = v.split('-')
-    return { d: String(parseInt(da)), m: String(parseInt(mo)), y }
-  }
-  const [local, setLocal] = useState(() => parse(value))
-  useEffect(() => { setLocal(parse(value)) }, [value])
-
-  const push = (d: string, m: string, y: string) => {
-    const dN = parseInt(d), mN = parseInt(m), yN = parseInt(y)
-    if (!d || !m || !y || isNaN(dN) || isNaN(mN) || isNaN(yN)) { onChange(''); return }
-    if (dN < 1 || dN > 31 || mN < 1 || mN > 12 || yN < 1900) return
-    onChange(`${String(yN).padStart(4, '0')}-${String(mN).padStart(2, '0')}-${String(dN).padStart(2, '0')}`)
-  }
-  const update = (field: 'd' | 'm' | 'y', val: string) => {
-    const next = { ...local, [field]: val }
-    setLocal(next)
-    push(next.d, next.m, next.y)
-  }
-  const cls = 'text-center rounded-lg border border-input bg-background px-1 py-2 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums'
-  return (
-    <div className="flex items-center gap-1">
-      <input type="text" inputMode="numeric" maxLength={2} value={local.d} placeholder="DD" className={cn(cls, 'w-10')}
-        onChange={e => { const v = e.target.value.replace(/\D/g, ''); const n = parseInt(v); if (v === '' || (!isNaN(n) && n <= 31)) update('d', v) }} />
-      <span className="text-xs font-bold text-muted-foreground">/</span>
-      <input type="text" inputMode="numeric" maxLength={2} value={local.m} placeholder="MM" className={cn(cls, 'w-10')}
-        onChange={e => { const v = e.target.value.replace(/\D/g, ''); const n = parseInt(v); if (v === '' || (!isNaN(n) && n <= 12)) update('m', v) }} />
-      <span className="text-xs font-bold text-muted-foreground">/</span>
-      <input type="text" inputMode="numeric" maxLength={4} value={local.y} placeholder="AAAA" className={cn(cls, 'w-16')}
-        onChange={e => { const v = e.target.value.replace(/\D/g, ''); if (v.length <= 4) update('y', v) }} />
     </div>
   )
 }

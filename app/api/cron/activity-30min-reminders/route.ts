@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendFCM } from '@/lib/firebase-admin'
+import { sendFCM, sendWebPush } from '@/lib/firebase-admin'
 import { localToUTC, localDateStr } from '@/lib/tz-utils'
 
 const MOTIVATIONAL = [
@@ -90,13 +90,14 @@ export async function GET(request: Request) {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, fcm_token')
+    .select('id, fcm_token, web_push_subscription')
     .in('id', Array.from(allRecipients))
-    .not('fcm_token', 'is', null)
 
   const tokenMap: Record<string, string> = {}
+  const webPushMap: Record<string, any>  = {}
   for (const p of profiles ?? []) {
-    if (p.fcm_token) tokenMap[p.id] = p.fcm_token
+    if (p.fcm_token)              tokenMap[p.id]    = p.fcm_token
+    if (p.web_push_subscription)  webPushMap[p.id]  = p.web_push_subscription
   }
 
   let sent = 0
@@ -109,36 +110,25 @@ export async function GET(request: Request) {
     await Promise.all(recipients.map(async uid => {
       const token = tokenMap[uid]
 
+      const webSub = webPushMap[uid]
       if (isReminder) {
-        // Push notification AT reminder time
-        if (token) {
-          await sendFCM(
-            token,
-            `🔔 ${act.title}`,
-            randomMotivation(),
-            { type: 'activity_reminder', date: act.date, activityId: act.id },
-          )
-          sent++
-        }
-        // Also insert an in-app notification so the bell lights up
+        const title = `🔔 ${act.title}`
+        const body  = randomMotivation()
+        const data  = { type: 'activity_reminder', date: act.date, activityId: act.id }
+        if (token)  { await sendFCM(token, title, body, data); sent++ }
+        if (webSub) { await sendWebPush(webSub, title, body, data); if (!token) sent++ }
+        // In-app notification so the bell lights up
         await supabase.from('notifications').insert({
-          recipient_id: uid,
-          actor_id:     uid,
-          type:         'activity_reminder',
-          activity_id:  act.id,
-          message:      `🔔 Recordatorio: ${act.title}`,
+          recipient_id: uid, actor_id: uid,
+          type: 'activity_reminder', activity_id: act.id,
+          message: `🔔 Recordatorio: ${act.title}`,
         })
       } else {
-        // Push notification 30 min before
-        if (token) {
-          await sendFCM(
-            token,
-            `⏰ En ${act.minutesBefore} minutos: ${label}`,
-            randomMotivation(),
-            { type: 'activity_30min_reminder', date: act.date, activityId: act.id },
-          )
-          sent++
-        }
+        const title = `⏰ En ${act.minutesBefore} minutos: ${label}`
+        const body  = randomMotivation()
+        const data  = { type: 'activity_30min_reminder', date: act.date, activityId: act.id }
+        if (token)  { await sendFCM(token, title, body, data); sent++ }
+        if (webSub) { await sendWebPush(webSub, title, body, data); if (!token) sent++ }
       }
     }))
   }))

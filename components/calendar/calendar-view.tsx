@@ -32,7 +32,15 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   // Use client-side new Date() so the initial day reflects the user's local timezone,
   // not the server's UTC date (which can differ by a day near midnight).
   const [currentDate, setCurrentDate]   = useState(() => new Date())
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    // Restore last viewed date so a refresh doesn't jump back to today
+    const saved = sessionStorage.getItem('dayflow:selectedDate')
+    if (saved) {
+      const d = new Date(saved + 'T12:00:00')
+      if (!isNaN(d.getTime())) return d
+    }
+    return new Date()
+  })
   const [mode, setMode]                 = useState<CalendarMode>('month')
   const [activities, setActivities]     = useState<Activity[]>([])
   const [loading, setLoading]           = useState(true)
@@ -181,7 +189,14 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     return () => window.removeEventListener('dayflow:navigate', onNavigate)
   }, [])
 
+  // Persist the selected date so a page refresh returns to the same day
+  useEffect(() => {
+    const str = selectedDate.toISOString().slice(0, 10)
+    sessionStorage.setItem('dayflow:selectedDate', str)
+  }, [selectedDate])
+
   // Pick up a date stored by push-notification deep links (fires after full-page reload)
+  // This intentionally overwrites dayflow:selectedDate for the push-nav case.
   useEffect(() => {
     const gotoDate = sessionStorage.getItem('dayflow:gotoDate')
     if (!gotoDate) return
@@ -378,7 +393,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
               start: startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 }),
               end:   endOfWeek(endOfMonth(currentDate),   { weekStartsOn: 0 }),
             }).length / 7
-            return rows >= 6 ? '32dvh' : rows >= 5 ? '28dvh' : '25dvh'
+            return rows >= 6 ? '28dvh' : rows >= 5 ? '25dvh' : '22dvh'
           })(),
         }}>
           <CompactMonthGrid
@@ -393,8 +408,8 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           />
         </div>
 
-        {/* Day detail — remaining ~75% */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Day detail — remaining space, min-h-0 ensures flex child can shrink below content */}
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           <DayDetailPanel {...detailProps} />
         </div>
 

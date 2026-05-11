@@ -621,7 +621,7 @@ export function DayDetailPanel({
   }
 
   return (
-    <div className="flex-1 bg-card/50 flex flex-col overflow-hidden">
+    <div className="flex-1 bg-card/50 flex flex-col overflow-hidden min-h-0">
       {/* Encabezado */}
       <div className="px-4 py-4 border-b border-border">
         <div className="flex items-start justify-between">

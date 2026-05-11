@@ -16,6 +16,29 @@ export async function getFirebaseMessaging() {
   }
 }
 
+export async function sendWebPush(
+  subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
+  title: string,
+  body: string,
+  data?: Record<string, string>,
+) {
+  const publicKey  = process.env.VAPID_PUBLIC_KEY
+  const privateKey = process.env.VAPID_PRIVATE_KEY
+  const email      = process.env.VAPID_EMAIL || 'mailto:admin@day-flow.co'
+  if (!publicKey || !privateKey) return
+  try {
+    const webpush = await import('web-push')
+    webpush.default.setVapidDetails(email, publicKey, privateKey)
+    await webpush.default.sendNotification(
+      subscription,
+      JSON.stringify({ title, body, data: { url: '/dashboard', ...data } }),
+    )
+  } catch (err: any) {
+    // 410 Gone = subscription expired; caller should remove it from DB
+    if (err?.statusCode !== 410) console.error('[WebPush] send error:', err?.message ?? err)
+  }
+}
+
 export async function sendFCM(
   token: string,
   title: string,

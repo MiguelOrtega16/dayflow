@@ -29,6 +29,7 @@ create table if not exists public.profiles (
 alter table public.profiles add column if not exists email_notifications boolean not null default false;
 alter table public.profiles add column if not exists fcm_token text;
 alter table public.profiles add column if not exists timezone text;
+alter table public.profiles add column if not exists web_push_subscription jsonb;
 
 alter table public.profiles enable row level security;
 

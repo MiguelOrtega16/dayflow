@@ -6,8 +6,7 @@ export async function initPushNotifications(userId: string) {
   // Start local-notification tap listener in parallel (independent of FCM)
   initLocalNotificationListeners()
 
-  // Persist the device timezone so server-side crons fire at the right local time.
-  // Runs on every platform (web + native); fire-and-forget.
+  // Persist timezone for server-side crons; fire-and-forget
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
   createClient()
     .from('profiles')
@@ -15,6 +14,48 @@ export async function initPushNotifications(userId: string) {
     .eq('id', userId)
     .then(() => {})
 
+  if (Capacitor.isNativePlatform()) {
+    // ── Native: register FCM via Capacitor ──────────────────────────────────
+    await initNativePush(userId)
+  } else {
+    // ── Web: register service worker + Web Push ──────────────────────────────
+    await initWebPush()
+  }
+}
+
+async function initWebPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  if (!vapidKey) return
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js')
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') return
+
+    const existing = await reg.pushManager.getSubscription()
+    const sub = existing ?? await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    })
+
+    await fetch('/api/web-push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub.toJSON() }),
+    })
+  } catch (err) {
+    console.error('[WebPush] init error:', err)
+  }
+}
+
+function urlBase64ToUint8Array(base64: string): Uint8Array {
+  const padding = '='.repeat((4 - base64.length % 4) % 4)
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(b64)
+  return Uint8Array.from(raw, c => c.charCodeAt(0))
+}
+
+async function initNativePush(userId: string) {
   // Only runs inside the native Android/iOS app — no-op in browser
   if (!Capacitor.isNativePlatform()) return
 
