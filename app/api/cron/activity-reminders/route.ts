@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendFCM } from '@/lib/firebase-admin'
+import { sendFCM, sendWebPush } from '@/lib/firebase-admin'
 import { localDateStr, localHour } from '@/lib/tz-utils'
 
 function isAuthorized(request: Request) {
@@ -8,7 +8,6 @@ function isAuthorized(request: Request) {
   return auth === `Bearer ${process.env.CRON_SECRET}`
 }
 
-// Formats "14:30:00" → "2:30 PM"
 function formatTime(t: string): string {
   const [h, m] = t.split(':').map(Number)
   const ampm = h >= 12 ? 'PM' : 'AM'
@@ -16,14 +15,26 @@ function formatTime(t: string): string {
   return `${hour}:${String(m).padStart(2, '0')} ${ampm}`
 }
 
+const EVENING_MESSAGES = [
+  '¿Cuánto lograste hoy? Revisa tus actividades 📋',
+  'Tómate un momento para ver tu día 🌙',
+  '¿Completaste todo lo planeado? Échale un vistazo ✨',
+  'Cierra tu día con orden. Revisa tus actividades 💫',
+  'Un día más, un paso más cerca de tus metas 🎯',
+  '¿Cómo estuvo el día? Marca lo que lograste ✅',
+]
+const randomEvening = () => EVENING_MESSAGES[Math.floor(Math.random() * EVENING_MESSAGES.length)]
+
+async function notify(token: string | null, webSub: any, title: string, body: string, data: Record<string, string>) {
+  if (token)  await sendFCM(token, title, body, data)
+  if (webSub) await sendWebPush(webSub, title, body, data)
+}
+
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  // This cron runs every hour. It sends a 7 AM digest to each user whose local time is currently 7 AM.
-  // APP_TIMEZONE: fallback IANA timezone for users without a `timezone` column in profiles
-  // (e.g. "America/Bogota"). Per-user support requires a `timezone` column in the profiles table.
   const appTz = process.env.APP_TIMEZONE ?? 'UTC'
   const now   = new Date()
 
@@ -32,40 +43,58 @@ export async function GET(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // Fetch all users with FCM tokens (+ timezone if the column exists)
+  // Fetch all users that have at least one push channel
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, fcm_token, timezone')
-    .not('fcm_token', 'is', null)
+    .select('id, fcm_token, web_push_subscription, timezone')
 
   if (!profiles?.length) return NextResponse.json({ sent: 0 })
 
-  // Keep only users for whom it is currently 7 AM local time
-  const eligibleUsers = profiles.filter(p => {
+  // Bucket each user by their local hour
+  const morningUsers: typeof profiles = []
+  const eveningUsers: typeof profiles = []
+
+  for (const p of profiles) {
+    if (!p.fcm_token && !p.web_push_subscription) continue
     const tz = (p as any).timezone || appTz
-    return localHour(now, tz) === 7
-  })
+    const hour = localHour(now, tz)
+    if (hour === 7)  morningUsers.push(p)
+    if (hour === 20) eveningUsers.push(p)
+  }
 
-  if (eligibleUsers.length === 0) return NextResponse.json({ sent: 0, reason: 'not 7am for any user' })
+  let sent = 0
 
-  const eligibleIds = eligibleUsers.map(p => p.id)
+  // ── Evening engagement (8 PM) ──────────────────────────────────────────────
+  await Promise.all(eveningUsers.map(async p => {
+    const tz       = (p as any).timezone || appTz
+    const todayStr = localDateStr(now, tz)
+    await notify(p.fcm_token, (p as any).web_push_subscription,
+      '🌙 DayFlow', randomEvening(),
+      { type: 'activity_reminder', date: todayStr })
+    sent++
+  }))
 
-  // For each eligible user, query their timed activities for their local today
-  // Group by timezone so we only compute the local date once per unique tz
-  const dateByTz = new Map<string, string>()
+  // ── Morning digest (7 AM) ──────────────────────────────────────────────────
+  if (morningUsers.length === 0) {
+    return NextResponse.json({ sent, reason: sent ? 'evening only' : 'no users at 7am or 8pm' })
+  }
+
+  const morningIds = morningUsers.map(p => p.id)
+
+  const dateByTz  = new Map<string, string>()
   const userTzMap = new Map<string, string>()
-  for (const p of eligibleUsers) {
+  for (const p of morningUsers) {
     const tz = (p as any).timezone || appTz
     userTzMap.set(p.id, tz)
     if (!dateByTz.has(tz)) dateByTz.set(tz, localDateStr(now, tz))
   }
 
-  // Fetch activities owned by eligible users today
   const localDates = Array.from(new Set(dateByTz.values()))
+
   const { data: activities, error } = await supabase
     .from('activities')
     .select('id, title, emoji, description, user_id, start_time, date')
-    .in('user_id', eligibleIds)
+    .in('user_id', morningIds)
     .in('date', localDates)
     .not('start_time', 'is', null)
     .order('start_time', { ascending: true })
@@ -75,21 +104,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Also include activities where the user is an accepted invitee
-  const allActivityIds = (activities ?? []).map(a => a.id)
   const { data: invitedActivities } = await supabase
     .from('activity_invitations')
     .select('activity_id, invitee_id, activities(id, title, emoji, user_id, start_time, date)')
-    .in('invitee_id', eligibleIds)
+    .in('invitee_id', morningIds)
     .eq('status', 'accepted')
 
-  // Build per-user activity list: owned + invited
   const byUser: Record<string, Array<{ id: string; title: string; emoji: string | null; start_time: string; date: string }>> = {}
-  for (const uid of eligibleIds) byUser[uid] = []
+  for (const uid of morningIds) byUser[uid] = []
 
-  for (const act of activities ?? []) {
-    byUser[act.user_id]?.push(act)
-  }
+  for (const act of activities ?? []) byUser[act.user_id]?.push(act)
   for (const inv of invitedActivities ?? []) {
     const act = (inv as any).activities
     const uid = inv.invitee_id
@@ -99,45 +123,29 @@ export async function GET(request: Request) {
     }
   }
 
-  const tokenMap: Record<string, string> = {}
-  for (const p of eligibleUsers) {
-    if (p.fcm_token) tokenMap[p.id] = p.fcm_token
-  }
+  await Promise.all(morningUsers.map(async p => {
+    const webSub   = (p as any).web_push_subscription
+    const todayStr = dateByTz.get(userTzMap.get(p.id)!)!
+    const acts     = (byUser[p.id] ?? [])
+      .filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i)
+      .sort((a, b) => a.start_time.localeCompare(b.start_time))
+    const count = acts.length
 
-  let sent = 0
-  await Promise.all(
-    eligibleIds.map(async uid => {
-      const token = tokenMap[uid]
-      if (!token) return
+    if (count === 0) {
+      await notify(p.fcm_token, webSub, '☀️ Buenos días',
+        'No tienes actividades programadas para hoy.',
+        { type: 'activity_reminder', date: todayStr })
+    } else {
+      const title = `📅 Tienes ${count} actividad${count > 1 ? 'es' : ''} hoy`
+      const lines = acts.slice(0, 4).map(a =>
+        `${formatTime(a.start_time)} — ${a.emoji ? `${a.emoji} ${a.title}` : a.title}`
+      )
+      if (count > 4) lines.push(`…y ${count - 4} más`)
+      await notify(p.fcm_token, webSub, title, lines.join('\n'),
+        { type: 'activity_reminder', date: todayStr })
+    }
+    sent++
+  }))
 
-      const acts = byUser[uid]
-        .filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i) // dedupe invited+owned
-        .sort((a, b) => a.start_time.localeCompare(b.start_time))
-
-      const todayStr = dateByTz.get(userTzMap.get(uid)!)!
-      const count = acts.length
-
-      if (count === 0) {
-        // No timed activities — send a lighter nudge
-        await sendFCM(
-          token,
-          '☀️ Buenos días',
-          'No tienes actividades programadas para hoy.',
-          { type: 'activity_reminder', date: todayStr },
-        )
-      } else {
-        const title = `📅 Tienes ${count} actividad${count > 1 ? 'es' : ''} hoy`
-        const lines = acts.slice(0, 4).map(a => {
-          const label = a.emoji ? `${a.emoji} ${a.title}` : a.title
-          return `${formatTime(a.start_time)} — ${label}`
-        })
-        if (count > 4) lines.push(`…y ${count - 4} más`)
-        await sendFCM(token, title, lines.join('\n'), { type: 'activity_reminder', date: todayStr })
-      }
-
-      sent++
-    }),
-  )
-
-  return NextResponse.json({ sent, eligible: eligibleUsers.length })
+  return NextResponse.json({ sent, morning: morningUsers.length, evening: eveningUsers.length })
 }
