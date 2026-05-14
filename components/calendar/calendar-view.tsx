@@ -33,11 +33,14 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   // not the server's UTC date (which can differ by a day near midnight).
   const [currentDate, setCurrentDate]   = useState(() => new Date())
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    // Restore last viewed date so a refresh doesn't jump back to today
-    const saved = sessionStorage.getItem('dayflow:selectedDate')
-    if (saved) {
-      const d = new Date(saved + 'T12:00:00')
-      if (!isNaN(d.getTime())) return d
+    // Restore last viewed date so a refresh doesn't jump back to today.
+    // Guard required: useState initializers run on the server (SSR) where sessionStorage doesn't exist.
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('dayflow:selectedDate')
+      if (saved) {
+        const d = new Date(saved + 'T12:00:00')
+        if (!isNaN(d.getTime())) return d
+      }
     }
     return new Date()
   })
