@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useT } from '@/lib/i18n'
 
 export function InfoTooltip({ text }: { text: string }) {
   const [open, setOpen] = useState(false)
+  const t = useT()
   return (
     <div className="relative inline-block">
       <button
@@ -19,7 +21,7 @@ export function InfoTooltip({ text }: { text: string }) {
             <button
               onClick={() => setOpen(false)}
               className="block mt-2 text-primary font-medium hover:underline"
-            >Cerrar</button>
+            >{t('common.close')}</button>
           </div>
         </>
       )}

@@ -73,7 +73,7 @@ export default function WidgetConfigPage() {
       <div className="p-4 space-y-6 max-w-md mx-auto w-full">
         <div className="rounded-2xl overflow-hidden border border-border shadow-sm" style={{ backgroundColor: `rgba(255,255,255,${opacity / 100})` }}>
           <div className="px-3 h-10 flex items-center justify-between text-white text-sm font-bold" style={{ backgroundColor: color }}>
-            <span>All Tasks</span>
+            <span>{t('widgets.title')}</span>
             <div className="flex items-center gap-2 opacity-90">
               <Plus className="w-4 h-4" />
               <RefreshCcw className="w-4 h-4" />
@@ -81,10 +81,10 @@ export default function WidgetConfigPage() {
             </div>
           </div>
           <div className="px-3 py-3 space-y-2 text-xs">
-            <p className="text-[10px] font-bold text-muted-foreground">TODAY</p>
-            <PreviewRow label="Revisar PRs" time="9:00 AM" />
-            <PreviewRow label="Llamar a Ana" time="11:30 AM" />
-            <PreviewRow label="Café matutino" time="8:00 AM" done />
+            <p className="text-[10px] font-bold text-muted-foreground">{t('widgets.preview.today')}</p>
+            <PreviewRow label={t('widgets.preview.sample1')} time="9:00 AM" />
+            <PreviewRow label={t('widgets.preview.sample2')} time="11:30 AM" />
+            <PreviewRow label={t('widgets.preview.sample4')} time="8:00 AM" done />
           </div>
         </div>
 

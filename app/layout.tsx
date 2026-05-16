@@ -7,8 +7,8 @@ import { SplashScreen } from '@/components/layout/splash-screen'
 import { I18nProvider } from '@/lib/i18n'
 
 export const metadata: Metadata = {
-  title: 'DayFlow — Metas y actividades diarias compartidas',
-  description: 'Registra tus metas, tareas y hábitos diarios. Comparte tu progreso con otros.',
+  title: 'DayFlow — Shared daily goals & activities · Metas y actividades diarias',
+  description: 'Track daily goals, tasks and habits, and share your progress. · Registra tus metas, tareas y hábitos diarios y comparte tu progreso.',
   manifest: '/manifest.json',
   icons: {
     icon: [

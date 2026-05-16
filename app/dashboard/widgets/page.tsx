@@ -149,10 +149,11 @@ export default function WidgetsPage() {
 }
 
 function WidgetPreview() {
+  const { t } = useI18n()
   return (
     <div className="rounded-2xl overflow-hidden border border-border/60 bg-background shadow-sm">
       <div className="bg-primary text-primary-foreground px-3 h-9 flex items-center justify-between text-xs font-bold">
-        <span>All Tasks</span>
+        <span>{t('widgets.title')}</span>
         <div className="flex items-center gap-1.5 opacity-90">
           <Plus className="w-3.5 h-3.5" />
           <RefreshCcw className="w-3.5 h-3.5" />
@@ -160,13 +161,13 @@ function WidgetPreview() {
         </div>
       </div>
       <div className="px-3 py-2.5 space-y-1.5 text-xs">
-        <p className="text-[10px] font-bold text-muted-foreground">TODAY</p>
-        <PreviewRow label="Revisar PRs" time="9:00 AM" />
-        <PreviewRow label="Llamar a Ana" time="11:30 AM" />
-        <p className="text-[10px] font-bold text-muted-foreground pt-1">FUTURE</p>
-        <PreviewRow label="Reunión mensual" time="20-05" />
-        <p className="text-[10px] font-bold text-muted-foreground pt-1">COMPLETED</p>
-        <PreviewRow label="Café matutino" time="8:00 AM" done />
+        <p className="text-[10px] font-bold text-muted-foreground">{t('widgets.preview.today')}</p>
+        <PreviewRow label={t('widgets.preview.sample1')} time="9:00 AM" />
+        <PreviewRow label={t('widgets.preview.sample2')} time="11:30 AM" />
+        <p className="text-[10px] font-bold text-muted-foreground pt-1">{t('widgets.preview.future')}</p>
+        <PreviewRow label={t('widgets.preview.sample3')} time="20-05" />
+        <p className="text-[10px] font-bold text-muted-foreground pt-1">{t('widgets.preview.completed')}</p>
+        <PreviewRow label={t('widgets.preview.sample4')} time="8:00 AM" done />
       </div>
     </div>
   )

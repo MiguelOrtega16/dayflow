@@ -368,6 +368,15 @@ export const messages = {
       customizeShort: 'Personalizar color y opacidad',
       androidOnly: 'Los widgets solo están disponibles dentro de la app móvil de Android.',
       back: 'Volver',
+      preview: {
+        today: 'HOY',
+        future: 'PRÓXIMO',
+        completed: 'COMPLETADO',
+        sample1: 'Revisar PRs',
+        sample2: 'Llamar a Ana',
+        sample3: 'Reunión mensual',
+        sample4: 'Café matutino',
+      },
     },
     widgetConfig: {
       title: 'Personalizar widget',
@@ -869,6 +878,15 @@ export const messages = {
       customizeShort: 'Customize color and opacity',
       androidOnly: 'Widgets are only available inside the Android mobile app.',
       back: 'Back',
+      preview: {
+        today: 'TODAY',
+        future: 'UPCOMING',
+        completed: 'COMPLETED',
+        sample1: 'Review PRs',
+        sample2: 'Call Ana',
+        sample3: 'Monthly meeting',
+        sample4: 'Morning coffee',
+      },
     },
     widgetConfig: {
       title: 'Customize widget',

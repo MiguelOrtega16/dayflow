@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { X, Clock, Smile, Target, UserPlus, CheckCircle2, XCircle } from 'lucide-react'
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG, statusLabel, categoryLabel } from '@/lib/utils'
-import { useI18n } from '@/lib/i18n'
+import { useI18n, weekdayNarrow } from '@/lib/i18n'
 import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
   getActivityTitleSuggestions, getActivityInvitations, inviteToActivity,
@@ -47,9 +47,9 @@ interface ActivityFormModalProps {
 
 
 export function ActivityFormModal({ date, activity, currentUser, onClose, onSaved, initialStartTime, initialEndTime }: ActivityFormModalProps) {
+  const { t, locale } = useI18n()
   const isEditing = !!activity
   const router = useRouter()
-  const { locale } = useI18n()
 
   // Core fields
   const [title, setTitle]             = useState(activity?.title || '')
@@ -170,12 +170,12 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     e?.preventDefault()
     console.log('[ActivityForm] submit — title:', title, 'user:', currentUser?.id ?? 'NULL')
 
-    if (!title.trim()) { setTitleTouched(true); setSaveError('El título no puede estar vacío.'); return }
-    if (!currentUser)  { setSaveError('Sesión expirada. Recarga la página.'); return }
-    if (isReminder && !startTime) { setSaveError('Los recordatorios requieren una hora.'); return }
+    if (!title.trim()) { setTitleTouched(true); setSaveError(t('activityForm.titleEmpty')); return }
+    if (!currentUser)  { setSaveError(t('activityForm.sessionExpired')); return }
+    if (isReminder && !startTime) { setSaveError(t('activityForm.reminderRequiresTime')); return }
     // Only the owner or an accepted invitee may edit an existing activity
     if (isEditing && activity!.user_id !== currentUser.id && !activity!.invitation_id) {
-      setSaveError('No tienes permiso para editar esta actividad.')
+      setSaveError(t('activityForm.noPermission'))
       return
     }
 
@@ -239,7 +239,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
       onSaved()
     } catch (err: any) {
       console.error('Save activity error:', err)
-      setSaveError(err?.message || 'Error al guardar. Intenta nuevamente.')
+      setSaveError(err?.message || t('activityForm.saveError'))
     } finally {
       setSaving(false)
     }
@@ -268,9 +268,8 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   }
 
 
-  const DAY_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
+  const DAY_LABELS = weekdayNarrow(locale)
 
-  const INV_STATUS_LABEL: Record<string, string> = { pending: 'Pendiente', accepted: 'Aceptó', declined: 'Declinó' }
   const INV_STATUS_COLOR: Record<string, string> = {
     pending:  'text-amber-600 dark:text-amber-400',
     accepted: 'text-emerald-600 dark:text-emerald-400',
@@ -285,7 +284,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
         {/* Floating close button — replaces the removed header bar */}
         <button
           onClick={onClose}
-          aria-label="Cerrar"
+          aria-label={t('common.close')}
           className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center rounded-lg bg-card/90 backdrop-blur hover:bg-muted text-muted-foreground transition-colors"
         >
           <X className="w-4 h-4" />
@@ -301,7 +300,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               {/* Title with autocomplete + inline emoji picker */}
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                  Título <span className="text-destructive">*</span>
+                  {t('activityForm.titleLabel')} <span className="text-destructive">*</span>
                 </label>
                 <div className={cn(
                   'relative flex items-center gap-2 rounded-xl border pl-2 pr-3 py-2 transition-colors',
@@ -312,7 +311,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                   <div className="relative shrink-0">
                     <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                       className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-base hover:bg-muted/80 transition-colors"
-                      title="Cambiar emoji"
+                      title={t('activityForm.changeEmoji')}
                     >
                       {emoji || CATEGORY_CONFIG[category].emoji}
                     </button>
@@ -327,20 +326,20 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                         <button type="button"
                           onClick={ev => { ev.stopPropagation(); setEmoji(''); setShowEmojiPicker(false) }}
                           className="col-span-2 text-[10px] text-muted-foreground hover:text-foreground px-1 py-0.5 rounded hover:bg-muted transition-colors"
-                        >Quitar</button>
+                        >{t('activityForm.removeEmoji')}</button>
                       </div>
                     )}
                   </div>
                   <input ref={titleRef} type="text" value={title} onChange={e => setTitle(e.target.value)}
                     onBlur={() => { setTitleTouched(true); setTimeout(() => setShowSuggestions(false), 150) }}
                     onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                    placeholder="¿Qué quieres lograr?" required autoFocus
+                    placeholder={t('activityForm.titlePlaceholder')} required autoFocus
                     className="flex-1 text-base font-medium bg-transparent border-none outline-none placeholder:text-muted-foreground/60 min-w-0 disabled:opacity-60"
                   />
                   <div className="relative shrink-0">
                     <button type="button" onClick={() => setShowTitleEmoji(p => !p)}
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                      title="Insertar emoji en el título"
+                      title={t('activityForm.insertEmoji')}
                     >
                       <Smile className="w-4 h-4" />
                     </button>
@@ -367,7 +366,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                   )}
                 </div>
                 {titleTouched && !title.trim() && (
-                  <p className="text-xs text-destructive mt-1">El título es requerido</p>
+                  <p className="text-xs text-destructive mt-1">{t('activityForm.titleRequired')}</p>
                 )}
               </div>
 
@@ -375,11 +374,11 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
               {/* Category — compact dropdown */}
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Categoría</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('activityForm.categoryLabel')}</label>
                 <CustomSelect
                   value={category}
                   onChange={(v) => setCategory(v as ActivityCategory)}
-                  ariaLabel="Categoría"
+                  ariaLabel={t('activityForm.categoryLabel')}
                   options={(Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
                     .filter(c => c !== 'habit' && c !== 'note')
                     .map(cat => ({
@@ -390,17 +389,17 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               </div>
 
               {isReminder ? (
-                /* Reminder: single row — Hora left, Fecha right */
+                /* Reminder: single row — Time left, Date right */
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> Hora <span className="text-primary font-bold">*</span>
+                      <Clock className="w-3 h-3" /> {t('activityForm.hour')} <span className="text-primary font-bold">*</span>
                     </label>
                     <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha</label>
-                    <input type="date" lang="es" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('activityForm.date')}</label>
+                    <input type="date" lang={locale} value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
                       className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
@@ -409,8 +408,8 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 <>
                   {/* Date row */}
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha</label>
-                    <input type="date" lang="es" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('activityForm.date')}</label>
+                    <input type="date" lang={locale} value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
                       className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
@@ -418,17 +417,17 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> Hora inicio
+                        <Clock className="w-3 h-3" /> {t('activityForm.startTime')}
                       </label>
                       <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> Hora fin
+                        <Clock className="w-3 h-3" /> {t('activityForm.endTime')}
                       </label>
                       <TimePicker value={endTime} onChange={handleEndTimeChange} placeholder="--" />
                       {endTimeError && (
-                        <p className="text-xs text-destructive mt-1">Debe ser posterior a la de inicio</p>
+                        <p className="text-xs text-destructive mt-1">{t('activityForm.endAfterStart')}</p>
                       )}
                     </div>
                   </div>
@@ -437,7 +436,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
               {/* Status — hidden for reminders and during creation; shown only when editing */}
               {!isReminder && isEditing && <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Estado</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('activityForm.status')}</label>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                   {(Object.keys(STATUS_CONFIG) as ActivityStatus[]).map(s => (
                     <button key={s} type="button" onClick={() => setStatus(s)}
@@ -451,29 +450,29 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 </div>
               </div>}
 
-              {/* ── Repetición — compact dropdown ── */}
+              {/* ── Repeat — compact dropdown ── */}
               <div className="border-t border-border/50 pt-4">
                 <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs font-medium text-muted-foreground shrink-0">Repetir</label>
+                  <label className="text-xs font-medium text-muted-foreground shrink-0">{t('activityForm.repeat')}</label>
                   <div className="flex-1">
                     <CustomSelect
                       value={recurrenceType}
                       onChange={(v) => setRecurrenceType(v as RecurrenceType)}
-                      ariaLabel="Frecuencia de repetición"
+                      ariaLabel={t('activityForm.repeatFreq')}
                       options={([
-                        { value: 'none',     label: 'Nunca' },
-                        { value: 'daily',    label: '🗓 Diario' },
-                        { value: 'weekdays', label: '💼 Días hábiles' },
-                        { value: 'weekly',   label: '📅 Semanal' },
-                        { value: 'monthly',  label: '🌙 Mensual' },
-                        { value: 'custom',   label: '⚙️ Personalizado' },
+                        { value: 'none',     label: t('activityForm.recurrence.none')     },
+                        { value: 'daily',    label: t('activityForm.recurrence.daily')    },
+                        { value: 'weekdays', label: t('activityForm.recurrence.weekdays') },
+                        { value: 'weekly',   label: t('activityForm.recurrence.weekly')   },
+                        { value: 'monthly',  label: t('activityForm.recurrence.monthly')  },
+                        { value: 'custom',   label: t('activityForm.recurrence.custom')   },
                       ] as const).filter(opt => isReminder ? ['none','daily','weekly','monthly'].includes(opt.value) : true)}
                     />
                   </div>
                 </div>
                 {recurrenceType === 'custom' && (
                   <div className="mt-3">
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Días de la semana</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('activityForm.daysOfWeek')}</label>
                     <div className="flex gap-1.5">
                       {DAY_LABELS.map((label, i) => (
                         <button key={i} type="button"
@@ -488,7 +487,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 )}
                 {recurrenceType !== 'none' && (
                   <div className="mt-3 flex items-center justify-between">
-                    <label className="text-xs text-muted-foreground">Número de veces</label>
+                    <label className="text-xs text-muted-foreground">{t('activityForm.timesCount')}</label>
                     <input type="number" min={1} max={365} value={recurrenceCount}
                       onChange={e => setRecurrenceCount(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
                       className="w-20 text-center rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
@@ -501,7 +500,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               {status === 'in_progress' && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-medium text-muted-foreground">Progreso</label>
+                    <label className="text-xs font-medium text-muted-foreground">{t('activityForm.progressLabel')}</label>
                     <input type="number" min={0} max={100} value={completionPct}
                       onChange={e => setCompletionPct(Math.max(0, Math.min(100, Number(e.target.value))))}
                       className="w-16 text-center rounded-lg border border-input bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
@@ -520,12 +519,12 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               {!isReminder && goals.length > 0 && (
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                    <Target className="w-3 h-3" /> Vincular a meta
+                    <Target className="w-3 h-3" /> {t('activityForm.linkGoal')}
                   </label>
                   <select value={goalId} onChange={e => setGoalId(e.target.value)}
                     className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="">Sin meta</option>
+                    <option value="">{t('activityForm.noGoal')}</option>
                     {goals.map(g => <option key={g.id} value={g.id}>{g.emoji} {g.title}</option>)}
                   </select>
                 </div>
@@ -546,11 +545,9 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                   <div className="flex items-center gap-2">
                     <span className="text-base">{isPublic ? '👁' : '🔒'}</span>
                     <div className="text-left">
-                      <p className="text-sm font-medium">{isPublic ? 'Visible' : 'Privado'}</p>
+                      <p className="text-sm font-medium">{isPublic ? t('activityForm.visible') : t('activityForm.private')}</p>
                       <p className="text-[11px] opacity-70">
-                        {isPublic
-                          ? 'Las personas con las que compartes tu calendario pueden verla y comentarla, pero no modificarla'
-                          : 'Solo tú y las personas a las que invitas pueden ver esta actividad'}
+                        {isPublic ? t('activityForm.visibleHelp') : t('activityForm.privateHelp')}
                       </p>
                     </div>
                   </div>
@@ -560,29 +557,29 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 </button>
               </div>
 
-              {/* ── Invitar personas ── */}
+              {/* ── Invite people ── */}
               <div className="border-t border-border/50 pt-4">
                 <div className="mb-2">
                   <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                    <UserPlus className="w-3 h-3" /> Invitar personas
+                    <UserPlus className="w-3 h-3" /> {t('activityForm.invitePeople')}
                   </span>
                   <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                    Los invitados pueden ver <strong>y modificar</strong> esta actividad
+                    {t('activityForm.inviteHelp')}
                   </p>
                 </div>
 
                 {sharedUserIds !== null && sharedUserIds.length === 0 ? (
                   <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-xl px-3 py-2.5">
-                    Para invitar a alguien, primero comparte tu calendario con esa persona en la sección{' '}
+                    {t('activityForm.noContactsHint')}{' '}
                     <button
                       type="button"
                       className="font-bold underline hover:opacity-70 transition-opacity"
                       onClick={() => { onClose(); router.push('/dashboard/people') }}
-                    >Personas</button>.
+                    >{t('people.title')}</button>.
                   </p>
                 ) : (
                   <input type="text" value={inviteSearch} onChange={e => setInviteSearch(e.target.value)}
-                    placeholder="Busca entre tus contactos…"
+                    placeholder={t('activityForm.contactsSearch')}
                     className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                   />
                 )}
@@ -603,7 +600,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                         >
                           <UserPlus className="w-3 h-3" />
-                          Invitar
+                          {t('activityForm.invite')}
                         </button>
                       </div>
                     ))}
@@ -621,7 +618,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{u.full_name || u.email}</p>
-                          <p className="text-xs text-amber-600 dark:text-amber-400">Se invitará al guardar</p>
+                          <p className="text-xs text-amber-600 dark:text-amber-400">{t('activityForm.pendingInvite')}</p>
                         </div>
                         <button type="button" onClick={() => setPendingInvitees(prev => prev.filter(x => x.id !== u.id))}
                           className="w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
@@ -648,12 +645,12 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{person?.full_name || person?.email}</p>
                             <p className={cn('text-xs font-medium', INV_STATUS_COLOR[inv.status])}>
-                              {INV_STATUS_LABEL[inv.status]}
+                              {t(`invitationStatus.${inv.status as 'pending' | 'accepted' | 'declined'}`)}
                             </p>
                           </div>
                           {inv.status === 'pending' && (
                             <button type="button" onClick={() => handleCancelInvitation(inv.id)}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Cancelar invitación">
+                              className="w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title={t('activityForm.cancelInvitation')}>
                               <X className="w-3.5 h-3.5" />
                             </button>
                           )}
@@ -678,16 +675,21 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
           <div className="flex items-center justify-end gap-2">
             <button type="button" onClick={onClose}
               className="px-4 py-2 text-sm font-medium rounded-xl border border-border hover:bg-muted transition-colors">
-              Cancelar
+              {t('common.cancel')}
             </button>
             <button type="button" disabled={saving || !title.trim()}
               onClick={e => handleSubmit(e)}
               className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              {saving ? 'Guardando...' : pendingInvitees.length > 0
-                ? `${isEditing ? 'Guardar' : 'Crear'} e invitar (${pendingInvitees.length})`
-                : isEditing
-                  ? 'Guardar cambios'
-                  : `Crear ${categoryLabel(category, locale).toLowerCase()}`}
+              {saving
+                ? t('activityForm.saving')
+                : pendingInvitees.length > 0
+                  ? t('activityForm.saveAndInvite', {
+                      verb: isEditing ? t('activityForm.verbSave') : t('activityForm.verbCreate'),
+                      count: pendingInvitees.length,
+                    })
+                  : isEditing
+                    ? t('activityForm.saveBtn')
+                    : t('activityForm.saveBtnCreate', { category: categoryLabel(category, locale).toLowerCase() })}
             </button>
           </div>
         </div>

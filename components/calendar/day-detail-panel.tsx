@@ -361,7 +361,9 @@ export function DayDetailPanel({
                 canInteract ? 'hover:opacity-70 cursor-pointer' : 'cursor-default',
                 statusCfg.textColor
               )}
-              title={`Estado: ${statusLabel(activity.status, locale)}${canInteract ? ' (clic para cambiar)' : ''}`}
+              title={canInteract
+                ? t('calendar.eventTitleInteractive', { label: statusLabel(activity.status, locale) })
+                : t('calendar.eventTitle', { label: statusLabel(activity.status, locale) })}
             >
               {updatingIds.has(activity.id)
                 ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -413,12 +415,12 @@ export function DayDetailPanel({
 
                 {activity.invited_from_activity_id && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-medium">
-                    👥 Invitado
+                    👥 {t('calendar.invited')}
                   </span>
                 )}
 
                 {activity.recurrence_type !== 'none' && (
-                  <span className="text-[10px] text-primary font-medium">🔄 Recurrente</span>
+                  <span className="text-[10px] text-primary font-medium">🔄 {t('calendar.recurring')}</span>
                 )}
 
                 {activity.tags?.slice(0, 2).map(tag => (
@@ -462,10 +464,10 @@ export function DayDetailPanel({
                 <div className="mt-2 rounded-lg overflow-hidden border border-border/50">
                   <img
                     src={activity.evidence_image_url}
-                    alt="Evidencia"
+                    alt={t('calendar.evidenceAlt')}
                     className="w-full max-h-36 object-cover cursor-pointer"
                     onClick={() => window.open(activity.evidence_image_url!, '_blank')}
-                    title="Ver evidencia en tamaño completo"
+                    title={t('calendar.evidenceFull')}
                   />
                 </div>
               )}
@@ -480,7 +482,7 @@ export function DayDetailPanel({
                     'flex items-center gap-0.5 px-1 h-6 rounded-md transition-colors text-muted-foreground',
                     isCommentOpen ? 'bg-primary/10 text-primary' : 'hover:bg-background/60 hover:text-foreground'
                   )}
-                  title="Comentarios"
+                  title={t('calendar.commentsTitle')}
                 >
                   <MessageCircle className="w-3.5 h-3.5" />
                   {(commentCounts[activity.id] ?? 0) > 0 && (
@@ -509,10 +511,10 @@ export function DayDetailPanel({
                         onClick={() => { onEditActivity(activity); setOpenMenuId(null) }}
                         className="w-full text-left px-3 py-1.5 hover:bg-muted transition-colors"
                       >
-                        ✏️ Editar
+                        ✏️ {t('common.edit')}
                       </button>
                       <div className="border-t border-border my-1" />
-                      <p className="px-3 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Estado</p>
+                      <p className="px-3 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t('goals.statusHeading')}</p>
                       {STATUS_CYCLE.map(s => {
                         const cfg = STATUS_CONFIG[s]
                         const Icon = STATUS_ICON[s]
@@ -548,14 +550,14 @@ export function DayDetailPanel({
                         onClick={() => handleDelete(activity)}
                         className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors"
                       >
-                        🗑 Eliminar esta actividad
+                        🗑 {t('calendar.deleteThis')}
                       </button>
                       {activity.recurrence_type !== 'none' && (
                         <button
                           onClick={() => handleDelete(activity, true)}
                           className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors"
                         >
-                          🗑 Eliminar todas las recurrentes
+                          🗑 {t('calendar.deleteAllRecurring')}
                         </button>
                       )}
                     </div>
@@ -570,12 +572,12 @@ export function DayDetailPanel({
         {isCommentOpen && (
           <div className="border-t border-border/50 bg-background/40 rounded-b-xl overflow-hidden">
             {isLoadingComments ? (
-              <div className="px-3 py-2 text-xs text-muted-foreground">Cargando comentarios…</div>
+              <div className="px-3 py-2 text-xs text-muted-foreground">{t('calendar.loadingComments')}</div>
             ) : (
               <>
                 {comments.length === 0 ? (
                   <p className="px-3 py-2 text-xs text-muted-foreground italic">
-                    Sin comentarios aún. ¡Sé el primero!
+                    {t('calendar.noCommentsYet')}
                   </p>
                 ) : (
                   <div className="px-3 py-2 space-y-2 max-h-40 overflow-y-auto">
@@ -596,10 +598,10 @@ export function DayDetailPanel({
                           <div className="flex-1 min-w-0">
                             <div className="flex items-baseline gap-1.5">
                               <span className="text-[10px] font-semibold truncate">
-                                {commenterProfile?.full_name || commenterProfile?.email || 'Usuario'}
+                                {commenterProfile?.full_name || commenterProfile?.email || t('calendar.anonymous')}
                               </span>
                               <span className="text-[9px] text-muted-foreground shrink-0">
-                                {formatRelativeTime(comment.created_at)}
+                                {formatRelativeTime(comment.created_at, locale)}
                               </span>
                             </div>
                             <p className="text-xs text-foreground/80 leading-snug">{comment.content}</p>
@@ -624,7 +626,7 @@ export function DayDetailPanel({
                     value={newCommentText[activity.id] || ''}
                     onChange={e => setNewCommentText(prev => ({ ...prev, [activity.id]: e.target.value }))}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(activity.id) } }}
-                    placeholder="Escribe un comentario…"
+                    placeholder={t('calendar.writeComment')}
                     className="flex-1 text-xs bg-background rounded-lg border border-input px-2 py-1.5 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
                   />
                   <button
@@ -662,14 +664,14 @@ export function DayDetailPanel({
             className="hidden md:flex items-center gap-1 px-2.5 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 transition-colors animate-attention"
           >
             <Plus className="w-3.5 h-3.5" />
-            Agregar
+            {t('calendar.add')}
           </button>
         </div>
 
         {total > 0 && (
           <div className="mt-3">
             <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-              <span>{done}/{total} completadas</span>
+              <span>{t('calendar.progress', { done, total })}</span>
               <span>{Math.round((done / total) * 100)}%</span>
             </div>
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -689,8 +691,8 @@ export function DayDetailPanel({
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
               <span className="text-2xl">✦</span>
             </div>
-            <p className="text-sm font-medium text-muted-foreground">Sin actividades aún</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">Haz clic en "Agregar" para planear tu día</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('calendar.noActivities')}</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">{t('calendar.noActivitiesHelp')}</p>
           </div>
         ) : (
           <div className="p-3 space-y-4">
@@ -709,7 +711,7 @@ export function DayDetailPanel({
                       ? <img src={myProfile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
                       : getInitials(myProfile.full_name, myProfile.email)}
                   </div>
-                  <span className="text-xs font-semibold" style={{ color: myProfile.color }}>Tú</span>
+                  <span className="text-xs font-semibold" style={{ color: myProfile.color }}>{t('common.you')}</span>
                   {myActivities.length > 0 && (
                     <span className="ml-auto text-[10px] text-muted-foreground font-medium">
                       {myActivities.filter(a => a.status === 'done').length}/{myActivities.length}
@@ -722,7 +724,7 @@ export function DayDetailPanel({
                 <div className="space-y-1.5">
                   {myActivities.length === 0 ? (
                     <button onClick={onAddActivity} className="activity-card-ghost w-full text-sm">
-                      <Plus className="w-4 h-4 mr-1" /> Agregar actividad
+                      <Plus className="w-4 h-4 mr-1" /> {t('calendar.addActivity')}
                     </button>
                   ) : (
                     myActivities.map(a => renderActivityCard(a, myProfile?.color || currentUserColor))
@@ -760,7 +762,7 @@ export function DayDetailPanel({
                       )}
                     </div>
                     <span className="text-xs font-semibold ml-1" style={{ color: group.profile?.color || '#6366f1' }}>
-                      {group.profile?.full_name?.split(' ')[0] || group.profile?.email || 'Compartida'} & Tú
+                      {t('calendar.youWith', { name: group.profile?.full_name?.split(' ')[0] || group.profile?.email || t('calendar.sharedWithYou') })}
                     </span>
                     <span className="ml-auto text-[10px] text-muted-foreground font-medium">
                       {group.activities.filter(a => a.status === 'done').length}/{group.activities.length}
