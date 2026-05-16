@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { cn, getInitials } from '@/lib/utils'
 import { useTheme } from './theme-provider'
@@ -10,7 +11,7 @@ import type { Profile } from '@/types'
 import {
   LayoutDashboard, Users, Settings,
   LogOut, Sun, Moon, ChevronLeft, ChevronRight,
-  Target, BarChart2, CalendarDays
+  Target, BarChart2, CalendarDays, LayoutPanelTop
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -21,12 +22,24 @@ const NAV_ITEMS = [
   { href: '/dashboard/people', icon: Users, label: 'Personas' },
 ]
 
+// Native-only items (hidden on web; only appear inside the Capacitor Android app)
+const NATIVE_NAV_ITEMS = [
+  { href: '/dashboard/widgets', icon: LayoutPanelTop, label: 'Widgets' },
+]
+
 export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; onNavClick?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const [collapsed, setCollapsed] = useState(false)
+  const [isNative, setIsNative]   = useState(false)
   const supabase = createClient()
+
+  // Capacitor.isNativePlatform() is safe to call on the client; we still want
+  // this in an effect so SSR markup matches first paint.
+  useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
+
+  const navItems = isNative ? [...NAV_ITEMS, ...NATIVE_NAV_ITEMS] : NAV_ITEMS
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -62,7 +75,7 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
 
       {/* Navigation */}
       <nav className="flex-1 py-4 px-2 space-y-0.5">
-        {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
+        {navItems.map(({ href, icon: Icon, label }) => {
           const isActive = href === '/dashboard'
             ? pathname === '/dashboard'
             : pathname.startsWith(href)

@@ -19,6 +19,7 @@ import { CalendarHeader } from './calendar-header'
 import { UserFilterBar } from './user-filter-bar'
 import { ActivityFormModal } from '../activities/activity-form-modal'
 import { scheduleActivityReminders } from '@/lib/activity-reminders'
+import { syncWidgetSnapshot, startWidgetAuthSync } from '@/lib/widget-sync'
 import { CompactMonthGrid } from './compact-month-grid'
 import { TimeGridView } from './time-grid-view'
 
@@ -152,6 +153,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
       const data = await getActivitiesForRange(start, end, activeUserIds, currentUser?.id)
       setActivities(data)
       scheduleActivityReminders(data)
+      if (currentUser?.id) syncWidgetSnapshot(data, currentUser.id)
     } catch (err) {
       console.error('Failed to fetch activities:', err)
     } finally {
@@ -160,6 +162,10 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   }, [getDateRange, activeUserIds, currentUser?.id])
 
   useEffect(() => { fetchActivities() }, [fetchActivities])
+
+  // Mirror the Supabase session into native storage so the widget can refresh
+  // / toggle-done on its own. No-op on web.
+  useEffect(() => startWidgetAuthSync(), [])
 
   useEffect(() => {
     if (activeUserIds.length === 0) return
