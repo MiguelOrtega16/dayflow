@@ -38,20 +38,14 @@
         </provider>
 
         <!-- ── Home-screen widget ── -->
-        <receiver
-            android:name=".widget.TodayWidgetProvider"
-            android:exported="true">
+        <receiver android:name=".widget.TodayWidgetProvider" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/today_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/today_widget_info" />
         </receiver>
 
-        <receiver
-            android:name=".widget.WidgetActionReceiver"
-            android:exported="false">
+        <receiver android:name=".widget.WidgetActionReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="com.chanclastudio.dayflow.widget.REFRESH" />
                 <action android:name="com.chanclastudio.dayflow.widget.ROW_CLICK" />
@@ -61,7 +55,8 @@
         <service
             android:name=".widget.TodayWidgetService"
             android:permission="android.permission.BIND_REMOTEVIEWS"
-            android:exported="false" />
+            android:exported="false"
+        />
     </application>
 
     <!-- Permissions -->
