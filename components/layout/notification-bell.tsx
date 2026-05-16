@@ -78,9 +78,29 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
   const [notifications, setNotifications]   = useState<Notification[]>([])
   const [unreadCount, setUnreadCount]       = useState(0)
   const [open, setOpen]                     = useState(false)
+  // Keep the panel in the DOM during the closing animation, then unmount.
+  const [panelMounted, setPanelMounted]     = useState(false)
+  const [bellAnimKey, setBellAnimKey]       = useState(0)
   const [responding, setResponding]         = useState<{ id: string; action: 'accept' | 'decline' } | null>(null)
   const router = useRouter()
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const closeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const toggleOpen = () => {
+    setBellAnimKey(k => k + 1)
+    setOpen(prev => !prev)
+  }
+
+  useEffect(() => {
+    if (open) {
+      if (closeTimeout.current) { clearTimeout(closeTimeout.current); closeTimeout.current = null }
+      setPanelMounted(true)
+    } else if (panelMounted) {
+      // Match the panel-out animation duration in tailwind config
+      closeTimeout.current = setTimeout(() => setPanelMounted(false), 170)
+    }
+    return () => { if (closeTimeout.current) { clearTimeout(closeTimeout.current); closeTimeout.current = null } }
+  }, [open])
   const channelName = useRef(`notifications-${userId}-${Math.random().toString(36).slice(2)}`)
   const supabase    = createClient()
 
@@ -245,11 +265,15 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
   return (
     <div ref={dropdownRef}>
       <button
-        onClick={() => setOpen(prev => !prev)}
+        onClick={toggleOpen}
+        aria-expanded={open}
         className={cn(
-          'relative transition-colors',
+          'relative transition-all duration-200 ease-out active:scale-95',
           topBar
-            ? 'w-9 h-9 flex items-center justify-center rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground'
+            ? cn(
+                'w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted',
+                open && 'bg-muted text-foreground'
+              )
             : cn(
                 'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm',
                 open ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
@@ -258,7 +282,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
         )}
         title="Notificaciones"
       >
-        <Bell className="w-4 h-4 shrink-0" />
+        <Bell key={bellAnimKey} className="w-4 h-4 shrink-0 origin-top animate-bell-wiggle" />
         {!topBar && !collapsed && <span className="flex-1 text-left">Notificaciones</span>}
         {unreadCount > 0 && (
           <span className={cn(
@@ -272,16 +296,22 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
         )}
       </button>
 
-      {open && (
+      {panelMounted && (
         <>
           {/* Transparent backdrop — closes panel when clicking anywhere outside */}
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className={cn('fixed inset-0 z-40 transition-opacity duration-200', open ? 'opacity-100' : 'opacity-0')}
+            onClick={() => setOpen(false)}
+          />
 
           {/* Panel — fixed at top of viewport so it's never clipped by the sidebar */}
-          <div className="fixed z-50 animate-scale-in
-            top-16 left-2 right-2
-            sm:top-4 sm:left-auto sm:right-4 sm:w-96
-            bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden">
+          <div className={cn(
+            'fixed z-50 origin-top',
+            'top-16 left-2 right-2',
+            'sm:top-4 sm:left-auto sm:right-4 sm:w-96',
+            'bg-popover border border-border rounded-2xl shadow-2xl overflow-hidden',
+            open ? 'animate-panel-in' : 'animate-panel-out'
+          )}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <h3 className="font-semibold text-sm">Notificaciones</h3>
             {unreadCount > 0 && (

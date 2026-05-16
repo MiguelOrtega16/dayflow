@@ -1,13 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { format, subDays, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { getActivitiesForRange, updateActivityStatus } from '@/lib/api'
-import { cn, STATUS_CONFIG, CATEGORY_CONFIG } from '@/lib/utils'
-import type { Activity, ActivityStatus, Profile } from '@/types'
-import { CheckCircle2, Circle, Play, Ban, SkipForward, Loader2 } from 'lucide-react'
+import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime } from '@/lib/utils'
+import type { Activity, ActivityStatus, ActivityCategory, Profile } from '@/types'
+import {
+  CheckCircle2, Circle, Play, Ban, SkipForward, Loader2,
+  Search, ChevronDown, Clock, Target, Calendar as CalendarIcon, X,
+} from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 
 const STATUS_ICONS = {
@@ -20,12 +23,21 @@ const STATUS_ICONS = {
 
 const STATUS_CYCLE: ActivityStatus[] = ['todo', 'in_progress', 'done', 'blocked', 'skipped']
 
+// Primary columns shown side-by-side on desktop. The remaining statuses
+// live in a collapsible group below so the main view stays focused on
+// "what to do next" + recent wins.
+const PRIMARY_STATUSES: ActivityStatus[] = ['todo', 'in_progress', 'done']
+const SECONDARY_STATUSES: ActivityStatus[] = ['blocked', 'skipped']
+
 export default function OverviewPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<'today' | '7days' | '30days' | '90days'>('today')
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set())
+  const [search, setSearch] = useState('')
+  const [activeCategories, setActiveCategories] = useState<Set<ActivityCategory>>(new Set())
+  const [secondaryOpen, setSecondaryOpen] = useState(false)
   const supabase = createClient()
 
   useEffect(() => { setLoading(true); loadData() }, [range])
@@ -55,170 +67,492 @@ export default function OverviewPage() {
     }
   }
 
-  const done = activities.filter(a => a.status === 'done').length
-  const total = activities.length
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0
+  const toggleCategory = (c: ActivityCategory) => {
+    setActiveCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(c)) next.delete(c)
+      else next.add(c)
+      return next
+    })
+  }
+
+  // Filter pipeline — search by title/description + category chips
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return activities.filter(a => {
+      if (activeCategories.size > 0 && !activeCategories.has(a.category)) return false
+      if (!q) return true
+      return (
+        a.title.toLowerCase().includes(q) ||
+        (a.description?.toLowerCase().includes(q) ?? false)
+      )
+    })
+  }, [activities, search, activeCategories])
+
+  const grouped = useMemo(() => ({
+    todo:        filtered.filter(a => a.status === 'todo'),
+    in_progress: filtered.filter(a => a.status === 'in_progress'),
+    done:        filtered.filter(a => a.status === 'done'),
+    blocked:     filtered.filter(a => a.status === 'blocked'),
+    skipped:     filtered.filter(a => a.status === 'skipped'),
+  }), [filtered])
+
+  const totalAll       = activities.length
+  const totalFiltered  = filtered.length
+  const doneFiltered   = grouped.done.length
+  const pct = totalFiltered > 0 ? Math.round((doneFiltered / totalFiltered) * 100) : 0
+  const hasFilter      = search.trim().length > 0 || activeCategories.size > 0
+
+  const secondaryCount = grouped.blocked.length + grouped.skipped.length
+
+  // Sort columns: time first (earliest first), then by title
+  const sortColumn = (acts: Activity[]) =>
+    [...acts].sort((a, b) => {
+      if (a.start_time && b.start_time) return a.start_time.localeCompare(b.start_time)
+      if (a.start_time) return -1
+      if (b.start_time) return 1
+      return a.title.localeCompare(b.title)
+    })
+
   const now = new Date()
   const greeting = now.getHours() < 12 ? 'Buenos días' : now.getHours() < 18 ? 'Buenas tardes' : 'Buenas noches'
-
-  const grouped = {
-    todo: activities.filter(a => a.status === 'todo'),
-    in_progress: activities.filter(a => a.status === 'in_progress'),
-    done: activities.filter(a => a.status === 'done'),
-    blocked: activities.filter(a => a.status === 'blocked'),
-    skipped: activities.filter(a => a.status === 'skipped'),
+  const rangeLabel: Record<typeof range, string> = {
+    today:  'Hoy',
+    '7days':  '7 días',
+    '30days': '30 días',
+    '90days': '90 días',
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      {/* Saludo */}
-      <div className="mb-8">
+    <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 max-w-7xl mx-auto">
+      {/* ─── Header: greeting + range selector ─── */}
+      <div className="mb-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-2xl font-semibold">
+              <h1 className="text-xl sm:text-2xl font-semibold truncate">
                 {greeting}, {profile?.full_name?.split(' ')[0] || 'ahí'} 👋
               </h1>
-              <InfoTooltip text="Vista rápida de tus actividades del período seleccionado. Muestra tu progreso general, tareas pendientes y completadas, agrupadas por estado y categoría." />
+              <InfoTooltip text="Vista rápida de tus actividades del período seleccionado. Filtra, busca y cambia el estado con un clic." />
             </div>
-            <p className="text-muted-foreground capitalize">
+            <p className="text-sm text-muted-foreground capitalize">
               {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
             </p>
           </div>
-          <div className="flex items-center bg-muted rounded-xl p-1 shrink-0">
+          {/* Range selector — segmented control */}
+          <div className="flex items-center bg-muted rounded-xl p-1 shrink-0 overflow-x-auto">
             {(['today', '7days', '30days', '90days'] as const).map(r => (
               <button key={r} onClick={() => setRange(r)}
-                className={cn('px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                className={cn('px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap',
                   range === r ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-                {r === 'today' ? 'Hoy' : r === '7days' ? '7 días' : r === '30days' ? '30 días' : '90 días'}
+                {rangeLabel[r]}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Progreso del período */}
+      {/* ─── Stats card: progress ring + counts ─── */}
       {loading ? (
-        <div className="bg-card border border-border rounded-2xl p-5 mb-6 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="h-4 w-32 rounded shimmer" />
-            <div className="h-7 w-12 rounded shimmer" />
-          </div>
-          <div className="h-2.5 rounded-full shimmer" />
-          <div className="flex gap-3">
-            {[1, 2, 3].map(i => <div key={i} className="h-3 w-20 rounded shimmer" />)}
+        <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mb-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full shimmer" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-40 rounded shimmer" />
+              <div className="h-3 w-64 rounded shimmer" />
+            </div>
           </div>
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-2xl p-5 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold">
-              {range === 'today' ? 'Progreso de hoy' : range === '7days' ? 'Últimos 7 días' : range === '30days' ? 'Últimos 30 días' : 'Últimos 90 días'}
-            </h2>
-            <span className="text-2xl font-bold text-primary">{pct}%</span>
-          </div>
-          <div className="h-2.5 bg-muted rounded-full overflow-hidden mb-3">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-700"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-            {Object.entries(grouped).filter(([, acts]) => acts.length > 0).map(([status, acts]) => {
-              const cfg = STATUS_CONFIG[status as ActivityStatus]
-              return (
-                <span key={status} className="flex items-center gap-1">
-                  <span className={cn('w-2 h-2 rounded-full', cfg.dotColor)} />
-                  {acts.length} {cfg.label.toLowerCase()}
-                </span>
-              )
-            })}
-            {total === 0 && <span>Sin actividades{range === 'today' ? ' por hoy' : ' en este período'}</span>}
-          </div>
-        </div>
+        <StatsCard
+          pct={pct}
+          done={doneFiltered}
+          total={totalFiltered}
+          totalAll={totalAll}
+          rangeLabel={rangeLabel[range]}
+          grouped={grouped}
+          hasFilter={hasFilter}
+        />
       )}
 
-      {/* Lista agrupada por estado */}
+      {/* ─── Filters: search + category chips ─── */}
+      <div className="mb-5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
+        <div className="relative flex-1 min-w-0">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none" />
+          <input
+            type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por título o descripción…"
+            className="w-full rounded-xl border border-input bg-card pl-9 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} aria-label="Limpiar búsqueda"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5 sm:pb-0 sm:overflow-visible">
+          {(Object.keys(CATEGORY_CONFIG) as ActivityCategory[]).map(cat => {
+            const active = activeCategories.has(cat)
+            const cfg = CATEGORY_CONFIG[cat]
+            return (
+              <button key={cat} onClick={() => toggleCategory(cat)}
+                className={cn(
+                  'shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                  active
+                    ? 'bg-primary/10 border-primary/40 text-primary'
+                    : 'bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}
+              >
+                <span>{cfg.emoji}</span>
+                <span>{cfg.label}</span>
+              </button>
+            )
+          })}
+          {activeCategories.size > 0 && (
+            <button onClick={() => setActiveCategories(new Set())}
+              className="shrink-0 text-xs text-muted-foreground hover:text-foreground ml-1 underline-offset-2 hover:underline">
+              Limpiar
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Tareas content: Kanban on desktop / sections on mobile ─── */}
       {loading ? (
-        <div className="space-y-3">
-          <div className="h-3 w-24 rounded shimmer" />
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="flex items-start gap-3 p-3 rounded-xl border border-border/40">
-              <div className="w-4 h-4 rounded-full shrink-0 mt-0.5 shimmer" />
-              <div className="flex-1 space-y-1.5">
+        <KanbanSkeleton />
+      ) : totalFiltered === 0 ? (
+        <EmptyState
+          hasFilter={hasFilter}
+          range={range}
+          onClearFilter={() => { setSearch(''); setActiveCategories(new Set()) }}
+        />
+      ) : (
+        <>
+          {/* Primary columns: 1 col mobile → 3 cols desktop */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+            {PRIMARY_STATUSES.map(status => (
+              <StatusColumn
+                key={status}
+                status={status}
+                activities={sortColumn(grouped[status])}
+                range={range}
+                updatingIds={updatingIds}
+                onCycle={handleCycleStatus}
+              />
+            ))}
+          </div>
+
+          {/* Secondary statuses (blocked + skipped) — collapsible */}
+          {secondaryCount > 0 && (
+            <div className="mt-5 bg-card border border-border rounded-2xl overflow-hidden">
+              <button onClick={() => setSecondaryOpen(o => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors">
+                <div className="flex items-center gap-3 text-sm">
+                  <ChevronDown className={cn('w-4 h-4 transition-transform', !secondaryOpen && '-rotate-90')} />
+                  <span className="font-medium">Otros estados</span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {SECONDARY_STATUSES.map(s => grouped[s].length > 0 && (
+                      <span key={s} className="inline-flex items-center gap-1">
+                        <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_CONFIG[s].dotColor)} />
+                        {grouped[s].length} {STATUS_CONFIG[s].label.toLowerCase()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </button>
+              {secondaryOpen && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 pt-0">
+                  {SECONDARY_STATUSES.map(status =>
+                    grouped[status].length > 0 ? (
+                      <StatusColumn
+                        key={status}
+                        status={status}
+                        activities={sortColumn(grouped[status])}
+                        range={range}
+                        updatingIds={updatingIds}
+                        onCycle={handleCycleStatus}
+                        compact
+                      />
+                    ) : null
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Stats card with progress ring + breakdown ───────────────────────────────
+function StatsCard({
+  pct, done, total, totalAll, rangeLabel, grouped, hasFilter,
+}: {
+  pct: number
+  done: number
+  total: number
+  totalAll: number
+  rangeLabel: string
+  grouped: Record<ActivityStatus, Activity[]>
+  hasFilter: boolean
+}) {
+  // SVG progress ring math
+  const radius = 28
+  const circumference = 2 * Math.PI * radius
+  const offset = circumference - (pct / 100) * circumference
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mb-4">
+      <div className="flex items-center gap-4">
+        {/* Progress ring */}
+        <div className="relative w-16 h-16 shrink-0">
+          <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r={radius} className="text-muted" strokeWidth="6" fill="none" stroke="currentColor" />
+            <circle cx="32" cy="32" r={radius} className="text-primary transition-[stroke-dashoffset] duration-700"
+              strokeWidth="6" strokeLinecap="round" fill="none" stroke="currentColor"
+              strokeDasharray={circumference} strokeDashoffset={offset}
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-sm font-bold tabular-nums">{pct}%</span>
+          </div>
+        </div>
+        {/* Counts + breakdown */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <h2 className="font-semibold text-sm sm:text-base">{rangeLabel}</h2>
+            <span className="text-xs text-muted-foreground">
+              {done} de {total} completadas{hasFilter && totalAll !== total ? ` · de ${totalAll} totales` : ''}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+            {(Object.keys(grouped) as ActivityStatus[]).map(s =>
+              grouped[s].length > 0 ? (
+                <span key={s} className="inline-flex items-center gap-1.5">
+                  <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_CONFIG[s].dotColor)} />
+                  <span className="tabular-nums">{grouped[s].length}</span>
+                  <span className="hidden sm:inline">{STATUS_CONFIG[s].label.toLowerCase()}</span>
+                </span>
+              ) : null
+            )}
+            {total === 0 && <span>Sin coincidencias para los filtros activos</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Status column ───────────────────────────────────────────────────────────
+function StatusColumn({
+  status, activities, range, updatingIds, onCycle, compact,
+}: {
+  status: ActivityStatus
+  activities: Activity[]
+  range: 'today' | '7days' | '30days' | '90days'
+  updatingIds: Set<string>
+  onCycle: (a: Activity) => void
+  compact?: boolean
+}) {
+  const cfg = STATUS_CONFIG[status]
+  return (
+    <section className={cn(
+      'flex flex-col rounded-2xl border border-border bg-card overflow-hidden',
+      compact && 'shadow-none'
+    )}>
+      <header className={cn('flex items-center justify-between px-4 py-2.5 border-b border-border/70')}>
+        <div className="flex items-center gap-2">
+          <span className={cn('w-2 h-2 rounded-full', cfg.dotColor)} />
+          <h3 className={cn('text-xs font-semibold uppercase tracking-wider', cfg.textColor)}>{cfg.label}</h3>
+        </div>
+        <span className="text-xs text-muted-foreground tabular-nums">{activities.length}</span>
+      </header>
+      {activities.length === 0 ? (
+        <div className="px-4 py-6 text-center text-xs text-muted-foreground/70">
+          Sin actividades en este estado
+        </div>
+      ) : (
+        <ul className="p-2 space-y-1.5">
+          {activities.map(a => (
+            <ActivityCard
+              key={a.id}
+              activity={a}
+              status={status}
+              range={range}
+              loading={updatingIds.has(a.id)}
+              onCycle={() => onCycle(a)}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+// ─── Activity card ───────────────────────────────────────────────────────────
+function ActivityCard({
+  activity, status, range, loading, onCycle,
+}: {
+  activity: Activity
+  status: ActivityStatus
+  range: 'today' | '7days' | '30days' | '90days'
+  loading: boolean
+  onCycle: () => void
+}) {
+  const cfg = STATUS_CONFIG[status]
+  const catCfg = CATEGORY_CONFIG[activity.category]
+  const Icon = STATUS_ICONS[status]
+  const showDate = range !== 'today'
+  const hasTime = !!activity.start_time
+  const isHighPri = activity.priority === 'high' || activity.priority === 'critical'
+
+  return (
+    <li className={cn(
+      'group relative flex items-start gap-2.5 p-2.5 rounded-xl border transition-colors',
+      cfg.bgColor, cfg.color,
+      'hover:shadow-sm'
+    )}>
+      {/* Priority accent bar */}
+      {isHighPri && (
+        <span className={cn(
+          'absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full',
+          PRIORITY_CONFIG[activity.priority].color.replace('text-', 'bg-')
+        )} />
+      )}
+
+      {/* Status button (cycles statuses) */}
+      <button
+        onClick={onCycle}
+        disabled={loading}
+        className={cn('mt-0.5 shrink-0 hover:opacity-70 transition-opacity', cfg.textColor)}
+        title="Clic para cambiar estado"
+      >
+        {loading
+          ? <Loader2 className="w-4 h-4 animate-spin" />
+          : <Icon className="w-4 h-4" />}
+      </button>
+
+      <div className="flex-1 min-w-0">
+        {/* Title row */}
+        <div className="flex items-start gap-1.5">
+          {activity.emoji && <span className="shrink-0 leading-tight">{activity.emoji}</span>}
+          <span className={cn(
+            'text-sm font-medium leading-snug break-words flex-1 min-w-0',
+            status === 'done' && 'line-through opacity-60',
+            status === 'skipped' && 'opacity-40'
+          )}>
+            {activity.title}
+          </span>
+        </div>
+
+        {/* Meta row: time · date · category */}
+        {(hasTime || showDate || activity.goal) && (
+          <div className="mt-1 flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground">
+            {hasTime && (
+              <span className="inline-flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                <span className="tabular-nums">{formatTime(activity.start_time)}</span>
+              </span>
+            )}
+            {showDate && (
+              <span className="inline-flex items-center gap-1">
+                <CalendarIcon className="w-3 h-3" />
+                {format(parseISO(activity.date), "d MMM", { locale: es })}
+              </span>
+            )}
+            {activity.goal && (
+              <span className="inline-flex items-center gap-1 truncate max-w-[140px]">
+                <Target className="w-3 h-3 shrink-0" />
+                <span className="truncate">{activity.goal.title}</span>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Description (1 line) */}
+        {activity.description && (
+          <p className="text-xs text-muted-foreground/80 mt-1 line-clamp-1">{activity.description}</p>
+        )}
+
+        {/* In-progress completion bar */}
+        {status === 'in_progress' && activity.completion_percentage > 0 && (
+          <div className="mt-1.5 flex items-center gap-2">
+            <div className="flex-1 h-1 bg-background/60 rounded-full overflow-hidden">
+              <div className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                style={{ width: `${activity.completion_percentage}%` }} />
+            </div>
+            <span className="text-[10px] font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+              {activity.completion_percentage}%
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Category chip — top-right */}
+      <span className={cn(
+        'shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-background/70 border border-border/40',
+        catCfg.color
+      )}>
+        <span className="text-xs leading-none">{catCfg.emoji}</span>
+        <span className="hidden md:inline">{catCfg.label}</span>
+      </span>
+    </li>
+  )
+}
+
+// ─── Skeleton state ──────────────────────────────────────────────────────────
+function KanbanSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+      {[0, 1, 2].map(col => (
+        <div key={col} className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-border/70 flex items-center justify-between">
+            <div className="h-3 w-24 rounded shimmer" />
+            <div className="h-3 w-6 rounded shimmer" />
+          </div>
+          <div className="p-2 space-y-1.5">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="p-2.5 rounded-xl border border-border/40 space-y-2">
                 <div className="h-3.5 rounded shimmer" style={{ width: `${55 + (i * 13) % 35}%` }} />
                 <div className="h-2.5 w-24 rounded shimmer" />
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      ) : total === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-4xl mb-3">✦</div>
-          <p className="text-muted-foreground">{range === 'today' ? 'Aún no hay actividades para hoy.' : 'Sin actividades en este período.'}</p>
-          <p className="text-sm text-muted-foreground/70 mt-1">¡Ve al Calendario para agregar algunas!</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {(['in_progress', 'todo', 'blocked', 'done', 'skipped'] as ActivityStatus[]).map(status => {
-            const acts = grouped[status]
-            if (acts.length === 0) return null
-            const cfg = STATUS_CONFIG[status]
-            const Icon = STATUS_ICONS[status]
-            return (
-              <div key={status}>
-                <h3 className={cn('text-xs font-semibold uppercase tracking-wider mb-2', cfg.textColor)}>
-                  {cfg.label} · {acts.length}
-                </h3>
-                <div className="space-y-2">
-                  {acts.map(activity => (
-                    <div key={activity.id} className={cn('flex items-start gap-3 p-3 rounded-xl border', cfg.bgColor, cfg.color)}>
-                      <button
-                        onClick={() => handleCycleStatus(activity)}
-                        disabled={updatingIds.has(activity.id)}
-                        className={cn('mt-0.5 shrink-0 hover:opacity-70 transition-opacity', cfg.textColor)}
-                        title="Clic para cambiar estado"
-                      >
-                        {updatingIds.has(activity.id)
-                          ? <Loader2 className="w-4 h-4 animate-spin" />
-                          : <Icon className="w-4 h-4" />}
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          {activity.emoji && <span>{activity.emoji}</span>}
-                          <span className={cn(
-                            'text-sm font-medium',
-                            status === 'done' && 'line-through opacity-60',
-                            status === 'skipped' && 'opacity-40'
-                          )}>
-                            {activity.title}
-                          </span>
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {CATEGORY_CONFIG[activity.category].emoji}
-                          </span>
-                        </div>
-                        {range !== 'today' && (
-                          <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                            {format(parseISO(activity.date), "d 'de' MMMM", { locale: es })}
-                          </p>
-                        )}
-                        {activity.description && (
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{activity.description}</p>
-                        )}
-                        {status === 'in_progress' && activity.completion_percentage > 0 && (
-                          <div className="mt-1.5 h-1 bg-background/60 rounded-full overflow-hidden">
-                            <div className="h-full bg-amber-400 rounded-full" style={{ width: `${activity.completion_percentage}%` }} />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      ))}
+    </div>
+  )
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
+function EmptyState({
+  hasFilter, range, onClearFilter,
+}: {
+  hasFilter: boolean
+  range: 'today' | '7days' | '30days' | '90days'
+  onClearFilter: () => void
+}) {
+  if (hasFilter) {
+    return (
+      <div className="bg-card border border-border rounded-2xl py-12 px-4 text-center">
+        <div className="text-4xl mb-3">🔍</div>
+        <p className="text-sm text-muted-foreground">No hay actividades que coincidan con los filtros activos.</p>
+        <button onClick={onClearFilter}
+          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+          Limpiar filtros
+        </button>
+      </div>
+    )
+  }
+  return (
+    <div className="bg-card border border-border rounded-2xl py-12 px-4 text-center">
+      <div className="text-4xl mb-3">✦</div>
+      <p className="text-muted-foreground">
+        {range === 'today' ? 'Aún no hay actividades para hoy.' : 'Sin actividades en este período.'}
+      </p>
+      <p className="text-sm text-muted-foreground/70 mt-1">¡Ve al Calendario para agregar algunas!</p>
     </div>
   )
 }

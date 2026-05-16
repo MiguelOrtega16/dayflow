@@ -16,7 +16,7 @@ import {
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: CalendarDays, label: 'Calendario' },
-  { href: '/dashboard/overview', icon: LayoutDashboard, label: 'Resumen' },
+  { href: '/dashboard/overview', icon: LayoutDashboard, label: 'Tareas' },
   { href: '/dashboard/goals', icon: Target, label: 'Metas' },
   { href: '/dashboard/stats', icon: BarChart2, label: 'Estadísticas' },
   { href: '/dashboard/people', icon: Users, label: 'Personas' },

@@ -66,7 +66,6 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
       const w = window.innerWidth
       setIsMobile(w < 768)
       setIsTablet(w >= 768 && w < 1280)
-      if (w < 768) setMode('week')
     }
     check()
     window.addEventListener('resize', check)

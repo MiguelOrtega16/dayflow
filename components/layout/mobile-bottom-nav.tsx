@@ -12,9 +12,9 @@ interface MobileBottomNavProps {
 }
 
 const TABS = [
-  { href: '/dashboard/stats',    icon: BarChart2,       label: 'Estadísticas'  },
+  { href: '/dashboard/overview', icon: LayoutDashboard, label: 'Tareas'        },
   { href: '/dashboard',          icon: CalendarDays,    label: 'Calendario'    },
-  { href: '/dashboard/overview', icon: LayoutDashboard, label: 'Resumen'       },
+  { href: '/dashboard/stats',    icon: BarChart2,       label: 'Estadísticas'  },
 ]
 
 export function MobileBottomNav({ userId, onMenuClick }: MobileBottomNavProps) {
