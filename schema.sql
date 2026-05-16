@@ -376,6 +376,12 @@ create policy "Comments visible if activity is visible"
               and sc.owner_id = a.user_id
               and sc.status = 'accepted'
           )
+          or exists (
+            select 1 from public.activity_invitations ai
+            where ai.activity_id = a.id
+              and ai.invitee_id = auth.uid()
+              and ai.status = 'accepted'
+          )
         )
     )
   );

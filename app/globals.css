@@ -182,3 +182,18 @@
 @keyframes app-spin {
   to { transform: rotate(360deg); }
 }
+
+/* Attention ripple — used on primary CTA buttons to draw the eye */
+@keyframes attention-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.7);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px hsl(var(--primary) / 0);
+    transform: scale(1.05);
+  }
+}
+.animate-attention {
+  animation: attention-pulse 1.6s ease-in-out infinite;
+}

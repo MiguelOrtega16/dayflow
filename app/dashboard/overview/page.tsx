@@ -7,7 +7,7 @@ import { es } from 'date-fns/locale'
 import { getActivitiesForRange, updateActivityStatus } from '@/lib/api'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG } from '@/lib/utils'
 import type { Activity, ActivityStatus, Profile } from '@/types'
-import { CheckCircle2, Circle, Play, Ban, SkipForward } from 'lucide-react'
+import { CheckCircle2, Circle, Play, Ban, SkipForward, Loader2 } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 
 const STATUS_ICONS = {
@@ -25,6 +25,7 @@ export default function OverviewPage() {
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<'today' | '7days' | '30days' | '90days'>('today')
+  const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set())
   const supabase = createClient()
 
   useEffect(() => { setLoading(true); loadData() }, [range])
@@ -45,8 +46,13 @@ export default function OverviewPage() {
   const handleCycleStatus = async (activity: Activity) => {
     const idx = STATUS_CYCLE.indexOf(activity.status)
     const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
-    await updateActivityStatus(activity.id, next)
-    loadData()
+    setUpdatingIds(prev => new Set(prev).add(activity.id))
+    try {
+      await updateActivityStatus(activity.id, next, profile?.id)
+      await loadData()
+    } finally {
+      setUpdatingIds(prev => { const s = new Set(prev); s.delete(activity.id); return s })
+    }
   }
 
   const done = activities.filter(a => a.status === 'done').length
@@ -169,10 +175,13 @@ export default function OverviewPage() {
                     <div key={activity.id} className={cn('flex items-start gap-3 p-3 rounded-xl border', cfg.bgColor, cfg.color)}>
                       <button
                         onClick={() => handleCycleStatus(activity)}
+                        disabled={updatingIds.has(activity.id)}
                         className={cn('mt-0.5 shrink-0 hover:opacity-70 transition-opacity', cfg.textColor)}
                         title="Clic para cambiar estado"
                       >
-                        <Icon className="w-4 h-4" />
+                        {updatingIds.has(activity.id)
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Icon className="w-4 h-4" />}
                       </button>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">

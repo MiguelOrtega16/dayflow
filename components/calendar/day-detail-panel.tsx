@@ -63,6 +63,7 @@ export function DayDetailPanel({
   const [commentLoading, setCommentLoading] = useState<Record<string, boolean>>({})
   const [collapsedUsers, setCollapsedUsers] = useState<Set<string>>(new Set())
   const [transitioning, setTransitioning] = useState(false)
+  const [updatingIds, setUpdatingIds]     = useState<Set<string>>(new Set())
   const supabase = createClient()
   // Ref so the Realtime callback always reads the current openCommentId without stale closure
   const openCommentIdRef = useRef<string | null>(null)
@@ -204,13 +205,26 @@ export function DayDetailPanel({
 
   const showSectionHeaders = sharedGroups.length > 0 || othersGroups.length > 0 || isSharedView
 
+  const markUpdating = (id: string, on: boolean) => {
+    setUpdatingIds(prev => {
+      const next = new Set(prev)
+      on ? next.add(id) : next.delete(id)
+      return next
+    })
+  }
+
   const handleCycleStatus = async (activity: Activity) => {
     const canUpdate = activity.user_id === currentUserId || !!activity.invitation_id
     if (!canUpdate) return
     const currentIdx = STATUS_CYCLE.indexOf(activity.status)
     const nextStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length]
-    await updateActivityStatus(activity.id, nextStatus)
-    onActivityUpdated()
+    markUpdating(activity.id, true)
+    try {
+      await updateActivityStatus(activity.id, nextStatus, currentUserId)
+      onActivityUpdated()
+    } finally {
+      markUpdating(activity.id, false)
+    }
   }
 
   const handleDelete = async (activity: Activity, deleteAll = false) => {
@@ -339,7 +353,7 @@ export function DayDetailPanel({
             {/* Botón de estado */}
             <button
               onClick={() => handleCycleStatus(activity)}
-              disabled={!canInteract}
+              disabled={!canInteract || updatingIds.has(activity.id)}
               className={cn(
                 'mt-0.5 shrink-0 transition-colors',
                 canInteract ? 'hover:opacity-70 cursor-pointer' : 'cursor-default',
@@ -347,7 +361,9 @@ export function DayDetailPanel({
               )}
               title={`Estado: ${statusCfg.label}${canInteract ? ' (clic para cambiar)' : ''}`}
             >
-              <StatusIcon className="w-4 h-4" />
+              {updatingIds.has(activity.id)
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <StatusIcon className="w-4 h-4" />}
             </button>
 
             {/* Contenido */}
@@ -455,7 +471,7 @@ export function DayDetailPanel({
 
             {/* Acciones */}
             <div className="flex items-center gap-0.5 shrink-0">
-              {activity.is_public && (
+              {(activity.is_public || canInteract) && (
                 <button
                   onClick={() => handleToggleComments(activity.id)}
                   className={cn(
@@ -504,8 +520,13 @@ export function DayDetailPanel({
                             key={s}
                             onClick={async () => {
                               if (!isCurrent) {
-                                await updateActivityStatus(activity.id, s)
-                                onActivityUpdated()
+                                markUpdating(activity.id, true)
+                                try {
+                                  await updateActivityStatus(activity.id, s, currentUserId)
+                                  onActivityUpdated()
+                                } finally {
+                                  markUpdating(activity.id, false)
+                                }
                               }
                               setOpenMenuId(null)
                             }}
@@ -636,7 +657,7 @@ export function DayDetailPanel({
           </div>
           <button
             onClick={onAddActivity}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 transition-colors"
+            className="hidden md:flex items-center gap-1 px-2.5 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 transition-colors animate-attention"
           >
             <Plus className="w-3.5 h-3.5" />
             Agregar

@@ -293,15 +293,24 @@ async function notifyActivityParticipants(
     ? `Estado de "${orig.title}" cambiado a: ${statusLabels[updates.status] ?? updates.status}`
     : `"${orig.title}" fue actualizada`
 
-  await Promise.all([...participants].map(recipientId =>
-    supabase.from('notifications').insert({
+  await Promise.all([...participants].map(async recipientId => {
+    await supabase.from('notifications').insert({
       recipient_id: recipientId,
       actor_id:     updaterId,
       type,
       activity_id:  origId,
       message,
     })
-  ))
+    // Push notification — fire-and-forget, never blocks the action
+    sendPushNotification({
+      recipientId,
+      title: type === 'status_update' ? '🔄 Estado actualizado' : '✨ Actividad actualizada',
+      body:  message,
+      type,
+      date:  activity.date,
+      activityId: origId,
+    })
+  }))
 }
 
 export async function deleteActivity(id: string, deleteAll?: boolean) {

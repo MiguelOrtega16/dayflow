@@ -12,12 +12,23 @@ self.addEventListener('push', event => {
     data:    payload.data  || {},
     vibrate: [200, 100, 200],
   }
+  if (Array.isArray(payload.actions) && payload.actions.length > 0) {
+    options.actions = payload.actions
+  }
   event.waitUntil(self.registration.showNotification(title, options))
 })
 
 self.addEventListener('notificationclick', event => {
   event.notification.close()
-  const url = event.notification.data?.url || '/dashboard'
+  const data = event.notification.data || {}
+  let url = data.url || '/dashboard'
+
+  // Action-button click — append the relevant query so the page can react on load
+  if (event.action === 'create') {
+    const date = data.date ? `?create=${encodeURIComponent(data.date)}` : '?create=today'
+    url = `/dashboard${date}`
+  }
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       const existing = list.find(c => c.url.includes('/dashboard'))

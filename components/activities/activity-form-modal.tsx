@@ -10,6 +10,7 @@ import {
   getActivityTitleSuggestions, getActivityInvitations, inviteToActivity,
   cancelActivityInvitation, searchUsers, getSharedCalendarUsers,
 } from '@/lib/api'
+import { CustomSelect } from '@/components/ui/custom-select'
 import type {
   Activity, ActivityStatus, ActivityCategory, RecurrenceType,
   Profile, Goal, ActivityInvitation,
@@ -87,7 +88,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
   // Recurrence
   const [recurrenceType, setRecurrenceType]     = useState<RecurrenceType>(activity?.recurrence_type || 'none')
-  const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
   const [recurrenceCount, setRecurrenceCount]   = useState(1)
   const [daysOfWeek, setDaysOfWeek]             = useState<number[]>([])
   const isReminder = category === 'reminder'
@@ -204,8 +204,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
         tags,
         recurrence_type:    recurrenceType,
         recurrence_config:  recurrenceType !== 'none' ? {
-          end_date:    recurrenceEndDate || undefined,
-          occurrences: recurrenceEndDate ? undefined : recurrenceCount,
+          occurrences: recurrenceCount,
           days_of_week: recurrenceType === 'custom' ? daysOfWeek : undefined,
         } : null,
         color:              null,
@@ -373,65 +372,72 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 )}
               </div>
 
-              <textarea value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="Añade una descripción (opcional)" rows={2}
-                className="w-full text-sm bg-muted/40 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-ring resize-none placeholder:text-muted-foreground/50"
-              />
+              {/* Description — hidden in this build; data is still preserved on edit */}
 
-              {/* Category */}
+              {/* Category — compact dropdown */}
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Categoría</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(Object.keys(CATEGORY_CONFIG) as ActivityCategory[]).filter(c => c !== 'habit' && c !== 'note').map(cat => (
-                    <button key={cat} type="button" onClick={() => setCategory(cat)}
-                      className={cn('flex flex-col items-center gap-1 py-2 px-1 rounded-xl border text-xs font-medium transition-all',
-                        category === cat ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40 text-muted-foreground hover:text-foreground'
-                      )}
-                    >
-                      <span className="text-base">{CATEGORY_CONFIG[cat].emoji}</span>
-                      <span>{CATEGORY_CONFIG[cat].label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Date row */}
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha</label>
-                <input type="date" lang="es" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                <CustomSelect
+                  value={category}
+                  onChange={(v) => setCategory(v as ActivityCategory)}
+                  ariaLabel="Categoría"
+                  options={(Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
+                    .filter(c => c !== 'habit' && c !== 'note')
+                    .map(cat => ({
+                      value: cat,
+                      label: `${CATEGORY_CONFIG[cat].emoji} ${CATEGORY_CONFIG[cat].label}`,
+                    }))}
                 />
               </div>
-              {/* Time row — for reminders: time + days counter side by side */}
+
               {isReminder ? (
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> Hora <span className="text-primary font-bold">*</span>
-                  </label>
-                  <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
-                </div>
-              ) : (
+                /* Reminder: single row — Hora left, Fecha right */
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> Hora inicio
+                      <Clock className="w-3 h-3" /> Hora <span className="text-primary font-bold">*</span>
                     </label>
                     <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> Hora fin
-                    </label>
-                    <TimePicker value={endTime} onChange={handleEndTimeChange} placeholder="--" />
-                    {endTimeError && (
-                      <p className="text-xs text-destructive mt-1">Debe ser posterior a la de inicio</p>
-                    )}
+                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha</label>
+                    <input type="date" lang="es" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                      className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
                   </div>
                 </div>
+              ) : (
+                <>
+                  {/* Date row */}
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Fecha</label>
+                    <input type="date" lang="es" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                      className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  {/* Time row */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> Hora inicio
+                      </label>
+                      <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> Hora fin
+                      </label>
+                      <TimePicker value={endTime} onChange={handleEndTimeChange} placeholder="--" />
+                      {endTimeError && (
+                        <p className="text-xs text-destructive mt-1">Debe ser posterior a la de inicio</p>
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
 
-              {/* Status — hidden for reminders */}
-              {!isReminder && <div>
+              {/* Status — hidden for reminders and during creation; shown only when editing */}
+              {!isReminder && isEditing && <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Estado</label>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                   {(Object.keys(STATUS_CONFIG) as ActivityStatus[]).map(s => (
@@ -446,24 +452,25 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 </div>
               </div>}
 
-              {/* ── Repetición ── */}
+              {/* ── Repetición — compact dropdown ── */}
               <div className="border-t border-border/50 pt-4">
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Repetir</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {([
-                    { value: 'none',     label: 'Nunca' },
-                    { value: 'daily',    label: '🗓 Diario' },
-                    { value: 'weekdays', label: '💼 Días hábiles' },
-                    { value: 'weekly',   label: '📅 Semanal' },
-                    { value: 'monthly',  label: '🌙 Mensual' },
-                    { value: 'custom',   label: '⚙️ Personalizado' },
-                  ] as const).filter(opt => isReminder ? ['none','daily','weekly','monthly'].includes(opt.value) : true).map(opt => (
-                    <button key={opt.value} type="button" onClick={() => setRecurrenceType(opt.value)}
-                      className={cn('py-2 px-2 rounded-xl border text-xs font-medium transition-all',
-                        recurrenceType === opt.value ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/40 text-muted-foreground'
-                      )}
-                    >{opt.label}</button>
-                  ))}
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-xs font-medium text-muted-foreground shrink-0">Repetir</label>
+                  <div className="flex-1">
+                    <CustomSelect
+                      value={recurrenceType}
+                      onChange={(v) => setRecurrenceType(v as RecurrenceType)}
+                      ariaLabel="Frecuencia de repetición"
+                      options={([
+                        { value: 'none',     label: 'Nunca' },
+                        { value: 'daily',    label: '🗓 Diario' },
+                        { value: 'weekdays', label: '💼 Días hábiles' },
+                        { value: 'weekly',   label: '📅 Semanal' },
+                        { value: 'monthly',  label: '🌙 Mensual' },
+                        { value: 'custom',   label: '⚙️ Personalizado' },
+                      ] as const).filter(opt => isReminder ? ['none','daily','weekly','monthly'].includes(opt.value) : true)}
+                    />
+                  </div>
                 </div>
                 {recurrenceType === 'custom' && (
                   <div className="mt-3">
@@ -481,23 +488,12 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                   </div>
                 )}
                 {recurrenceType !== 'none' && (
-                  <div className="mt-3 space-y-2">
-                    <label className="block text-xs font-medium text-muted-foreground">Fin</label>
-                    <div>
-                      <label className="block text-xs text-muted-foreground mb-1">Fecha de fin (opcional)</label>
-                      <input type="date" lang="es" value={recurrenceEndDate} onChange={e => setRecurrenceEndDate(e.target.value)}
-                        className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                      />
-                    </div>
-                    {!recurrenceEndDate && (
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs text-muted-foreground">Número de veces</label>
-                        <input type="number" min={1} max={365} value={recurrenceCount}
-                          onChange={e => setRecurrenceCount(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
-                          className="w-20 text-center rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
-                        />
-                      </div>
-                    )}
+                  <div className="mt-3 flex items-center justify-between">
+                    <label className="text-xs text-muted-foreground">Número de veces</label>
+                    <input type="number" min={1} max={365} value={recurrenceCount}
+                      onChange={e => setRecurrenceCount(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
+                      className="w-20 text-center rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
+                    />
                   </div>
                 )}
               </div>
@@ -753,14 +749,6 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
           const v = e.target.value.replace(/\D/g, '')
           const n = parseInt(v)
           if (v === '' || (!isNaN(n) && n <= 59)) update('m', v)
-        }}
-        onBlur={() => {
-          if (local.m.length === 1) {
-            const padded = local.m.padStart(2, '0')
-            const next = { ...local, m: padded }
-            setLocal(next)
-            push(next.h, padded, next.p as 'AM' | 'PM')
-          }
         }}
         className={inputCls}
       />

@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Menu, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { AppSidebar } from './app-sidebar'
-import { NotificationBell } from './notification-bell'
+import { MobileBottomNav } from './mobile-bottom-nav'
 import { cn } from '@/lib/utils'
 import { initPushNotifications } from '@/lib/push-notifications'
 import type { Profile } from '@/types'
@@ -100,27 +100,6 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* ── Top bar — mobile only ── */}
-        <header className="xl:hidden relative flex items-center justify-between px-4 h-14 border-b border-border bg-card shrink-0">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-foreground transition-colors"
-            aria-label="Abrir menú"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-
-          {/* Centred logo */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
-            <img src="/icon-512.png" alt="" className="w-7 h-7 rounded-lg object-cover" />
-            <span className="font-semibold text-base tracking-tight">DayFlow</span>
-          </div>
-
-          {profile?.id && (
-            <NotificationBell userId={profile.id} topBar />
-          )}
-        </header>
-
         <main ref={mainRef} className="flex-1 overflow-auto min-w-0">
           {/* Pull-to-refresh indicator — mobile only */}
           <div
@@ -137,6 +116,9 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
           </div>
           {children}
         </main>
+
+        {/* ── Bottom navigation — mobile only ── */}
+        <MobileBottomNav userId={profile?.id} onMenuClick={() => setSidebarOpen(true)} />
       </div>
     </div>
   )

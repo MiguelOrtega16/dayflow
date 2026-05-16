@@ -16,11 +16,14 @@ export async function getFirebaseMessaging() {
   }
 }
 
+export interface WebPushAction { action: string; title: string }
+
 export async function sendWebPush(
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   title: string,
   body: string,
   data?: Record<string, string>,
+  actions?: WebPushAction[],
 ) {
   const publicKey  = process.env.VAPID_PUBLIC_KEY
   const privateKey = process.env.VAPID_PRIVATE_KEY
@@ -31,7 +34,7 @@ export async function sendWebPush(
     webpush.default.setVapidDetails(email, publicKey, privateKey)
     await webpush.default.sendNotification(
       subscription,
-      JSON.stringify({ title, body, data: { url: '/dashboard', ...data } }),
+      JSON.stringify({ title, body, data: { url: '/dashboard', ...data }, actions }),
     )
   } catch (err: any) {
     // 410 Gone = subscription expired; caller should remove it from DB

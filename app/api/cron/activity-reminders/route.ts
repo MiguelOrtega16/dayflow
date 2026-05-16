@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendFCM, sendWebPush } from '@/lib/firebase-admin'
+import { sendFCM, sendWebPush, type WebPushAction } from '@/lib/firebase-admin'
 import { localDateStr, localHour } from '@/lib/tz-utils'
 
 function isAuthorized(request: Request) {
@@ -25,9 +25,16 @@ const EVENING_MESSAGES = [
 ]
 const randomEvening = () => EVENING_MESSAGES[Math.floor(Math.random() * EVENING_MESSAGES.length)]
 
-async function notify(token: string | null, webSub: any, title: string, body: string, data: Record<string, string>) {
+async function notify(
+  token: string | null,
+  webSub: any,
+  title: string,
+  body: string,
+  data: Record<string, string>,
+  actions?: WebPushAction[],
+) {
   if (token)  await sendFCM(token, title, body, data)
-  if (webSub) await sendWebPush(webSub, title, body, data)
+  if (webSub) await sendWebPush(webSub, title, body, data, actions)
 }
 
 export async function GET(request: Request) {
@@ -131,10 +138,15 @@ export async function GET(request: Request) {
       .sort((a, b) => a.start_time.localeCompare(b.start_time))
     const count = acts.length
 
+    const morningActions: WebPushAction[] = [
+      { action: 'create', title: '➕ Nueva actividad' },
+    ]
+
     if (count === 0) {
       await notify(p.fcm_token, webSub, '☀️ Buenos días',
         'No tienes actividades programadas para hoy.',
-        { type: 'activity_reminder', date: todayStr })
+        { type: 'activity_reminder', date: todayStr },
+        morningActions)
     } else {
       const title = `📅 Tienes ${count} actividad${count > 1 ? 'es' : ''} hoy`
       const lines = acts.slice(0, 4).map(a =>
@@ -142,7 +154,8 @@ export async function GET(request: Request) {
       )
       if (count > 4) lines.push(`…y ${count - 4} más`)
       await notify(p.fcm_token, webSub, title, lines.join('\n'),
-        { type: 'activity_reminder', date: todayStr })
+        { type: 'activity_reminder', date: todayStr },
+        morningActions)
     }
     sent++
   }))

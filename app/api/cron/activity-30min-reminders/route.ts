@@ -36,6 +36,33 @@ export async function GET(request: Request) {
 
   const now = new Date()
 
+  // ── Auto-mark past reminders as done ────────────────────────────────────────
+  // Reminders are point-in-time; once their time has passed they should be done.
+  const todayLocalForCleanup = localDateStr(now, appTz)
+  const { data: pendingReminders } = await supabase
+    .from('activities')
+    .select('id, date, start_time')
+    .eq('category', 'reminder')
+    .eq('status', 'todo')
+    .not('start_time', 'is', null)
+    .lte('date', todayLocalForCleanup)
+
+  if (pendingReminders && pendingReminders.length > 0) {
+    const pastIds = pendingReminders
+      .filter(r => {
+        const utc = localToUTC(r.date, r.start_time!.slice(0, 5), appTz)
+        return utc.getTime() < now.getTime()
+      })
+      .map(r => r.id)
+
+    if (pastIds.length > 0) {
+      await supabase
+        .from('activities')
+        .update({ status: 'done', completion_percentage: 100 })
+        .in('id', pastIds)
+    }
+  }
+
   // Query today + tomorrow to handle windows that span midnight
   const todayLocal    = localDateStr(now, appTz)
   const tomorrowLocal = localDateStr(new Date(now.getTime() + 32 * 60_000), appTz)

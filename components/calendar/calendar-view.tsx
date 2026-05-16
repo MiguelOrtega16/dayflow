@@ -10,6 +10,7 @@ import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
 import { getActivitiesForRange } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { Plus } from 'lucide-react'
 import { getColombiaHolidays } from '@/lib/holidays'
 import type { Activity, Profile } from '@/types'
 import { DayCell } from './day-cell'
@@ -209,6 +210,24 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     setSelectedDate(d)
   }, [])
 
+  // ?create=YYYY-MM-DD (or 'today') from the morning-notification action button:
+  // jump to that date and open the create modal immediately.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const raw    = params.get('create')
+    if (!raw) return
+    const target = raw === 'today' ? new Date() : new Date(raw + 'T12:00:00')
+    if (isNaN(target.getTime())) return
+    setCurrentDate(target)
+    setSelectedDate(target)
+    setShowAddModal(true)
+    // Clean the URL so a refresh doesn't reopen the modal
+    const next = new URL(window.location.href)
+    next.searchParams.delete('create')
+    window.history.replaceState(null, '', next.pathname + next.search)
+  }, [])
+
   const getDaysForView = (): Date[] => {
     if (mode === 'month') {
       const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 })
@@ -323,7 +342,6 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onNavigate={navigate}
           onToday={() => { const t = new Date(); setCurrentDate(t); setSelectedDate(t) }}
           onModeChange={m => { setMode(m) }}
-          onAddActivity={() => setShowAddModal(true)}
           userId={currentUser?.id}
         />
         <div
@@ -341,6 +359,17 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
             onAddActivityAtTime={openAddAtTime}
           />
         </div>
+
+        {/* Floating action button — anchored above the bottom nav */}
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="fixed right-4 z-30 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform animate-attention"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4rem)' }}
+          aria-label="Nueva actividad"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+
         {(showAddModal || editingActivity) && (
           <ActivityFormModal
             date={selectedDate} activity={editingActivity} currentUser={currentUser}
@@ -365,7 +394,6 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onNavigate={navigate}
           onToday={() => { const t = new Date(); setCurrentDate(t); setSelectedDate(t) }}
           onModeChange={m => { setMode(m) }}
-          onAddActivity={() => setShowAddModal(true)}
           userId={currentUser?.id}
         />
         <UserFilterBar
@@ -416,6 +444,16 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           <DayDetailPanel {...detailProps} />
         </div>
 
+        {/* Floating action button — anchored above the bottom nav */}
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="fixed right-4 z-30 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform animate-attention"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4rem)' }}
+          aria-label="Nueva actividad"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+
         {(showAddModal || editingActivity) && (
           <ActivityFormModal
             date={selectedDate} activity={editingActivity} currentUser={currentUser}
@@ -443,7 +481,6 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
             setSelectedDate(today)
           }}
           onModeChange={setMode}
-          onAddActivity={() => setShowAddModal(true)}
           userId={currentUser?.id}
         />
 
