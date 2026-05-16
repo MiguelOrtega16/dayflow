@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { CalendarDays, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { translateAuthError } from '@/lib/auth-errors'
+import { useI18n } from '@/lib/i18n'
 
 const COOLDOWN_SECONDS = 60
 
 export default function ForgotPasswordPage() {
+  const { t, locale } = useI18n()
   const [email, setEmail]       = useState('')
   const [loading, setLoading]   = useState(false)
   const [sent, setSent]         = useState(false)
@@ -30,7 +32,7 @@ export default function ForgotPasswordPage() {
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
     setLoading(false)
     if (error) {
-      setError(translateAuthError(error.message))
+      setError(translateAuthError(error.message, locale))
     } else {
       setSent(true)
       setCooldown(COOLDOWN_SECONDS)
@@ -54,10 +56,11 @@ export default function ForgotPasswordPage() {
           <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl">📧</span>
           </div>
-          <h2 className="text-2xl font-semibold mb-2">Revisa tu correo</h2>
+          <h2 className="text-2xl font-semibold mb-2">{t('auth.forgot.sentTitle')}</h2>
           <p className="text-muted-foreground mb-6">
-            Enviamos un enlace para restablecer tu contraseña a{' '}
-            <strong>{email}</strong>. Expira en 1 hora.
+            {t('auth.forgot.sentBodyPre')}
+            <strong>{email}</strong>
+            {t('auth.forgot.sentBodyPost')}
           </p>
 
           {error && (
@@ -75,17 +78,17 @@ export default function ForgotPasswordPage() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Enviando…
+                {t('common.sending')}
               </>
             ) : cooldown > 0 ? (
-              `Reenviar correo (${cooldown}s)`
+              t('auth.forgot.resendCountdown', { seconds: cooldown })
             ) : (
-              'Reenviar correo'
+              t('auth.forgot.resend')
             )}
           </button>
 
           <Link href="/auth/login" className="text-sm text-primary hover:underline font-medium">
-            Volver al inicio de sesión
+            {t('auth.forgot.backToLogin')}
           </Link>
         </div>
       </div>
@@ -95,16 +98,14 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-8">
       <div className="w-full max-w-md">
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <CalendarDays className="w-4 h-4 text-primary-foreground" />
-          </div>
+        <div className="flex items-center gap-2.5 mb-8">
+          <img src="/icon-512.png" alt="DayFlow" className="w-10 h-10 rounded-xl shadow-sm object-cover" />
           <span className="font-semibold text-2xl">DayFlow</span>
         </div>
 
-        <h2 className="text-3xl font-semibold mb-2">¿Olvidaste tu contraseña?</h2>
+        <h2 className="text-3xl font-semibold mb-2">{t('auth.forgot.title')}</h2>
         <p className="text-muted-foreground mb-8">
-          Escribe tu correo y te enviaremos un enlace para restablecerla.
+          {t('auth.forgot.subtitle')}
         </p>
 
         {error && (
@@ -115,12 +116,12 @@ export default function ForgotPasswordPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1.5">Correo electrónico</label>
+            <label className="block text-sm font-medium mb-1.5">{t('auth.login.emailLabel')}</label>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="tu@correo.com"
+              placeholder={t('auth.login.emailPlaceholder')}
               required
               autoFocus
               className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow placeholder:text-muted-foreground"
@@ -134,17 +135,17 @@ export default function ForgotPasswordPage() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Enviando…
+                {t('common.sending')}
               </>
             ) : (
-              'Enviar enlace de restablecimiento'
+              t('auth.forgot.submit')
             )}
           </button>
         </form>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
           <Link href="/auth/login" className="text-primary hover:underline font-medium">
-            Volver al inicio de sesión
+            {t('auth.forgot.backToLogin')}
           </Link>
         </p>
       </div>

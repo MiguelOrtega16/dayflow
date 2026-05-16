@@ -4,22 +4,10 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Plus, Settings, RefreshCcw } from 'lucide-react'
 import { WidgetBridge, isWidgetSupported } from '@/lib/widget-bridge'
-
-const WIDGET_TYPES = [
-  {
-    id:    'today',
-    name:  'Hoy y próximos',
-    size:  '4 × 3',
-    bullets: [
-      'Tareas de hoy y próximos días',
-      'Tareas completadas del día',
-      'Marca como completado tocando el círculo',
-      'Refresca y personaliza desde la propia widget',
-    ],
-  },
-] as const
+import { useI18n } from '@/lib/i18n'
 
 export default function WidgetsPage() {
+  const { t } = useI18n()
   const router = useRouter()
   const [installedIds, setInstalledIds] = useState<number[]>([])
   const [pinning, setPinning] = useState(false)
@@ -38,7 +26,7 @@ export default function WidgetsPage() {
 
   const handleAdd = async () => {
     if (!supported) {
-      toast({ title: 'Solo en la app móvil', description: 'Los widgets se instalan desde la app de Android.' })
+      toast({ title: t('widgets.mobileOnlyTitle'), description: t('widgets.mobileOnlyBody') })
       return
     }
     setPinning(true)
@@ -46,13 +34,13 @@ export default function WidgetsPage() {
       const res = await WidgetBridge.requestPin()
       if (!res.supported) {
         toast({
-          title: 'Añade el widget desde el launcher',
-          description: 'Tu launcher no soporta añadir widgets desde apps. Mantén pulsada la pantalla de inicio → Widgets → DayFlow.',
+          title: t('widgets.addLauncherTitle'),
+          description: t('widgets.addLauncherBody'),
         })
       } else if (!res.requested) {
-        toast({ title: 'No se pudo iniciar', description: 'Intenta añadirlo desde el menú de widgets del launcher.' })
+        toast({ title: t('widgets.cantStartTitle'), description: t('widgets.cantStartBody') })
       } else {
-        toast({ title: '¡Listo!', description: 'Selecciona dónde colocarlo en tu pantalla.' })
+        toast({ title: t('widgets.doneTitle'), description: t('widgets.doneBody') })
         setTimeout(refreshIds, 1500)
       }
     } finally {
@@ -60,24 +48,33 @@ export default function WidgetsPage() {
     }
   }
 
+  const widgetBullets = [
+    t('widgets.bullets.todaysTasks'),
+    t('widgets.bullets.completedToday'),
+    t('widgets.bullets.markDone'),
+    t('widgets.bullets.refresh'),
+  ]
+
+  const bannerText = t('widgets.banner', { add: t('widgets.bannerAddBold') })
+  const bannerParts = bannerText.split(t('widgets.bannerAddBold'))
+
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border px-4 h-14 flex items-center gap-3 shrink-0">
         <button
           onClick={() => router.back()}
           className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Volver"
+          aria-label={t('widgets.back')}
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <h1 className="text-lg font-semibold">Widgets</h1>
+        <h1 className="text-lg font-semibold">{t('widgets.title')}</h1>
       </header>
 
-      {/* Helper banner */}
       <div className="mx-3 mt-3 rounded-xl bg-primary/10 text-foreground/80 text-sm px-4 py-3">
-        Pulsa <span className="font-semibold">AÑADIR</span> para colocar el widget en tu pantalla de inicio.
-        Es la forma más rápida de ver y completar tus tareas de hoy sin abrir la app.
+        {bannerParts[0]}
+        <span className="font-semibold">{t('widgets.bannerAddBold')}</span>
+        {bannerParts[1] ?? ''}
       </div>
 
       {statusMsg && (
@@ -90,45 +87,39 @@ export default function WidgetsPage() {
         </div>
       )}
 
-      {/* Widget catalogue */}
       <div className="p-3 space-y-3">
-        {WIDGET_TYPES.map(w => (
-          <div key={w.id} className="rounded-2xl border border-border bg-card p-4">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold">{w.name}</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Tamaño: {w.size}</p>
-              </div>
-              <button
-                onClick={handleAdd}
-                disabled={pinning}
-                className="shrink-0 px-4 py-1.5 rounded-full border-2 border-primary text-primary text-sm font-bold tracking-wider hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50"
-              >
-                {pinning ? '...' : 'AÑADIR'}
-              </button>
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold">{t('widgets.todayName')}</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">{t('widgets.sizeLabel')} 4 × 3</p>
             </div>
-
-            {/* Mock preview */}
-            <WidgetPreview />
-
-            {/* Features */}
-            <ul className="mt-3 space-y-1.5">
-              {w.bullets.map(b => (
-                <li key={b} className="text-xs text-muted-foreground flex items-start gap-2">
-                  <span className="text-primary mt-0.5">•</span>
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
+            <button
+              onClick={handleAdd}
+              disabled={pinning}
+              className="shrink-0 px-4 py-1.5 rounded-full border-2 border-primary text-primary text-sm font-bold tracking-wider hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50"
+            >
+              {pinning ? '...' : t('widgets.addBtn')}
+            </button>
           </div>
-        ))}
+
+          <WidgetPreview />
+
+          <ul className="mt-3 space-y-1.5">
+            {widgetBullets.map(b => (
+              <li key={b} className="text-xs text-muted-foreground flex items-start gap-2">
+                <span className="text-primary mt-0.5">•</span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
 
-      {/* Already-installed widgets */}
       {installedIds.length > 0 && (
         <div className="px-3 pb-6">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1 mb-2">
-            Widgets activos
+            {t('widgets.activeHeading')}
           </h3>
           <div className="rounded-xl border border-border bg-card divide-y divide-border">
             {installedIds.map(id => (
@@ -138,8 +129,8 @@ export default function WidgetsPage() {
                 className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors"
               >
                 <div>
-                  <p className="text-sm font-medium">Widget #{id}</p>
-                  <p className="text-xs text-muted-foreground">Personalizar color y opacidad</p>
+                  <p className="text-sm font-medium">{t('widgets.widgetN', { id })}</p>
+                  <p className="text-xs text-muted-foreground">{t('widgets.customizeShort')}</p>
                 </div>
                 <Settings className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -150,7 +141,7 @@ export default function WidgetsPage() {
 
       {!supported && (
         <p className="text-xs text-muted-foreground text-center px-6 py-4">
-          Los widgets solo están disponibles dentro de la app móvil de Android.
+          {t('widgets.androidOnly')}
         </p>
       )}
     </div>

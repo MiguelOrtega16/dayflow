@@ -6,7 +6,6 @@ import {
   addMonths, subMonths, addWeeks, subWeeks, addDays, subDays,
   eachDayOfInterval, isSameMonth, isSameDay, isToday, getYear,
 } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
 import { getActivitiesForRange } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -18,6 +17,7 @@ import { DayDetailPanel } from './day-detail-panel'
 import { CalendarHeader } from './calendar-header'
 import { UserFilterBar } from './user-filter-bar'
 import { ActivityFormModal } from '../activities/activity-form-modal'
+import { useI18n, weekdayShort, dateFnsLocale } from '@/lib/i18n'
 import { scheduleActivityReminders } from '@/lib/activity-reminders'
 import { syncWidgetSnapshot, startWidgetAuthSync } from '@/lib/widget-sync'
 import { CompactMonthGrid } from './compact-month-grid'
@@ -31,6 +31,7 @@ interface CalendarViewProps {
 }
 
 export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps) {
+  const { t, locale } = useI18n()
   // Use client-side new Date() so the initial day reflects the user's local timezone,
   // not the server's UTC date (which can differ by a day near midnight).
   const [currentDate, setCurrentDate]   = useState(() => new Date())
@@ -279,8 +280,8 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
   // Week day headers — 7 fixed labels for month/desktop week, dynamic 3 for mobile week
   const weekDayHeaders: string[] = isMobileWeek
-    ? days.map(d => format(d, 'EEE', { locale: es }))
-    : ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+    ? days.map(d => format(d, 'EEE', { locale: dateFnsLocale(locale) }))
+    : weekdayShort(locale)
 
   // Pre-compute Colombian holidays for the visible year range
   const holidays = useMemo(() => {
@@ -370,7 +371,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onClick={() => setShowAddModal(true)}
           className="fixed right-4 z-30 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform animate-attention"
           style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4rem)' }}
-          aria-label="Nueva actividad"
+          aria-label={t('calendar.newActivity')}
         >
           <Plus className="w-6 h-6" />
         </button>
@@ -414,7 +415,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
             <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 12a9 9 0 1 1-6.219-8.56" />
             </svg>
-            Actualizando…
+            {t('calendar.refreshing')}
           </div>
         )}
 
@@ -454,7 +455,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onClick={() => setShowAddModal(true)}
           className="fixed right-4 z-30 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform animate-attention"
           style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4rem)' }}
-          aria-label="Nueva actividad"
+          aria-label={t('calendar.newActivity')}
         >
           <Plus className="w-6 h-6" />
         </button>

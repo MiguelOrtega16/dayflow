@@ -1,13 +1,13 @@
 'use client'
 
 import { format, isToday } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2, ChevronDown, Loader2 } from 'lucide-react'
-import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime, getInitials, formatRelativeTime } from '@/lib/utils'
+import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime, getInitials, formatRelativeTime, statusLabel, categoryLabel, priorityLabel } from '@/lib/utils'
 import { updateActivityStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile, ActivityComment } from '@/types'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useI18n, useFormatDate, dateFnsLocale } from '@/lib/i18n'
 
 interface DayDetailPanelProps {
   date: Date
@@ -65,6 +65,8 @@ export function DayDetailPanel({
   const [transitioning, setTransitioning] = useState(false)
   const [updatingIds, setUpdatingIds]     = useState<Set<string>>(new Set())
   const supabase = createClient()
+  const { locale, t } = useI18n()
+  const fmt = useFormatDate()
   // Ref so the Realtime callback always reads the current openCommentId without stale closure
   const openCommentIdRef = useRef<string | null>(null)
   const prevDateStr = useRef(format(date, 'yyyy-MM-dd'))
@@ -159,8 +161,8 @@ export function DayDetailPanel({
   }, [activities.map(a => a.id).join(','), currentUserId])
 
   const isTodayDate = isToday(date)
-  const dateLabel = isTodayDate ? 'Hoy' : format(date, 'EEEE', { locale: es })
-  const dateSubLabel = format(date, "d 'de' MMMM 'de' yyyy", { locale: es })
+  const dateLabel = isTodayDate ? t('common.today') : format(date, 'EEEE', { locale: dateFnsLocale(locale) })
+  const dateSubLabel = fmt(date, 'long')
 
   const myProfile = allUsers.find(u => u.isOwn)?.profile
 
@@ -295,7 +297,7 @@ export function DayDetailPanel({
               {activity.start_time && (
                 <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mt-0.5">
                   {formatTime(activity.start_time)}
-                  {activity.recurrence_type !== 'none' && ' · 🔄 Recurrente'}
+                  {activity.recurrence_type !== 'none' && ` · 🔄 ${t('calendar.recurring')}`}
                 </p>
               )}
             </div>
@@ -309,11 +311,11 @@ export function DayDetailPanel({
                 </button>
                 {openMenuId === activity.id && (
                   <div className="absolute right-0 top-7 z-50 w-44 bg-popover border border-border rounded-xl shadow-lg py-1 text-sm" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => { onEditActivity(activity); setOpenMenuId(null) }} className="w-full text-left px-3 py-1.5 hover:bg-muted transition-colors">✏️ Editar</button>
+                    <button onClick={() => { onEditActivity(activity); setOpenMenuId(null) }} className="w-full text-left px-3 py-1.5 hover:bg-muted transition-colors">✏️ {t('common.edit')}</button>
                     <div className="border-t border-border my-1" />
-                    <button onClick={() => handleDelete(activity)} className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors">🗑 Eliminar</button>
+                    <button onClick={() => handleDelete(activity)} className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors">🗑 {t('common.delete')}</button>
                     {activity.recurrence_type !== 'none' && (
-                      <button onClick={() => handleDelete(activity, true)} className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors">🗑 Eliminar todas</button>
+                      <button onClick={() => handleDelete(activity, true)} className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors">🗑 {t('calendar.deleteAllRecurring')}</button>
                     )}
                   </div>
                 )}
@@ -341,7 +343,7 @@ export function DayDetailPanel({
             </div>
             {overlappingIds.has(activity.id) && (
               <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 shrink-0">
-                ⚠ Simultáneo
+                ⚠ {t('calendar.simultaneous')}
               </span>
             )}
           </div>
@@ -359,7 +361,7 @@ export function DayDetailPanel({
                 canInteract ? 'hover:opacity-70 cursor-pointer' : 'cursor-default',
                 statusCfg.textColor
               )}
-              title={`Estado: ${statusCfg.label}${canInteract ? ' (clic para cambiar)' : ''}`}
+              title={`Estado: ${statusLabel(activity.status, locale)}${canInteract ? ' (clic para cambiar)' : ''}`}
             >
               {updatingIds.has(activity.id)
                 ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -390,10 +392,10 @@ export function DayDetailPanel({
 
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-semibold', statusCfg.bgColor, statusCfg.textColor)}>
-                  {statusCfg.label}
+                  {statusLabel(activity.status, locale)}
                 </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-background/60 text-muted-foreground font-medium">
-                  {CATEGORY_CONFIG[activity.category].emoji} {CATEGORY_CONFIG[activity.category].label}
+                  {CATEGORY_CONFIG[activity.category].emoji} {categoryLabel(activity.category, locale)}
                 </span>
 
                 {activity.goal && (
@@ -405,7 +407,7 @@ export function DayDetailPanel({
 
                 {activity.priority !== 'medium' && (
                   <span className={cn('text-[10px] font-medium', priorityCfg.color)}>
-                    {priorityCfg.icon} {priorityCfg.label}
+                    {priorityCfg.icon} {priorityLabel(activity.priority, locale)}
                   </span>
                 )}
 
@@ -536,7 +538,7 @@ export function DayDetailPanel({
                             )}
                           >
                             <Icon className={cn('w-3.5 h-3.5 shrink-0', cfg.color)} />
-                            <span>{cfg.label}</span>
+                            <span>{statusLabel(s, locale)}</span>
                             {isCurrent && <span className="ml-auto text-[10px] text-muted-foreground">✓</span>}
                           </button>
                         )

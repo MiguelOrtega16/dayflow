@@ -1,48 +1,46 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import type { ActivityStatus, ActivityPriority, ActivityCategory } from "@/types"
+import { getMessage, interpolate, DEFAULT_LOCALE, type Locale } from "@/lib/i18n"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Status / category / priority configs hold visual data only. Labels live in
+// i18n; resolve them with `statusLabel(status, locale)` etc., or with the
+// `useStatusLabel` hooks below from React components.
 export const STATUS_CONFIG: Record<ActivityStatus, {
-  label: string
   color: string
   bgColor: string
   textColor: string
   dotColor: string
 }> = {
   todo: {
-    label: 'Por hacer',
     color: 'border-slate-400',
     bgColor: 'bg-slate-100 dark:bg-slate-600/40',
     textColor: 'text-slate-700 dark:text-slate-200',
     dotColor: 'bg-slate-400',
   },
   in_progress: {
-    label: 'En progreso',
     color: 'border-amber-400',
     bgColor: 'bg-amber-50 dark:bg-amber-500/25',
     textColor: 'text-amber-800 dark:text-amber-300',
     dotColor: 'bg-amber-500',
   },
   done: {
-    label: 'Completado',
     color: 'border-emerald-400',
     bgColor: 'bg-emerald-50 dark:bg-emerald-600/25',
     textColor: 'text-emerald-800 dark:text-emerald-300',
     dotColor: 'bg-emerald-500',
   },
   blocked: {
-    label: 'Bloqueado',
     color: 'border-red-400',
     bgColor: 'bg-red-50 dark:bg-red-600/25',
     textColor: 'text-red-800 dark:text-red-300',
     dotColor: 'bg-red-500',
   },
   skipped: {
-    label: 'Omitido',
     color: 'border-gray-500',
     bgColor: 'bg-gray-200 dark:bg-gray-600',
     textColor: 'text-gray-600 dark:text-gray-100',
@@ -51,26 +49,34 @@ export const STATUS_CONFIG: Record<ActivityStatus, {
 }
 
 export const PRIORITY_CONFIG: Record<ActivityPriority, {
-  label: string
   color: string
   icon: string
 }> = {
-  low: { label: 'Baja', color: 'text-blue-500', icon: '▽' },
-  medium: { label: 'Media', color: 'text-yellow-500', icon: '◇' },
-  high: { label: 'Alta', color: 'text-orange-500', icon: '▲' },
-  critical: { label: 'Crítica', color: 'text-red-600', icon: '⬆' },
+  low: { color: 'text-blue-500', icon: '▽' },
+  medium: { color: 'text-yellow-500', icon: '◇' },
+  high: { color: 'text-orange-500', icon: '▲' },
+  critical: { color: 'text-red-600', icon: '⬆' },
 }
 
 export const CATEGORY_CONFIG: Record<ActivityCategory, {
-  label: string
   emoji: string
   color: string
 }> = {
-  task:     { label: 'Tarea',         emoji: '✓',  color: 'text-blue-600'   },
-  habit:    { label: 'Hábito',        emoji: '🔄', color: 'text-green-600'  },
-  event:    { label: 'Evento',        emoji: '📅', color: 'text-orange-600' },
-  note:     { label: 'Nota',          emoji: '📝', color: 'text-gray-600'   },
-  reminder: { label: 'Recordatorio',  emoji: '🔔', color: 'text-purple-600' },
+  task:     { emoji: '✓',  color: 'text-blue-600'   },
+  habit:    { emoji: '🔄', color: 'text-green-600'  },
+  event:    { emoji: '📅', color: 'text-orange-600' },
+  note:     { emoji: '📝', color: 'text-gray-600'   },
+  reminder: { emoji: '🔔', color: 'text-purple-600' },
+}
+
+export function statusLabel(s: ActivityStatus, locale: Locale = DEFAULT_LOCALE) {
+  return getMessage(locale, `status.${s}`) ?? s
+}
+export function categoryLabel(c: ActivityCategory, locale: Locale = DEFAULT_LOCALE) {
+  return getMessage(locale, `category.${c}`) ?? c
+}
+export function priorityLabel(p: ActivityPriority, locale: Locale = DEFAULT_LOCALE) {
+  return getMessage(locale, `priority.${p}`) ?? p
 }
 
 export const USER_COLORS = [
@@ -95,7 +101,7 @@ export function formatTime(time: string | null): string {
   return `${h12}:${minutes} ${ampm}`
 }
 
-export function formatRelativeTime(dateStr: string): string {
+export function formatRelativeTime(dateStr: string, locale: Locale = DEFAULT_LOCALE): string {
   const now = new Date()
   const date = new Date(dateStr)
   const diffMs = now.getTime() - date.getTime()
@@ -104,10 +110,13 @@ export function formatRelativeTime(dateStr: string): string {
   const diffHours = Math.floor(diffMins / 60)
   const diffDays = Math.floor(diffHours / 24)
 
-  if (diffSecs < 60) return 'just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays === 1) return 'yesterday'
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const t = (key: string, vars?: Record<string, string | number>) =>
+    interpolate(getMessage(locale, key) ?? key, vars)
+
+  if (diffSecs < 60) return t('relativeTime.justNow')
+  if (diffMins < 60) return t('relativeTime.minutesAgo', { count: diffMins })
+  if (diffHours < 24) return t('relativeTime.hoursAgo', { count: diffHours })
+  if (diffDays === 1) return t('relativeTime.yesterday')
+  if (diffDays < 7) return t('relativeTime.daysAgo', { count: diffDays })
+  return date.toLocaleDateString(locale === 'en' ? 'en-US' : 'es-ES', { month: 'short', day: 'numeric' })
 }

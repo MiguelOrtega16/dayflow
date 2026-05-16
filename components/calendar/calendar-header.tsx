@@ -1,11 +1,10 @@
 'use client'
 
-import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Calendar, LayoutGrid, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NotificationBell } from '@/components/layout/notification-bell'
 import { CustomSelect } from '@/components/ui/custom-select'
+import { useI18n, useFormatDate } from '@/lib/i18n'
 
 interface CalendarHeaderProps {
   currentDate: Date
@@ -16,18 +15,15 @@ interface CalendarHeaderProps {
   userId?: string
 }
 
-const MODE_LABEL: Record<'month' | 'week' | 'day', string> = {
-  month: 'Mes',
-  week:  'Semana',
-  day:   'Día',
-}
-
 export function CalendarHeader({
   currentDate, mode, onNavigate, onToday, onModeChange, userId
 }: CalendarHeaderProps) {
+  const { t } = useI18n()
+  const fmt = useFormatDate()
+
   const title = mode === 'day'
-    ? format(currentDate, "d 'de' MMMM yyyy", { locale: es })
-    : format(currentDate, 'MMMM yyyy', { locale: es })
+    ? fmt(currentDate, 'long')
+    : fmt(currentDate, 'monthYear')
 
   const navBtn = (dir: 'prev' | 'next') => (
     <button
@@ -40,10 +36,12 @@ export function CalendarHeader({
     </button>
   )
 
+  const modeLabel = (m: 'month' | 'week' | 'day') => t(`calendar.mode.${m}`)
+
   return (
     <div className="border-b border-border shrink-0 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
 
-      {/* ── Mobile: [<] [MES YYYY] [>] on left, [Hoy] [view ▾] on right ── */}
+      {/* Mobile layout */}
       <div className="md:hidden flex items-center justify-between gap-2 px-3 py-2">
         <div className="flex items-center gap-1 min-w-0">
           {navBtn('prev')}
@@ -55,31 +53,30 @@ export function CalendarHeader({
             onClick={onToday}
             className="px-2 py-1 text-xs font-medium rounded-lg border border-border hover:bg-muted transition-colors"
           >
-            Hoy
+            {t('calendar.today')}
           </button>
           <CustomSelect
             value={mode}
             onChange={(v) => onModeChange(v as 'month' | 'week' | 'day')}
-            ariaLabel="Vista de calendario"
+            ariaLabel={t('calendar.navAria')}
             options={[
-              { value: 'month', label: 'Mes' },
-              { value: 'week',  label: 'Semana' },
-              { value: 'day',   label: 'Día' },
+              { value: 'month', label: modeLabel('month') },
+              { value: 'week',  label: modeLabel('week') },
+              { value: 'day',   label: modeLabel('day') },
             ]}
             buttonClassName="px-2.5 py-1 text-xs font-medium rounded-lg border-border min-w-[88px]"
           />
         </div>
       </div>
 
-      {/* ── Desktop: full controls row ── */}
+      {/* Desktop layout */}
       <div className="hidden md:flex items-center justify-between px-4 h-16">
-
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={onToday}
             className="px-2.5 py-1.5 text-sm font-medium rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
           >
-            Hoy
+            {t('calendar.today')}
           </button>
           <div className="flex items-center gap-1">
             {navBtn('prev')}
@@ -100,10 +97,10 @@ export function CalendarHeader({
                     'flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium transition-all',
                     mode === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   )}
-                  title={`Vista ${MODE_LABEL[key].toLowerCase()}`}
+                  title={t('calendar.modeTitle', { mode: modeLabel(key).toLowerCase() })}
                 >
                   <Icon className="w-3.5 h-3.5" />
-                  <span>{MODE_LABEL[key]}</span>
+                  <span>{modeLabel(key)}</span>
                 </button>
               )
             })}

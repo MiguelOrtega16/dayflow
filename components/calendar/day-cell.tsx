@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { Plus, X } from 'lucide-react'
-import { cn, STATUS_CONFIG, getInitials, formatTime } from '@/lib/utils'
+import { cn, STATUS_CONFIG, getInitials, formatTime, statusLabel } from '@/lib/utils'
 import { deleteActivity, updateActivityStatus } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile } from '@/types'
+import { useI18n, useFormatDate } from '@/lib/i18n'
 
 interface DayCellProps {
   date: Date
@@ -54,6 +54,8 @@ export function DayCell({
   const [showAll, setShowAll]       = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const { locale, t } = useI18n()
+  const fmt = useFormatDate()
 
   const isWeekMode   = mode === 'week'
   const isSharedView = allUsers.length > 1
@@ -129,7 +131,7 @@ export function DayCell({
           )}
           <button
             onClick={e => { e.stopPropagation(); onAddActivity() }}
-            title="Nueva actividad"
+            title={t('calendar.newActivity')}
             className="absolute right-0 w-5 h-5 flex items-center justify-center rounded-md text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-all opacity-30 sm:opacity-0 sm:group-hover:opacity-100"
           >
             <Plus className="w-3 h-3" />
@@ -171,7 +173,7 @@ export function DayCell({
                 onClick={e => { e.stopPropagation(); setShowAll(true) }}
                 className="w-full text-left text-[10px] font-semibold text-primary px-1.5 py-0.5 rounded-md hover:bg-primary/10 transition-colors leading-tight"
               >
-                +{overflowCount} más
+                {t('calendar.moreLabel', { count: overflowCount })}
               </button>
             )}
           </>
@@ -192,8 +194,10 @@ export function DayCell({
           >
             <div className="flex items-center justify-between mb-2 pb-2 border-b border-border">
               <span className="text-xs font-semibold capitalize">
-                {format(date, "d 'de' MMMM", { locale: es })}
-                <span className="text-muted-foreground font-normal ml-1">· {total} actividad{total !== 1 ? 'es' : ''}</span>
+                {fmt(date, 'dayMonthLong')}
+                <span className="text-muted-foreground font-normal ml-1">
+                  · {total === 1 ? t('calendar.activityCount', { count: total }) : t('calendar.activityCountMany', { count: total })}
+                </span>
               </span>
               <button onClick={e => { e.stopPropagation(); setShowAll(false) }}
                 className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors shrink-0">
@@ -231,14 +235,14 @@ export function DayCell({
             {/* View/open in panel */}
             <button onClick={() => { closeContextMenu(); onClick() }}
               className="w-full text-left px-3 py-1.5 hover:bg-muted transition-colors flex items-center gap-2">
-              <span>📋</span> Ver detalles del día
+              <span>📋</span> {t('calendar.dayDetails')}
             </button>
 
             {/* Edit (own only) */}
             {contextMenu.activity.user_id === currentUserId && (
               <button onClick={() => { closeContextMenu(); onEditActivity(contextMenu.activity) }}
                 className="w-full text-left px-3 py-1.5 hover:bg-muted transition-colors flex items-center gap-2">
-                <span>✏️</span> Editar
+                <span>✏️</span> {t('common.edit')}
               </button>
             )}
 
@@ -247,7 +251,7 @@ export function DayCell({
               <>
                 <div className="border-t border-border my-1" />
                 <p className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  {contextMenu.activity.invitation_id ? 'Mi estado' : 'Cambiar estado'}
+                  {contextMenu.activity.invitation_id ? t('calendar.myStatus') : t('calendar.changeStatus')}
                 </p>
                 {(Object.keys(STATUS_CHAR) as ActivityStatus[]).map(s => {
                   const current = contextMenu.activity.status
@@ -259,8 +263,8 @@ export function DayCell({
                       )}
                     >
                       <span className={cn('text-xs', STATUS_CONFIG[s].textColor)}>{STATUS_CHAR[s]}</span>
-                      {STATUS_CONFIG[s].label}
-                      {current === s && <span className="ml-auto text-[10px] text-primary">actual</span>}
+                      {statusLabel(s, locale)}
+                      {current === s && <span className="ml-auto text-[10px] text-primary">{t('calendar.current')}</span>}
                     </button>
                   )
                 })}
@@ -273,12 +277,12 @@ export function DayCell({
                 <div className="border-t border-border my-1" />
                 <button onClick={() => handleDelete(contextMenu.activity)}
                   className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors flex items-center gap-2">
-                  <span>🗑</span> Eliminar esta actividad
+                  <span>🗑</span> {t('calendar.deleteThis')}
                 </button>
                 {contextMenu.activity.recurrence_type !== 'none' && (
                   <button onClick={() => handleDelete(contextMenu.activity, true)}
                     className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors flex items-center gap-2 text-xs">
-                    <span>🗑</span> Eliminar todas las recurrentes
+                    <span>🗑</span> {t('calendar.deleteAllRecurring')}
                   </button>
                 )}
               </>
@@ -305,6 +309,7 @@ function ActivityPill({
   onEditActivity: (a: Activity) => void
   onContextMenu: (e: React.MouseEvent, a: Activity) => void
 }) {
+  const { locale, t } = useI18n()
   const statusCfg   = STATUS_CONFIG[activity.status]
   const userProfile = allUsers.find(u => u.profile.id === activity.user_id)?.profile
   const userColor   = userProfile?.color || '#6366f1'
@@ -349,7 +354,7 @@ function ActivityPill({
         deleting && 'opacity-30 pointer-events-none',
       )}
       style={{ borderLeft: `2.5px solid ${userColor}` }}
-      title={`${userProfile ? (userProfile.full_name || userProfile.email) + ': ' : ''}${activity.title} · ${statusCfg.label}${activity.start_time ? ' · ' + formatTime(activity.start_time) : ''}`}
+      title={`${userProfile ? (userProfile.full_name || userProfile.email) + ': ' : ''}${activity.title} · ${statusLabel(activity.status, locale)}${activity.start_time ? ' · ' + formatTime(activity.start_time) : ''}`}
     >
       <span className={cn('text-[9px] font-bold shrink-0 leading-none', statusCfg.textColor)}>
         {STATUS_CHAR[activity.status]}
@@ -382,7 +387,7 @@ function ActivityPill({
       )}
 
       {activity.invitation_id && (
-        <span className="text-[8px] shrink-0 opacity-60" title="Eres participante">👥</span>
+        <span className="text-[8px] shrink-0 opacity-60" title={t('calendar.participantTag')}>👥</span>
       )}
 
       {expanded && activity.goal && (

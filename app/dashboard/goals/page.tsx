@@ -2,18 +2,19 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { format, parseISO } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { parseISO } from 'date-fns'
 import { Plus, Target, ChevronDown, ChevronRight, Trash2, CheckCircle2, Circle, MoreHorizontal } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { cn } from '@/lib/utils'
 import { getGoals, createGoal, updateGoal, deleteGoal } from '@/lib/api'
 import { STATUS_CONFIG, PRIORITY_CONFIG } from '@/lib/utils'
 import type { Goal, ActivityStatus, ActivityPriority, Profile } from '@/types'
+import { useI18n, useFormatDate } from '@/lib/i18n'
 
 const GOAL_EMOJIS = ['🎯', '🚀', '💪', '📚', '🏃', '🌱', '💡', '⭐', '🎨', '🏆', '💼', '🔬']
 
 export default function GoalsPage() {
+  const { t } = useI18n()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
@@ -30,7 +31,8 @@ export default function GoalsPage() {
   const [creating, setCreating] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -85,7 +87,7 @@ export default function GoalsPage() {
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
   }
@@ -96,27 +98,23 @@ export default function GoalsPage() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      {/* Encabezado */}
       <div className="flex items-start justify-between gap-3 mb-8">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-semibold">Metas</h1>
-            <InfoTooltip text="Gestiona tus objetivos a largo plazo. Crea metas y vincúlalas a actividades del calendario para medir tu progreso. Una meta se completa cuando la marcas como 'Lograda'." />
+            <h1 className="text-2xl font-semibold">{t('goals.title')}</h1>
+            <InfoTooltip text={t('goals.info')} />
           </div>
-          <p className="text-sm text-muted-foreground">
-            Resultados a largo plazo basados en tareas vinculadas
-          </p>
+          <p className="text-sm text-muted-foreground">{t('goals.subtitle')}</p>
         </div>
         <button
           onClick={() => setShowCreateForm(true)}
           className="shrink-0 w-9 h-9 flex items-center justify-center bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors"
-          title="Nueva meta"
+          title={t('goals.newGoal')}
         >
           <Plus className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Formulario de creación */}
       {showCreateForm && (
         <div className="mb-6 bg-card border border-border rounded-2xl p-4 animate-scale-in">
           <form onSubmit={handleCreate} className="space-y-3">
@@ -148,7 +146,7 @@ export default function GoalsPage() {
                 type="text"
                 value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
-                placeholder="Título de la meta…"
+                placeholder={t('goals.titlePlaceholder')}
                 required
                 autoFocus
                 className="flex-1 text-sm font-medium bg-transparent border-none outline-none placeholder:text-muted-foreground/60"
@@ -158,14 +156,14 @@ export default function GoalsPage() {
             <textarea
               value={newDescription}
               onChange={e => setNewDescription(e.target.value)}
-              placeholder="Descripción (opcional)"
+              placeholder={t('goals.descriptionPlaceholder')}
               rows={2}
               className="w-full text-sm bg-muted/40 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-ring resize-none placeholder:text-muted-foreground/50"
             />
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Fecha límite</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">{t('goals.targetDate')}</label>
                 <input
                   type="date"
                   value={newTargetDate}
@@ -174,14 +172,14 @@ export default function GoalsPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Prioridad</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">{t('goals.priority')}</label>
                 <select
                   value={newPriority}
                   onChange={e => setNewPriority(e.target.value as ActivityPriority)}
                   className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                 >
                   {(Object.keys(PRIORITY_CONFIG) as ActivityPriority[]).map(p => (
-                    <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
+                    <option key={p} value={p}>{t(`priority.${p}`)}</option>
                   ))}
                 </select>
               </div>
@@ -193,21 +191,20 @@ export default function GoalsPage() {
                 onClick={() => setShowCreateForm(false)}
                 className="px-4 py-2 text-sm font-medium rounded-xl border border-border hover:bg-muted transition-colors"
               >
-                Cancelar
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={creating || !newTitle.trim()}
                 className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
-                {creating ? 'Creando…' : 'Crear meta'}
+                {creating ? t('goals.submitting') : t('goals.submit')}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Lista de metas */}
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => <div key={i} className="h-20 rounded-2xl shimmer" />)}
@@ -215,22 +212,20 @@ export default function GoalsPage() {
       ) : goals.length === 0 ? (
         <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl">
           <Target className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
-          <p className="font-medium mb-1">Aún no hay metas</p>
-          <p className="text-sm text-muted-foreground mb-4">
-            Las metas rastrean resultados a largo plazo. Vincula tareas a una meta para medir el progreso.
-          </p>
+          <p className="font-medium mb-1">{t('goals.empty')}</p>
+          <p className="text-sm text-muted-foreground mb-4">{t('goals.emptyHelp')}</p>
           <button
             onClick={() => setShowCreateForm(true)}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
           >
-            Crea tu primera meta
+            {t('goals.firstGoal')}
           </button>
         </div>
       ) : (
         <div className="space-y-6">
           {activeGoals.length > 0 && (
             <GoalSection
-              title={`Activas (${activeGoals.length})`}
+              title={t('goals.sectionActive', { count: activeGoals.length })}
               goals={activeGoals}
               expandedIds={expandedIds}
               openMenuId={openMenuId}
@@ -242,7 +237,7 @@ export default function GoalsPage() {
           )}
           {completedGoals.length > 0 && (
             <GoalSection
-              title={`Logradas (${completedGoals.length})`}
+              title={t('goals.sectionDone', { count: completedGoals.length })}
               goals={completedGoals}
               expandedIds={expandedIds}
               openMenuId={openMenuId}
@@ -255,7 +250,7 @@ export default function GoalsPage() {
           )}
           {skippedGoals.length > 0 && (
             <GoalSection
-              title={`Omitidas (${skippedGoals.length})`}
+              title={t('goals.sectionSkipped', { count: skippedGoals.length })}
               goals={skippedGoals}
               expandedIds={expandedIds}
               openMenuId={openMenuId}
@@ -326,6 +321,8 @@ function GoalCard({
   onDelete: () => void
   onOpenMenu: () => void
 }) {
+  const { t } = useI18n()
+  const fmt = useFormatDate()
   const taskCount = goal.task_count ?? 0
   const doneCount = goal.done_count ?? 0
   const progress = taskCount > 0 ? Math.round((doneCount / taskCount) * 100) : 0
@@ -333,9 +330,7 @@ function GoalCard({
   const priorityCfg = PRIORITY_CONFIG[goal.priority]
 
   return (
-    // overflow-hidden removed — it clips the absolute-positioned dropdown menu
     <div className="bg-card border border-border rounded-2xl transition-all">
-      {/* Fila de encabezado */}
       <div className="flex items-center gap-3 p-4">
         <button
           onClick={onToggleExpand}
@@ -356,18 +351,18 @@ function GoalCard({
               {goal.title}
             </p>
             <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', statusCfg.bgColor, statusCfg.textColor)}>
-              {statusCfg.label}
+              {t(`status.${goal.status}`)}
             </span>
             {goal.priority !== 'medium' && (
               <span className={cn('text-[10px] font-medium', priorityCfg.color)}>
-                {priorityCfg.icon} {priorityCfg.label}
+                {priorityCfg.icon} {t(`priority.${goal.priority}`)}
               </span>
             )}
           </div>
 
           {goal.target_date && (
             <p className="text-xs text-muted-foreground mt-0.5 capitalize">
-              Vence {format(parseISO(goal.target_date), "d 'de' MMM 'de' yyyy", { locale: es })}
+              {t('goals.dueOn', { date: fmt(parseISO(goal.target_date), 'long') })}
             </p>
           )}
 
@@ -379,12 +374,11 @@ function GoalCard({
               />
             </div>
             <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
-              {doneCount}/{taskCount} tareas
+              {t('goals.tasksProgress', { done: doneCount, total: taskCount })}
             </span>
           </div>
         </div>
 
-        {/* Menú de opciones */}
         <div className="relative shrink-0">
           <button
             onClick={e => { e.stopPropagation(); onOpenMenu() }}
@@ -399,7 +393,7 @@ function GoalCard({
               onClick={e => e.stopPropagation()}
             >
               <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Estado
+                {t('goals.statusHeading')}
               </p>
               {(['todo', 'in_progress', 'done', 'blocked', 'skipped'] as ActivityStatus[]).map(s => (
                 <button
@@ -414,7 +408,7 @@ function GoalCard({
                     ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     : <Circle className="w-3.5 h-3.5 shrink-0 opacity-30" />
                   }
-                  {STATUS_CONFIG[s].label}
+                  {t(`status.${s}`)}
                 </button>
               ))}
               <div className="border-t border-border my-1" />
@@ -423,14 +417,13 @@ function GoalCard({
                 className="w-full text-left px-3 py-2 hover:bg-muted text-destructive transition-colors flex items-center gap-2"
               >
                 <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                Eliminar meta
+                {t('goals.deleteGoal')}
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Tareas vinculadas (expandido) */}
       {expanded && (
         <div className="border-t border-border rounded-b-2xl overflow-hidden">
           {goal.description && (
@@ -441,8 +434,8 @@ function GoalCard({
 
           {taskCount === 0 ? (
             <div className="px-4 py-4 text-center text-sm text-muted-foreground">
-              <p className="mb-1">Aún no hay tareas vinculadas.</p>
-              <p className="text-xs opacity-70">Al crear una tarea en el calendario, selecciona esta meta para vincularla aquí.</p>
+              <p className="mb-1">{t('goals.noTasksTitle')}</p>
+              <p className="text-xs opacity-70">{t('goals.noTasksHelp')}</p>
             </div>
           ) : (
             <div className="px-4 py-2 space-y-1">
@@ -460,7 +453,7 @@ function GoalCard({
                       {task.title}
                     </span>
                     <span className="text-[10px] text-muted-foreground shrink-0">
-                      {task.date ? format(parseISO(task.date), "d 'de' MMM", { locale: es }) : ''}
+                      {task.date ? fmt(parseISO(task.date), 'dayMonthLong') : ''}
                     </span>
                   </div>
                 )

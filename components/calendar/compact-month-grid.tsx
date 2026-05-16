@@ -5,6 +5,7 @@ import {
   eachDayOfInterval, isSameMonth, isSameDay, isToday,
 } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { useI18n, weekdayNarrow } from '@/lib/i18n'
 import type { Activity } from '@/types'
 
 interface CompactMonthGridProps {
@@ -18,12 +19,12 @@ interface CompactMonthGridProps {
   onDateSelect: (date: Date) => void
 }
 
-const DAY_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
-
 export function CompactMonthGrid({
   currentDate, selectedDate, days: propDays, activities, holidays,
   allUsers, activeUserIds, onDateSelect,
 }: CompactMonthGridProps) {
+  const { locale } = useI18n()
+  const DAY_LABELS = weekdayNarrow(locale)
   const days = propDays ?? eachDayOfInterval({
     start: startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 }),
     end:   endOfWeek(endOfMonth(currentDate),   { weekStartsOn: 0 }),

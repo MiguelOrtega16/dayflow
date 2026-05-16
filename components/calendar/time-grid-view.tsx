@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { format, isToday } from 'date-fns'
-import { es } from 'date-fns/locale'
-import { cn, STATUS_CONFIG } from '@/lib/utils'
+import { cn, STATUS_CONFIG, statusLabel } from '@/lib/utils'
 import { updateActivityStatus, deleteActivity } from '@/lib/api'
 import type { Activity, ActivityStatus } from '@/types'
+import { useI18n, dateFnsLocale } from '@/lib/i18n'
 
 const HOUR_HEIGHT = 56
 
@@ -78,6 +78,7 @@ export function TimeGridView({
 }: TimeGridViewProps) {
   const scrollRef  = useRef<HTMLDivElement>(null)
   const [ctx, setCtx] = useState<CtxMenu | null>(null)
+  const { locale, t } = useI18n()
 
   useEffect(() => {
     if (!scrollRef.current) return
@@ -137,7 +138,7 @@ export function TimeGridView({
         {days.map(day => (
           <div key={format(day, 'yyyy-MM-dd')} className="flex-1 flex flex-col items-center py-1.5 border-l border-border/40 first:border-l-0">
             <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-              {format(day, 'EEE', { locale: es })}
+              {format(day, 'EEE', { locale: dateFnsLocale(locale) })}
             </span>
             <span className={cn(
               'w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold mt-0.5',
@@ -156,7 +157,7 @@ export function TimeGridView({
         return (
           <div className="flex shrink-0 border-b border-border bg-card">
             <div className="w-10 shrink-0 flex items-start justify-end pr-1 pt-1">
-              <span className="text-[8px] text-muted-foreground leading-tight text-right">{'Todo el \ndía'}</span>
+              <span className="text-[8px] text-muted-foreground leading-tight text-right">{t('calendar.allDayLabel')}</span>
             </div>
             {rows.map(({ day, events }) => (
               <div key={format(day, 'yyyy-MM-dd')} className="flex-1 p-0.5 border-l border-border/40 first:border-l-0 min-h-[22px]">
@@ -279,7 +280,7 @@ export function TimeGridView({
             {ctx.activity.user_id === currentUserId && (
               <button onClick={() => { closeCtx(); onEditActivity(ctx.activity) }}
                 className="w-full text-left px-3 py-1.5 hover:bg-muted transition-colors flex items-center gap-2">
-                <span>✏️</span> Editar
+                <span>✏️</span> {t('common.edit')}
               </button>
             )}
 
@@ -288,7 +289,7 @@ export function TimeGridView({
               <>
                 <div className="border-t border-border my-1" />
                 <p className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  {ctx.activity.invitation_id ? 'Mi estado' : 'Cambiar estado'}
+                  {ctx.activity.invitation_id ? t('calendar.myStatus') : t('calendar.changeStatus')}
                 </p>
                 {(Object.keys(STATUS_CHAR) as ActivityStatus[]).map(s => (
                   <button key={s} onClick={() => handleStatus(ctx.activity, s)}
@@ -297,8 +298,8 @@ export function TimeGridView({
                       ctx.activity.status === s && 'font-semibold text-primary'
                     )}>
                     <span className={cn('text-xs', STATUS_CONFIG[s].textColor)}>{STATUS_CHAR[s]}</span>
-                    {STATUS_CONFIG[s].label}
-                    {ctx.activity.status === s && <span className="ml-auto text-[10px] text-primary">actual</span>}
+                    {statusLabel(s, locale)}
+                    {ctx.activity.status === s && <span className="ml-auto text-[10px] text-primary">{t('calendar.current')}</span>}
                   </button>
                 ))}
               </>
@@ -310,12 +311,12 @@ export function TimeGridView({
                 <div className="border-t border-border my-1" />
                 <button onClick={() => handleDelete(ctx.activity)}
                   className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors flex items-center gap-2">
-                  <span>🗑</span> Eliminar esta actividad
+                  <span>🗑</span> {t('calendar.deleteThis')}
                 </button>
                 {ctx.activity.recurrence_type !== 'none' && (
                   <button onClick={() => handleDelete(ctx.activity, true)}
                     className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors flex items-center gap-2 text-xs">
-                    <span>🗑</span> Eliminar todas las recurrentes
+                    <span>🗑</span> {t('calendar.deleteAllRecurring')}
                   </button>
                 )}
               </>

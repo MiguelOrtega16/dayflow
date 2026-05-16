@@ -9,6 +9,7 @@ import {
   respondToActivityInvitation, respondToCalendarShare,
 } from '@/lib/api'
 import { cn, formatRelativeTime, getInitials } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 import type { Notification } from '@/types'
 
 // Shared AudioContext — created once, resumed on first user gesture to satisfy autoplay policy
@@ -75,6 +76,7 @@ interface NotificationBellProps {
 }
 
 export function NotificationBell({ userId, collapsed, topBar }: NotificationBellProps) {
+  const { t, locale } = useI18n()
   const [notifications, setNotifications]   = useState<Notification[]>([])
   const [unreadCount, setUnreadCount]       = useState(0)
   const [open, setOpen]                     = useState(false)
@@ -280,10 +282,10 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
                 collapsed && 'justify-center px-0'
               )
         )}
-        title="Notificaciones"
+        title={t('notifications.title')}
       >
         <Bell key={bellAnimKey} className="w-4 h-4 shrink-0 origin-top animate-bell-wiggle" />
-        {!topBar && !collapsed && <span className="flex-1 text-left">Notificaciones</span>}
+        {!topBar && !collapsed && <span className="flex-1 text-left">{t('notifications.title')}</span>}
         {unreadCount > 0 && (
           <span className={cn(
             'rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shrink-0',
@@ -313,10 +315,10 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
             open ? 'animate-panel-in' : 'animate-panel-out'
           )}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <h3 className="font-semibold text-sm">Notificaciones</h3>
+            <h3 className="font-semibold text-sm">{t('notifications.title')}</h3>
             {unreadCount > 0 && (
               <button onClick={handleMarkAllRead} className="text-xs text-primary hover:underline font-medium">
-                Marcar todo leído
+                {t('notifications.markAllRead')}
               </button>
             )}
           </div>
@@ -325,9 +327,9 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center px-4">
                 <Bell className="w-8 h-8 text-muted-foreground/40 mb-2" />
-                <p className="text-sm text-muted-foreground">Sin notificaciones aún</p>
+                <p className="text-sm text-muted-foreground">{t('notifications.empty')}</p>
                 <p className="text-xs text-muted-foreground/60 mt-0.5">
-                  Aquí aparecen las actualizaciones de usuarios compartidos
+                  {t('notifications.emptyHelp')}
                 </p>
               </div>
             ) : (
@@ -364,7 +366,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
                           <p className="text-sm leading-snug text-foreground">{n.message}</p>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {formatRelativeTime(n.created_at)}
+                          {formatRelativeTime(n.created_at, locale)}
                         </p>
                       </div>
 
@@ -386,7 +388,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
                           {isLoading && responding?.action === 'accept'
                             ? <Loader2 className="w-3 h-3 animate-spin" />
                             : <CheckCircle2 className="w-3 h-3" />}
-                          Aceptar
+                          {t('notifications.accept')}
                         </button>
                         <button
                           onClick={() => n.type === 'activity_invitation'
@@ -398,7 +400,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
                           {isLoading && responding?.action === 'decline'
                             ? <Loader2 className="w-3 h-3 animate-spin" />
                             : <XCircle className="w-3 h-3" />}
-                          Declinar
+                          {t('notifications.decline')}
                         </button>
                       </div>
                     )}

@@ -4,10 +4,14 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CalendarDays, Trash2, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { useI18n } from '@/lib/i18n'
 
 type Step = 'info' | 'confirm' | 'deleting' | 'done'
 
+const DATA_ITEM_KEYS = ['profile','activities','goals','comments','invitations','shared','notifications','push','evidence','account'] as const
+
 export default function DeleteAccountPage() {
+  const { t } = useI18n()
   const [user, setUser]   = useState<{ email?: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [step, setStep]   = useState<Step>('info')
@@ -19,6 +23,7 @@ export default function DeleteAccountPage() {
       setUser(user)
       setLoading(false)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleDelete = async () => {
@@ -28,12 +33,12 @@ export default function DeleteAccountPage() {
       const res = await fetch('/api/delete-account', { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json()
-        throw new Error(body.error || 'Error al eliminar la cuenta')
+        throw new Error(body.error || t('deleteAccount.genericError'))
       }
       await supabase.auth.signOut()
       setStep('done')
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error inesperado')
+      setError(e instanceof Error ? e.message : t('common.unexpectedError'))
       setStep('confirm')
     }
   }
@@ -53,13 +58,10 @@ export default function DeleteAccountPage() {
           <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 className="w-8 h-8 text-green-600" />
           </div>
-          <h2 className="text-2xl font-semibold mb-2">Cuenta eliminada</h2>
-          <p className="text-muted-foreground mb-6">
-            Tu cuenta y todos tus datos han sido eliminados permanentemente.
-            Gracias por haber usado DayFlow.
-          </p>
+          <h2 className="text-2xl font-semibold mb-2">{t('deleteAccount.done.title')}</h2>
+          <p className="text-muted-foreground mb-6">{t('deleteAccount.done.body')}</p>
           <Link href="/auth/login" className="text-primary hover:underline font-medium text-sm">
-            Volver al inicio
+            {t('deleteAccount.done.back')}
           </Link>
         </div>
       </div>
@@ -78,30 +80,17 @@ export default function DeleteAccountPage() {
           <span className="font-semibold text-xl">DayFlow</span>
         </div>
 
-        <h1 className="text-3xl font-semibold mb-2">Eliminar cuenta</h1>
-        <p className="text-muted-foreground mb-10">
-          Puedes solicitar la eliminación permanente de tu cuenta y todos los datos asociados.
-        </p>
+        <h1 className="text-3xl font-semibold mb-2">{t('deleteAccount.title')}</h1>
+        <p className="text-muted-foreground mb-10">{t('deleteAccount.subtitle')}</p>
 
         {/* Data deleted */}
         <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-3">Datos que se eliminan</h2>
+          <h2 className="text-lg font-semibold mb-3">{t('deleteAccount.dataDeleted')}</h2>
           <ul className="space-y-2 text-sm text-muted-foreground">
-            {[
-              'Perfil de usuario (nombre, correo, foto de perfil, color)',
-              'Todas las actividades y tareas creadas',
-              'Metas y objetivos',
-              'Comentarios en actividades',
-              'Invitaciones a actividades enviadas y recibidas',
-              'Calendarios compartidos',
-              'Notificaciones',
-              'Token de notificaciones push (FCM)',
-              'Imágenes de evidencia subidas',
-              'Cuenta de acceso (correo electrónico y contraseña)',
-            ].map(item => (
-              <li key={item} className="flex items-start gap-2">
+            {DATA_ITEM_KEYS.map(key => (
+              <li key={key} className="flex items-start gap-2">
                 <span className="text-destructive mt-0.5">•</span>
-                {item}
+                {t(`deleteAccount.dataItems.${key}`)}
               </li>
             ))}
           </ul>
@@ -109,67 +98,67 @@ export default function DeleteAccountPage() {
 
         {/* Retention */}
         <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-3">Retención de datos</h2>
-          <p className="text-sm text-muted-foreground">
-            La eliminación es inmediata y permanente. No conservamos ninguna copia de tus datos personales
-            una vez que la cuenta ha sido eliminada. No existe un período de retención: la eliminación es definitiva.
-          </p>
+          <h2 className="text-lg font-semibold mb-3">{t('deleteAccount.retentionTitle')}</h2>
+          <p className="text-sm text-muted-foreground">{t('deleteAccount.retentionBody')}</p>
         </section>
 
         {/* How to request deletion */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-3">Cómo eliminar tu cuenta</h2>
+          <h2 className="text-lg font-semibold mb-3">{t('deleteAccount.howTitle')}</h2>
           <div className="space-y-3 text-sm text-muted-foreground">
             <div className="flex gap-3">
               <span className="font-semibold text-foreground w-5 shrink-0">1.</span>
-              <span>Inicia sesión en DayFlow con tu cuenta.</span>
+              <span>{t('deleteAccount.howStep1')}</span>
             </div>
             <div className="flex gap-3">
               <span className="font-semibold text-foreground w-5 shrink-0">2.</span>
-              <span>Usa el botón <strong className="text-foreground">"Eliminar mi cuenta"</strong> que aparece más abajo en esta página.</span>
+              <span>
+                {t('deleteAccount.howStep2_pre')}
+                <strong className="text-foreground">{t('deleteAccount.howStep2_strong')}</strong>
+                {t('deleteAccount.howStep2_post')}
+              </span>
             </div>
             <div className="flex gap-3">
               <span className="font-semibold text-foreground w-5 shrink-0">3.</span>
-              <span>Confirma la acción. La eliminación es inmediata e irreversible.</span>
+              <span>{t('deleteAccount.howStep3')}</span>
             </div>
           </div>
           <p className="text-sm text-muted-foreground mt-5">
-            Si no puedes iniciar sesión, escríbenos a{' '}
+            {t('deleteAccount.supportNotePre')}
             <a href="mailto:soporte@day-flow.co" className="text-primary hover:underline">
               soporte@day-flow.co
-            </a>{' '}
-            desde el correo asociado a tu cuenta. Procesaremos tu solicitud en un plazo máximo de 7 días hábiles.
+            </a>
+            {t('deleteAccount.supportNotePost')}
           </p>
         </section>
 
         {/* Self-service deletion */}
         {!user ? (
           <div className="bg-muted rounded-2xl p-6 text-center">
-            <p className="text-sm text-muted-foreground mb-4">
-              Inicia sesión para eliminar tu cuenta directamente desde aquí.
-            </p>
+            <p className="text-sm text-muted-foreground mb-4">{t('deleteAccount.loginPrompt')}</p>
             <Link
               href="/auth/login"
               className="inline-flex items-center gap-2 bg-primary text-primary-foreground rounded-xl px-6 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors"
             >
-              Iniciar sesión
+              {t('deleteAccount.login')}
             </Link>
           </div>
         ) : step === 'info' ? (
           <div className="border border-destructive/20 bg-destructive/5 rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-3">
               <Trash2 className="w-5 h-5 text-destructive" />
-              <h3 className="font-semibold text-destructive">Zona peligrosa</h3>
+              <h3 className="font-semibold text-destructive">{t('deleteAccount.dangerZone')}</h3>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Estás conectado como <strong>{user.email}</strong>.
-              La eliminación es permanente e irreversible.
+              {t('deleteAccount.loggedInAsPre')}
+              <strong>{user.email}</strong>
+              {t('deleteAccount.loggedInAsPost')}
             </p>
             <button
               onClick={() => setStep('confirm')}
               className="bg-destructive text-destructive-foreground rounded-xl px-5 py-2.5 text-sm font-medium hover:bg-destructive/90 transition-colors"
             >
-              Eliminar mi cuenta
+              {t('deleteAccount.deleteMyAccount')}
             </button>
           </div>
         ) : step === 'confirm' || step === 'deleting' ? (
@@ -177,10 +166,11 @@ export default function DeleteAccountPage() {
             <div className="flex items-start gap-3 mb-4">
               <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-semibold mb-1">¿Estás completamente seguro?</h3>
+                <h3 className="font-semibold mb-1">{t('deleteAccount.areYouSure')}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Se eliminarán permanentemente tu perfil, actividades, metas, comentarios y todos los datos
-                  asociados a <strong>{user.email}</strong>. Esta acción es irreversible.
+                  {t('deleteAccount.confirmBodyPre')}
+                  <strong>{user.email}</strong>
+                  {t('deleteAccount.confirmBodyPost')}
                 </p>
               </div>
             </div>
@@ -200,12 +190,12 @@ export default function DeleteAccountPage() {
                 {step === 'deleting' ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Eliminando…
+                    {t('common.deleting')}
                   </>
                 ) : (
                   <>
                     <Trash2 className="w-4 h-4" />
-                    Sí, eliminar permanentemente
+                    {t('deleteAccount.confirmDelete')}
                   </>
                 )}
               </button>
@@ -214,7 +204,7 @@ export default function DeleteAccountPage() {
                   onClick={() => setStep('info')}
                   className="rounded-xl px-5 py-2.5 text-sm font-medium border border-border hover:bg-muted transition-colors"
                 >
-                  Cancelar
+                  {t('common.cancel')}
                 </button>
               )}
             </div>

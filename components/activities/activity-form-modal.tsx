@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { X, Clock, Smile, Target, UserPlus, CheckCircle2, XCircle } from 'lucide-react'
-import { cn, CATEGORY_CONFIG, STATUS_CONFIG } from '@/lib/utils'
+import { cn, CATEGORY_CONFIG, STATUS_CONFIG, statusLabel, categoryLabel } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
   getActivityTitleSuggestions, getActivityInvitations, inviteToActivity,
@@ -48,6 +49,7 @@ interface ActivityFormModalProps {
 export function ActivityFormModal({ date, activity, currentUser, onClose, onSaved, initialStartTime, initialEndTime }: ActivityFormModalProps) {
   const isEditing = !!activity
   const router = useRouter()
+  const { locale } = useI18n()
 
   // Core fields
   const [title, setTitle]             = useState(activity?.title || '')
@@ -382,7 +384,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                     .filter(c => c !== 'habit' && c !== 'note')
                     .map(cat => ({
                       value: cat,
-                      label: `${CATEGORY_CONFIG[cat].emoji} ${CATEGORY_CONFIG[cat].label}`,
+                      label: `${CATEGORY_CONFIG[cat].emoji} ${categoryLabel(cat, locale)}`,
                     }))}
                 />
               </div>
@@ -444,7 +446,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                           ? cn('border-transparent', STATUS_CONFIG[s].bgColor, STATUS_CONFIG[s].textColor)
                           : 'border-border text-muted-foreground hover:border-primary/40'
                       )}
-                    >{STATUS_CONFIG[s].label}</button>
+                    >{statusLabel(s, locale)}</button>
                   ))}
                 </div>
               </div>}
@@ -685,7 +687,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 ? `${isEditing ? 'Guardar' : 'Crear'} e invitar (${pendingInvitees.length})`
                 : isEditing
                   ? 'Guardar cambios'
-                  : `Crear ${CATEGORY_CONFIG[category].label.toLowerCase()}`}
+                  : `Crear ${categoryLabel(category, locale).toLowerCase()}`}
             </button>
           </div>
         </div>

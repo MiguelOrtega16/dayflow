@@ -1,6 +1,7 @@
 'use client'
 
 import { cn, getInitials } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 import type { Profile } from '@/types'
 
 interface UserFilterBarProps {
@@ -10,11 +11,12 @@ interface UserFilterBarProps {
 }
 
 export function UserFilterBar({ users, activeUserIds, onToggleUser }: UserFilterBarProps) {
+  const { t } = useI18n()
   if (users.length <= 1) return null
 
   return (
     <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/30 overflow-x-auto">
-      <span className="text-xs font-medium text-muted-foreground shrink-0">Mostrando:</span>
+      <span className="text-xs font-medium text-muted-foreground shrink-0">{t('calendar.showing')}</span>
       {users.map(({ profile, isOwn }) => {
         const isActive = activeUserIds.includes(profile.id)
         return (
@@ -39,7 +41,7 @@ export function UserFilterBar({ users, activeUserIds, onToggleUser }: UserFilter
                 getInitials(profile.full_name, profile.email)
               )}
             </div>
-            {isOwn ? 'Tú' : (profile.full_name || profile.username || profile.email.split('@')[0])}
+            {isOwn ? t('common.you') : (profile.full_name || profile.username || profile.email.split('@')[0])}
           </button>
         )
       })}

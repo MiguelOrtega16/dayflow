@@ -7,39 +7,39 @@ import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { cn, getInitials } from '@/lib/utils'
 import { useTheme } from './theme-provider'
+import { useI18n } from '@/lib/i18n'
 import type { Profile } from '@/types'
 import {
-  LayoutDashboard, Users, Settings,
+  ListChecks, Users, Settings,
   LogOut, Sun, Moon, ChevronLeft, ChevronRight,
   Target, BarChart2, CalendarDays, LayoutPanelTop
 } from 'lucide-react'
 
-const NAV_ITEMS = [
-  { href: '/dashboard', icon: CalendarDays, label: 'Calendario' },
-  { href: '/dashboard/overview', icon: LayoutDashboard, label: 'Tareas' },
-  { href: '/dashboard/goals', icon: Target, label: 'Metas' },
-  { href: '/dashboard/stats', icon: BarChart2, label: 'Estadísticas' },
-  { href: '/dashboard/people', icon: Users, label: 'Personas' },
-]
+const NAV_KEYS = [
+  { href: '/dashboard',          icon: CalendarDays,    key: 'calendar' },
+  { href: '/dashboard/overview', icon: ListChecks,      key: 'tasks'    },
+  { href: '/dashboard/goals',    icon: Target,          key: 'goals'    },
+  { href: '/dashboard/stats',    icon: BarChart2,       key: 'stats'    },
+  { href: '/dashboard/people',   icon: Users,           key: 'people'   },
+] as const
 
 // Native-only items (hidden on web; only appear inside the Capacitor Android app)
-const NATIVE_NAV_ITEMS = [
-  { href: '/dashboard/widgets', icon: LayoutPanelTop, label: 'Widgets' },
-]
+const NATIVE_NAV_KEYS = [
+  { href: '/dashboard/widgets', icon: LayoutPanelTop, key: 'widgets' },
+] as const
 
 export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; onNavClick?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const { theme, setTheme } = useTheme()
+  const { t } = useI18n()
   const [collapsed, setCollapsed] = useState(false)
   const [isNative, setIsNative]   = useState(false)
   const supabase = createClient()
 
-  // Capacitor.isNativePlatform() is safe to call on the client; we still want
-  // this in an effect so SSR markup matches first paint.
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
 
-  const navItems = isNative ? [...NAV_ITEMS, ...NATIVE_NAV_ITEMS] : NAV_ITEMS
+  const navItems = isNative ? [...NAV_KEYS, ...NATIVE_NAV_KEYS] : NAV_KEYS
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -75,10 +75,11 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
 
       {/* Navigation */}
       <nav className="flex-1 py-4 px-2 space-y-0.5">
-        {navItems.map(({ href, icon: Icon, label }) => {
+        {navItems.map(({ href, icon: Icon, key }) => {
           const isActive = href === '/dashboard'
             ? pathname === '/dashboard'
             : pathname.startsWith(href)
+          const label = t(`nav.${key}`)
           return (
             <Link
               key={href}
@@ -109,13 +110,13 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
             'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
             collapsed && 'justify-center px-0'
           )}
-          title={collapsed ? 'Cambiar tema' : undefined}
+          title={collapsed ? t('nav.themeToggle') : undefined}
         >
           {theme === 'dark'
             ? <Sun className="w-4 h-4 shrink-0" />
             : <Moon className="w-4 h-4 shrink-0" />
           }
-          {!collapsed && <span>{theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}</span>}
+          {!collapsed && <span>{theme === 'dark' ? t('nav.themeLight') : t('nav.themeDark')}</span>}
         </button>
 
         {/* Settings */}
@@ -125,10 +126,10 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
             'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
             collapsed && 'justify-center px-0'
           )}
-          title={collapsed ? 'Configuración' : undefined}
+          title={collapsed ? t('nav.settings') : undefined}
         >
           <Settings className="w-4 h-4 shrink-0" />
-          {!collapsed && <span>Configuración</span>}
+          {!collapsed && <span>{t('nav.settings')}</span>}
         </Link>
 
         {/* Profile & Sign out */}
@@ -154,7 +155,7 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
               <button
                 onClick={handleSignOut}
                 className="text-muted-foreground hover:text-destructive transition-colors"
-                title="Cerrar sesión"
+                title={t('nav.signOut')}
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>

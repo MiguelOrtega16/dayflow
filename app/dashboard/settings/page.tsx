@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { USER_COLORS, getInitials } from '@/lib/utils'
+import { useI18n, LOCALE_NAMES, LOCALES, type Locale } from '@/lib/i18n'
+import { CustomSelect } from '@/components/ui/custom-select'
 import type { Profile } from '@/types'
 import { useRouter } from 'next/navigation'
 
 export default function SettingsPage() {
+  const { t, locale, setLocale } = useI18n()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
@@ -18,6 +21,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadProfile()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadProfile = async () => {
@@ -56,12 +60,12 @@ export default function SettingsPage() {
   return (
     <div className="p-6 max-w-lg mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold mb-1">Configuración</h1>
-        <p className="text-muted-foreground">Gestiona tu perfil y preferencias</p>
+        <h1 className="text-2xl font-semibold mb-1">{t('settings.title')}</h1>
+        <p className="text-muted-foreground">{t('settings.subtitle')}</p>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
-        {/* Vista previa del avatar */}
+        {/* Avatar preview */}
         <div className="flex items-center gap-4">
           <div
             className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold text-white"
@@ -79,10 +83,10 @@ export default function SettingsPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold">Información de perfil</h2>
+          <h2 className="text-sm font-semibold">{t('settings.profileSection')}</h2>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">Nombre completo</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('settings.fullName')}</label>
             <input
               type="text"
               value={fullName}
@@ -92,18 +96,18 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">Nombre de usuario</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('settings.username')}</label>
             <input
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value)}
-              placeholder="tu_usuario"
+              placeholder={t('settings.usernamePlaceholder')}
               className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">Color de calendario</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('settings.colorLabel')}</label>
             <div className="flex flex-wrap gap-2">
               {USER_COLORS.map(c => (
                 <button
@@ -123,13 +127,28 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Language section */}
+        <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+          <h2 className="text-sm font-semibold">{t('settings.languageSection')}</h2>
+          <p className="text-xs text-muted-foreground">{t('settings.languageHelp')}</p>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('settings.languageLabel')}</label>
+            <CustomSelect<Locale>
+              value={locale}
+              onChange={(v) => setLocale(v)}
+              options={LOCALES.map(l => ({ value: l, label: LOCALE_NAMES[l] }))}
+              ariaLabel={t('settings.languageLabel')}
+            />
+          </div>
+        </div>
+
         <div className="flex items-center gap-3">
           <button
             type="submit"
             disabled={saving}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
-            {saving ? 'Guardando...' : saved ? '✓ ¡Guardado!' : 'Guardar cambios'}
+            {saving ? t('settings.saving') : saved ? t('settings.saved') : t('settings.save')}
           </button>
         </div>
       </form>
@@ -139,7 +158,7 @@ export default function SettingsPage() {
           onClick={handleSignOut}
           className="text-sm text-destructive hover:underline font-medium"
         >
-          Cerrar sesión
+          {t('settings.signOut')}
         </button>
       </div>
     </div>

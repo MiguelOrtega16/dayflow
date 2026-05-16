@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Plus, RefreshCcw, Settings, Check } from 'lucide-react'
 import { WidgetBridge, isWidgetSupported } from '@/lib/widget-bridge'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 
 const COLOR_SWATCHES = [
   '#7C6FE3', // brand purple (default)
@@ -18,6 +19,7 @@ const COLOR_SWATCHES = [
 ]
 
 export default function WidgetConfigPage() {
+  const { t } = useI18n()
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const widgetId = Number(params?.id)
@@ -50,7 +52,7 @@ export default function WidgetConfigPage() {
   if (Number.isNaN(widgetId)) {
     return (
       <div className="p-8 text-sm text-muted-foreground">
-        ID de widget inválido.
+        {t('widgetConfig.invalidId')}
       </div>
     )
   }
@@ -61,15 +63,14 @@ export default function WidgetConfigPage() {
         <button
           onClick={() => router.back()}
           className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Volver"
+          aria-label={t('widgetConfig.back')}
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <h1 className="text-lg font-semibold">Personalizar widget</h1>
+        <h1 className="text-lg font-semibold">{t('widgetConfig.title')}</h1>
       </header>
 
       <div className="p-4 space-y-6 max-w-md mx-auto w-full">
-        {/* Live preview */}
         <div className="rounded-2xl overflow-hidden border border-border shadow-sm" style={{ backgroundColor: `rgba(255,255,255,${opacity / 100})` }}>
           <div className="px-3 h-10 flex items-center justify-between text-white text-sm font-bold" style={{ backgroundColor: color }}>
             <span>All Tasks</span>
@@ -87,9 +88,8 @@ export default function WidgetConfigPage() {
           </div>
         </div>
 
-        {/* Color */}
         <div>
-          <h3 className="text-sm font-semibold mb-3">Color del encabezado</h3>
+          <h3 className="text-sm font-semibold mb-3">{t('widgetConfig.headerColor')}</h3>
           <div className="grid grid-cols-8 gap-2">
             {COLOR_SWATCHES.map(c => (
               <button
@@ -100,14 +100,14 @@ export default function WidgetConfigPage() {
                   color === c ? 'border-foreground scale-105' : 'border-transparent hover:scale-105'
                 )}
                 style={{ backgroundColor: c }}
-                aria-label={`Color ${c}`}
+                aria-label={t('widgetConfig.colorAria', { color: c })}
               >
                 {color === c && <Check className="w-4 h-4 text-white drop-shadow" />}
               </button>
             ))}
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">Personalizado:</label>
+            <label className="text-xs text-muted-foreground">{t('widgetConfig.custom')}</label>
             <input
               type="color"
               value={color}
@@ -123,10 +123,9 @@ export default function WidgetConfigPage() {
           </div>
         </div>
 
-        {/* Opacity */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold">Opacidad</h3>
+            <h3 className="text-sm font-semibold">{t('widgetConfig.opacity')}</h3>
             <span className="text-xs text-muted-foreground font-mono">{opacity}%</span>
           </div>
           <input
@@ -139,7 +138,6 @@ export default function WidgetConfigPage() {
           />
         </div>
 
-        {/* Save */}
         <div className="pt-4">
           <button
             onClick={handleSave}
@@ -150,11 +148,11 @@ export default function WidgetConfigPage() {
               'disabled:opacity-50'
             )}
           >
-            {saving ? 'Guardando…' : saved ? '✓ Guardado' : 'GUARDAR'}
+            {saving ? t('widgetConfig.saving') : saved ? t('widgetConfig.saved') : t('widgetConfig.save')}
           </button>
           {!isWidgetSupported() && (
             <p className="text-[11px] text-muted-foreground text-center mt-2">
-              La personalización solo se aplica al widget en la app móvil de Android.
+              {t('widgetConfig.androidOnly')}
             </p>
           )}
         </div>

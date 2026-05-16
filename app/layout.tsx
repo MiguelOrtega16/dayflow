@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/components/layout/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
 import { NavigationProgress } from '@/components/layout/navigation-progress'
 import { SplashScreen } from '@/components/layout/splash-screen'
+import { I18nProvider } from '@/lib/i18n'
 
 export const metadata: Metadata = {
   title: 'DayFlow — Metas y actividades diarias compartidas',
@@ -39,17 +40,19 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
       <body>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <SplashScreen />
-          <NavigationProgress />
-          {children}
-          <Toaster />
-        </ThemeProvider>
+        <I18nProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <SplashScreen />
+            <NavigationProgress />
+            {children}
+            <Toaster />
+          </ThemeProvider>
+        </I18nProvider>
       </body>
     </html>
   )

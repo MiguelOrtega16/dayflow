@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>DayFlow — Feature Graphic (1024×500)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..800;1,9..40,400..800&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #1a1a1a; }
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 32px; font-family: 'DM Sans', system-ui, sans-serif; color: #ddd; gap: 24px; flex-direction: column; }
+  .stage {
+    width: 1024px; height: 500px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .stage svg, .stage img { display: block; width: 1024px; height: 500px; }
+  .hint { max-width: 1024px; font-size: 14px; line-height: 1.5; color: #aaa; }
+  .hint code { background: #2a2a2a; color: #f0f0f0; padding: 1px 6px; border-radius: 4px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!--
+      The SVG is inlined here so the page is fully self-contained for
+      screenshotting / exporting. Open this file in Chrome, scale window to fit,
+      then either right-click → Save as image, or use DevTools → Capture node.
+    -->
+    <object data="feature-graphic.svg" type="image/svg+xml" width="1024" height="500"></object>
+  </div>
+  <p class="hint">
+    To export this to a PNG for the Play Store:<br>
+    1) Open this file in Chrome at 100% zoom · 2) Right-click the graphic above and pick <code>Inspect</code> · 3) Click the three-dot menu in DevTools → <code>Capture node screenshot</code>. The PNG will be exactly <code>1024 × 500</code>.<br>
+    Alternative: open <code>feature-graphic.svg</code> in Inkscape or Figma and export → PNG @ 1024×500.
+  </p>
+</body>
+</html>

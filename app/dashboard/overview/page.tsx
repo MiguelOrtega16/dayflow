@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { format, subDays, parseISO } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { getActivitiesForRange, updateActivityStatus } from '@/lib/api'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime } from '@/lib/utils'
 import type { Activity, ActivityStatus, ActivityCategory, Profile } from '@/types'
@@ -12,6 +11,7 @@ import {
   Search, ChevronDown, Clock, Target, Calendar as CalendarIcon, X,
 } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { useI18n, useFormatDate } from '@/lib/i18n'
 
 const STATUS_ICONS = {
   todo: Circle,
@@ -23,13 +23,12 @@ const STATUS_ICONS = {
 
 const STATUS_CYCLE: ActivityStatus[] = ['todo', 'in_progress', 'done', 'blocked', 'skipped']
 
-// Primary columns shown side-by-side on desktop. The remaining statuses
-// live in a collapsible group below so the main view stays focused on
-// "what to do next" + recent wins.
 const PRIMARY_STATUSES: ActivityStatus[] = ['todo', 'in_progress', 'done']
 const SECONDARY_STATUSES: ActivityStatus[] = ['blocked', 'skipped']
 
 export default function OverviewPage() {
+  const { t } = useI18n()
+  const fmt = useFormatDate()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,7 +39,8 @@ export default function OverviewPage() {
   const [secondaryOpen, setSecondaryOpen] = useState(false)
   const supabase = createClient()
 
-  useEffect(() => { setLoading(true); loadData() }, [range])
+  useEffect(() => { setLoading(true); loadData() // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range])
 
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -105,7 +105,6 @@ export default function OverviewPage() {
 
   const secondaryCount = grouped.blocked.length + grouped.skipped.length
 
-  // Sort columns: time first (earliest first), then by title
   const sortColumn = (acts: Activity[]) =>
     [...acts].sort((a, b) => {
       if (a.start_time && b.start_time) return a.start_time.localeCompare(b.start_time)
@@ -115,44 +114,40 @@ export default function OverviewPage() {
     })
 
   const now = new Date()
-  const greeting = now.getHours() < 12 ? 'Buenos días' : now.getHours() < 18 ? 'Buenas tardes' : 'Buenas noches'
-  const rangeLabel: Record<typeof range, string> = {
-    today:  'Hoy',
-    '7days':  '7 días',
-    '30days': '30 días',
-    '90days': '90 días',
-  }
+  const greeting = now.getHours() < 12 ? t('overview.greetingMorning')
+                 : now.getHours() < 18 ? t('overview.greetingAfternoon')
+                 : t('overview.greetingEvening')
+  const rangeLabel = (r: typeof range) => t(`overview.ranges.${r}`)
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 max-w-7xl mx-auto">
-      {/* ─── Header: greeting + range selector ─── */}
       <div className="mb-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <h1 className="text-xl sm:text-2xl font-semibold truncate">
-                {greeting}, {profile?.full_name?.split(' ')[0] || 'ahí'} 👋
+                {greeting}, {profile?.full_name?.split(' ')[0] || t('overview.greetingFallback')} 👋
               </h1>
-              <InfoTooltip text="Vista rápida de tus actividades del período seleccionado. Filtra, busca y cambia el estado con un clic." />
+              <InfoTooltip text={t('overview.info')} />
             </div>
             <p className="text-sm text-muted-foreground capitalize">
-              {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
+              {fmt(new Date(), 'full')}
             </p>
           </div>
-          {/* Range selector — segmented control */}
-          <div className="flex items-center bg-muted rounded-xl p-1 shrink-0 overflow-x-auto">
+          <div className="flex items-center bg-muted rounded-xl p-1 w-full sm:w-auto sm:shrink-0">
             {(['today', '7days', '30days', '90days'] as const).map(r => (
               <button key={r} onClick={() => setRange(r)}
-                className={cn('px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap',
-                  range === r ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-                {rangeLabel[r]}
+                className={cn(
+                  'flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap text-center',
+                  range === r ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}>
+                {rangeLabel(r)}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* ─── Stats card: progress ring + counts ─── */}
       {loading ? (
         <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mb-4">
           <div className="flex items-center gap-4">
@@ -169,56 +164,56 @@ export default function OverviewPage() {
           done={doneFiltered}
           total={totalFiltered}
           totalAll={totalAll}
-          rangeLabel={rangeLabel[range]}
+          rangeLabel={rangeLabel(range)}
           grouped={grouped}
           hasFilter={hasFilter}
         />
       )}
 
-      {/* ─── Filters: search + category chips ─── */}
       <div className="mb-5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
         <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none" />
           <input
             type="text" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por título o descripción…"
+            placeholder={t('overview.searchPlaceholder')}
             className="w-full rounded-xl border border-input bg-card pl-9 pr-9 py-2 text-sm outline-none focus:ring-2 focus:ring-ring transition-shadow"
           />
           {search && (
-            <button onClick={() => setSearch('')} aria-label="Limpiar búsqueda"
+            <button onClick={() => setSearch('')} aria-label={t('overview.clearSearch')}
               className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5 sm:pb-0 sm:overflow-visible">
-          {(Object.keys(CATEGORY_CONFIG) as ActivityCategory[]).map(cat => {
-            const active = activeCategories.has(cat)
-            const cfg = CATEGORY_CONFIG[cat]
-            return (
-              <button key={cat} onClick={() => toggleCategory(cat)}
-                className={cn(
-                  'shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors',
-                  active
-                    ? 'bg-primary/10 border-primary/40 text-primary'
-                    : 'bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-                )}
-              >
-                <span>{cfg.emoji}</span>
-                <span>{cfg.label}</span>
-              </button>
-            )
-          })}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {(Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
+            .filter(c => c !== 'habit' && c !== 'note')
+            .map(cat => {
+              const active = activeCategories.has(cat)
+              const cfg = CATEGORY_CONFIG[cat]
+              return (
+                <button key={cat} onClick={() => toggleCategory(cat)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                    active
+                      ? 'bg-primary/10 border-primary/40 text-primary'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}
+                >
+                  <span>{cfg.emoji}</span>
+                  <span>{t(`category.${cat}`)}</span>
+                </button>
+              )
+            })}
           {activeCategories.size > 0 && (
             <button onClick={() => setActiveCategories(new Set())}
-              className="shrink-0 text-xs text-muted-foreground hover:text-foreground ml-1 underline-offset-2 hover:underline">
-              Limpiar
+              className="text-xs text-muted-foreground hover:text-foreground ml-1 underline-offset-2 hover:underline">
+              {t('overview.clearFilters')}
             </button>
           )}
         </div>
       </div>
 
-      {/* ─── Tareas content: Kanban on desktop / sections on mobile ─── */}
       {loading ? (
         <KanbanSkeleton />
       ) : totalFiltered === 0 ? (
@@ -229,7 +224,6 @@ export default function OverviewPage() {
         />
       ) : (
         <>
-          {/* Primary columns: 1 col mobile → 3 cols desktop */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
             {PRIMARY_STATUSES.map(status => (
               <StatusColumn
@@ -243,19 +237,18 @@ export default function OverviewPage() {
             ))}
           </div>
 
-          {/* Secondary statuses (blocked + skipped) — collapsible */}
           {secondaryCount > 0 && (
             <div className="mt-5 bg-card border border-border rounded-2xl overflow-hidden">
               <button onClick={() => setSecondaryOpen(o => !o)}
                 className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors">
                 <div className="flex items-center gap-3 text-sm">
                   <ChevronDown className={cn('w-4 h-4 transition-transform', !secondaryOpen && '-rotate-90')} />
-                  <span className="font-medium">Otros estados</span>
+                  <span className="font-medium">{t('overview.otherStatuses')}</span>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     {SECONDARY_STATUSES.map(s => grouped[s].length > 0 && (
                       <span key={s} className="inline-flex items-center gap-1">
                         <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_CONFIG[s].dotColor)} />
-                        {grouped[s].length} {STATUS_CONFIG[s].label.toLowerCase()}
+                        {grouped[s].length} {t(`status.${s}`).toLowerCase()}
                       </span>
                     ))}
                   </div>
@@ -286,7 +279,17 @@ export default function OverviewPage() {
   )
 }
 
-// ─── Stats card with progress ring + breakdown ───────────────────────────────
+const STATUS_HEX: Record<ActivityStatus, string> = {
+  todo:        '#94a3b8',
+  in_progress: '#f59e0b',
+  done:        '#10b981',
+  blocked:     '#ef4444',
+  skipped:     '#6b7280',
+}
+
+const RING_ORDER: ActivityStatus[] = ['done', 'in_progress', 'todo', 'blocked', 'skipped']
+const STAT_ORDER: ActivityStatus[] = ['todo', 'in_progress', 'done', 'blocked', 'skipped']
+
 function StatsCard({
   pct, done, total, totalAll, rangeLabel, grouped, hasFilter,
 }: {
@@ -298,54 +301,88 @@ function StatsCard({
   grouped: Record<ActivityStatus, Activity[]>
   hasFilter: boolean
 }) {
-  // SVG progress ring math
-  const radius = 28
+  const { t } = useI18n()
+  const radius = 30
   const circumference = 2 * Math.PI * radius
-  const offset = circumference - (pct / 100) * circumference
+  const SEGMENT_GAP = total > 1 ? 1.5 : 0
+
+  let cumulative = 0
+  const segments = RING_ORDER
+    .map(s => ({ status: s, count: grouped[s].length }))
+    .filter(seg => seg.count > 0)
+    .map(seg => {
+      const fraction = total > 0 ? seg.count / total : 0
+      const rawLen = fraction * circumference
+      const segmentLength = Math.max(rawLen - SEGMENT_GAP, 0.001)
+      const offset = -cumulative
+      cumulative += rawLen
+      return { ...seg, segmentLength, offset }
+    })
+
+  const doneSummary = total === 0
+    ? t('overview.noActivitiesPeriod')
+    : (done === 1 ? t('overview.doneCountOne') : t('overview.doneCountMany', { count: done }))
+      + (hasFilter && totalAll !== total ? t('overview.unfilteredSuffix', { count: totalAll }) : '')
 
   return (
     <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mb-4">
       <div className="flex items-center gap-4">
-        {/* Progress ring */}
-        <div className="relative w-16 h-16 shrink-0">
-          <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
-            <circle cx="32" cy="32" r={radius} className="text-muted" strokeWidth="6" fill="none" stroke="currentColor" />
-            <circle cx="32" cy="32" r={radius} className="text-primary transition-[stroke-dashoffset] duration-700"
-              strokeWidth="6" strokeLinecap="round" fill="none" stroke="currentColor"
-              strokeDasharray={circumference} strokeDashoffset={offset}
-            />
+        <div className="relative w-20 h-20 shrink-0">
+          <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r={radius} className="text-muted" strokeWidth="7" fill="none" stroke="currentColor" />
+            {segments.map(seg => (
+              <circle
+                key={seg.status}
+                cx="40" cy="40" r={radius}
+                fill="none"
+                stroke={STATUS_HEX[seg.status]}
+                strokeWidth="7"
+                strokeLinecap="butt"
+                strokeDasharray={`${seg.segmentLength} ${circumference - seg.segmentLength}`}
+                strokeDashoffset={seg.offset}
+                className="transition-[stroke-dashoffset,stroke-dasharray] duration-500"
+              />
+            ))}
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-sm font-bold tabular-nums">{pct}%</span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
+            <span className="text-base font-bold tabular-nums">{pct}%</span>
+            <span className="text-[10px] text-muted-foreground mt-0.5">{t('overview.done')}</span>
           </div>
         </div>
-        {/* Counts + breakdown */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <h2 className="font-semibold text-sm sm:text-base">{rangeLabel}</h2>
-            <span className="text-xs text-muted-foreground">
-              {done} de {total} completadas{hasFilter && totalAll !== total ? ` · de ${totalAll} totales` : ''}
-            </span>
-          </div>
-          <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-            {(Object.keys(grouped) as ActivityStatus[]).map(s =>
-              grouped[s].length > 0 ? (
-                <span key={s} className="inline-flex items-center gap-1.5">
-                  <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_CONFIG[s].dotColor)} />
-                  <span className="tabular-nums">{grouped[s].length}</span>
-                  <span className="hidden sm:inline">{STATUS_CONFIG[s].label.toLowerCase()}</span>
-                </span>
-              ) : null
-            )}
-            {total === 0 && <span>Sin coincidencias para los filtros activos</span>}
-          </div>
+          <h2 className="font-semibold text-sm sm:text-base">{rangeLabel}</h2>
+          <p className="mt-0.5 text-2xl font-bold tabular-nums leading-none">
+            {done}
+            <span className="text-base text-muted-foreground font-medium"> / {total}</span>
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">{doneSummary}</p>
         </div>
       </div>
+
+      {total > 0 && (
+        <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {STAT_ORDER.map(s => {
+            const count = grouped[s].length
+            return (
+              <div key={s}
+                className={cn(
+                  'rounded-xl border border-border/60 px-2.5 py-2 flex flex-col gap-1 transition-opacity',
+                  count === 0 && 'opacity-40'
+                )}>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: STATUS_HEX[s] }} />
+                  <span className="truncate">{t(`status.${s}`)}</span>
+                </span>
+                <span className="text-lg font-bold tabular-nums leading-none">{count}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── Status column ───────────────────────────────────────────────────────────
 function StatusColumn({
   status, activities, range, updatingIds, onCycle, compact,
 }: {
@@ -356,6 +393,7 @@ function StatusColumn({
   onCycle: (a: Activity) => void
   compact?: boolean
 }) {
+  const { t } = useI18n()
   const cfg = STATUS_CONFIG[status]
   return (
     <section className={cn(
@@ -365,13 +403,13 @@ function StatusColumn({
       <header className={cn('flex items-center justify-between px-4 py-2.5 border-b border-border/70')}>
         <div className="flex items-center gap-2">
           <span className={cn('w-2 h-2 rounded-full', cfg.dotColor)} />
-          <h3 className={cn('text-xs font-semibold uppercase tracking-wider', cfg.textColor)}>{cfg.label}</h3>
+          <h3 className={cn('text-xs font-semibold uppercase tracking-wider', cfg.textColor)}>{t(`status.${status}`)}</h3>
         </div>
         <span className="text-xs text-muted-foreground tabular-nums">{activities.length}</span>
       </header>
       {activities.length === 0 ? (
         <div className="px-4 py-6 text-center text-xs text-muted-foreground/70">
-          Sin actividades en este estado
+          {t('overview.noActivitiesStatus')}
         </div>
       ) : (
         <ul className="p-2 space-y-1.5">
@@ -391,7 +429,6 @@ function StatusColumn({
   )
 }
 
-// ─── Activity card ───────────────────────────────────────────────────────────
 function ActivityCard({
   activity, status, range, loading, onCycle,
 }: {
@@ -401,6 +438,8 @@ function ActivityCard({
   loading: boolean
   onCycle: () => void
 }) {
+  const { t } = useI18n()
+  const fmt = useFormatDate()
   const cfg = STATUS_CONFIG[status]
   const catCfg = CATEGORY_CONFIG[activity.category]
   const Icon = STATUS_ICONS[status]
@@ -414,7 +453,6 @@ function ActivityCard({
       cfg.bgColor, cfg.color,
       'hover:shadow-sm'
     )}>
-      {/* Priority accent bar */}
       {isHighPri && (
         <span className={cn(
           'absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full',
@@ -422,12 +460,11 @@ function ActivityCard({
         )} />
       )}
 
-      {/* Status button (cycles statuses) */}
       <button
         onClick={onCycle}
         disabled={loading}
         className={cn('mt-0.5 shrink-0 hover:opacity-70 transition-opacity', cfg.textColor)}
-        title="Clic para cambiar estado"
+        title={t('overview.changeStatusTitle')}
       >
         {loading
           ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -435,7 +472,6 @@ function ActivityCard({
       </button>
 
       <div className="flex-1 min-w-0">
-        {/* Title row */}
         <div className="flex items-start gap-1.5">
           {activity.emoji && <span className="shrink-0 leading-tight">{activity.emoji}</span>}
           <span className={cn(
@@ -447,7 +483,6 @@ function ActivityCard({
           </span>
         </div>
 
-        {/* Meta row: time · date · category */}
         {(hasTime || showDate || activity.goal) && (
           <div className="mt-1 flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground">
             {hasTime && (
@@ -459,7 +494,7 @@ function ActivityCard({
             {showDate && (
               <span className="inline-flex items-center gap-1">
                 <CalendarIcon className="w-3 h-3" />
-                {format(parseISO(activity.date), "d MMM", { locale: es })}
+                {fmt(parseISO(activity.date), 'dayMonthShort')}
               </span>
             )}
             {activity.goal && (
@@ -471,12 +506,10 @@ function ActivityCard({
           </div>
         )}
 
-        {/* Description (1 line) */}
         {activity.description && (
           <p className="text-xs text-muted-foreground/80 mt-1 line-clamp-1">{activity.description}</p>
         )}
 
-        {/* In-progress completion bar */}
         {status === 'in_progress' && activity.completion_percentage > 0 && (
           <div className="mt-1.5 flex items-center gap-2">
             <div className="flex-1 h-1 bg-background/60 rounded-full overflow-hidden">
@@ -490,19 +523,17 @@ function ActivityCard({
         )}
       </div>
 
-      {/* Category chip — top-right */}
       <span className={cn(
         'shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-background/70 border border-border/40',
         catCfg.color
       )}>
         <span className="text-xs leading-none">{catCfg.emoji}</span>
-        <span className="hidden md:inline">{catCfg.label}</span>
+        <span className="hidden md:inline">{t(`category.${activity.category}`)}</span>
       </span>
     </li>
   )
 }
 
-// ─── Skeleton state ──────────────────────────────────────────────────────────
 function KanbanSkeleton() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
@@ -526,7 +557,6 @@ function KanbanSkeleton() {
   )
 }
 
-// ─── Empty state ─────────────────────────────────────────────────────────────
 function EmptyState({
   hasFilter, range, onClearFilter,
 }: {
@@ -534,14 +564,15 @@ function EmptyState({
   range: 'today' | '7days' | '30days' | '90days'
   onClearFilter: () => void
 }) {
+  const { t } = useI18n()
   if (hasFilter) {
     return (
       <div className="bg-card border border-border rounded-2xl py-12 px-4 text-center">
         <div className="text-4xl mb-3">🔍</div>
-        <p className="text-sm text-muted-foreground">No hay actividades que coincidan con los filtros activos.</p>
+        <p className="text-sm text-muted-foreground">{t('overview.emptyFiltered')}</p>
         <button onClick={onClearFilter}
           className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
-          Limpiar filtros
+          {t('overview.clearFilters')}
         </button>
       </div>
     )
@@ -550,9 +581,9 @@ function EmptyState({
     <div className="bg-card border border-border rounded-2xl py-12 px-4 text-center">
       <div className="text-4xl mb-3">✦</div>
       <p className="text-muted-foreground">
-        {range === 'today' ? 'Aún no hay actividades para hoy.' : 'Sin actividades en este período.'}
+        {range === 'today' ? t('overview.emptyToday') : t('overview.emptyPeriod')}
       </p>
-      <p className="text-sm text-muted-foreground/70 mt-1">¡Ve al Calendario para agregar algunas!</p>
+      <p className="text-sm text-muted-foreground/70 mt-1">{t('overview.goToCalendar')}</p>
     </div>
   )
 }
