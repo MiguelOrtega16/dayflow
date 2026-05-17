@@ -4,17 +4,22 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingStart="14dp"
-    android:paddingEnd="14dp"
-    android:paddingTop="10dp"
-    android:paddingBottom="10dp"
-    android:background="@drawable/widget_row_bg">
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
 
-    <ImageView
+    <!-- Circle indicator: ○ when pending, ● when done. Drawn as text so the
+         RemoteViews renderer doesn't need to inflate a vector drawable.
+         Sized for a comfortable tap target (~48dp+ including row padding). -->
+    <TextView
         android:id="@+id/item_circle"
-        android:layout_width="22dp"
-        android:layout_height="22dp"
-        android:src="@drawable/ic_widget_circle"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:gravity="center"
+        android:text="○"
+        android:textSize="30sp"
+        android:textColor="#888888"
         android:contentDescription="Marcar como completado" />
 
     <TextView
@@ -22,9 +27,9 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="14dp"
         android:textColor="#1A1A1A"
-        android:textSize="14sp"
+        android:textSize="16sp"
         android:singleLine="true"
         android:ellipsize="end" />
 
@@ -32,7 +37,7 @@
         android:id="@+id/item_time"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
+        android:layout_marginStart="10dp"
         android:textColor="#666666"
-        android:textSize="11sp" />
+        android:textSize="13sp" />
 </LinearLayout>

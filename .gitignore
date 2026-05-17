@@ -76,3 +76,27 @@ ios/.DS_Store
 
 # Capacitor internal cache
 .capacitor/
+
+# ── Secrets / signing material (NEVER commit these) ───────────────────────────
+# Apple push notification certs
+*.pem
+*.p8
+*.p12
+# Android signing keys
+*.jks
+*.keystore
+# Firebase admin SDK / service account credentials
+firebase-adminsdk*.json
+service-account*.json
+google-services-account*.json
+
+# ── Backup / scratch files ────────────────────────────────────────────────────
+*.bak
+*.bak.*
+*_bkup.*
+*_backup.*
+*~
+
+# ── JVM crash dumps ───────────────────────────────────────────────────────────
+hs_err_pid*.log
+replay_pid*.log

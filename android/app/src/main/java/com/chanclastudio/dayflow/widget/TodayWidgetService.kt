@@ -46,7 +46,9 @@ class TodayWidgetFactory(private val ctx: Context) : RemoteViewsService.RemoteVi
         data class A(val id: String, val title: String, val date: String, val time: String?, val status: String)
         val parsed = (0 until acts.length()).mapNotNull { i ->
             val o = acts.optJSONObject(i) ?: return@mapNotNull null
-            val emoji = o.optString("emoji").takeIf { it.isNotBlank() }
+            // optString returns the literal string "null" when the JSON value is null,
+            // so filter that out too — otherwise titles read "null Ir a comprar…".
+            val emoji = o.optString("emoji").takeIf { it.isNotBlank() && it != "null" }
             val title = (if (emoji != null) "$emoji  " else "") + o.optString("title", "")
             A(
                 id     = o.optString("id"),
@@ -111,10 +113,13 @@ class TodayWidgetFactory(private val ctx: Context) : RemoteViewsService.RemoteVi
 
                 setTextViewText(R.id.item_time, row.time ?: "")
 
-                // Circle: filled-green when done, hollow otherwise
-                setImageViewResource(
+                // Circle: filled green ● when done, hollow grey ○ otherwise.
+                // Rendered as text so the launcher doesn't have to inflate a
+                // vector drawable (which Samsung One UI breaks on).
+                setTextViewText(R.id.item_circle, if (row.done) "●" else "○")
+                setTextColor(
                     R.id.item_circle,
-                    if (row.done) R.drawable.ic_widget_circle_done else R.drawable.ic_widget_circle,
+                    if (row.done) Color.parseColor("#22C55E") else Color.parseColor("#888888"),
                 )
 
                 // Fill in the row's pending-intent template (defined in the provider)

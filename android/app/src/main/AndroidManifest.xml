@@ -52,10 +52,17 @@
             </intent-filter>
         </receiver>
 
+        <!--
+          android:exported="true" is required so the system AppWidgetHost
+          (which lives in a different process / UID) can bind to this
+          RemoteViewsService. It's still secured by BIND_REMOTEVIEWS,
+          which is a signature|privileged permission only the system holds.
+          See https://developer.android.com/reference/android/widget/RemoteViewsService
+        -->
         <service
             android:name=".widget.TodayWidgetService"
             android:permission="android.permission.BIND_REMOTEVIEWS"
-            android:exported="false"
+            android:exported="true"
         />
     </application>
 

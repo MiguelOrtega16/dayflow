@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Intentionally minimal preview: no <ListView>, no <ImageView>, no theme
+  attribute (?android:attr/...), no shape drawables, no vector drawables.
+  Only plain LinearLayout + TextView with inline colors. If even this fails
+  to render in the pin dialog, the problem is not the layout — it's the
+  build/install (a cached APK, the launcher needing a restart, or a Samsung
+  One UI cache).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#FFFFFFFF"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#7C6FE3"
+        android:padding="12dp"
+        android:text="DayFlow"
+        android:textColor="#FFFFFF"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="14dp"
+        android:paddingBottom="6dp"
+        android:text="Hoy"
+        android:textColor="#666666"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:text="○  Revisar reporte semanal"
+        android:textColor="#1A1A1A"
+        android:textSize="16sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:text="●  Llamar a Sofía"
+        android:textColor="#888888"
+        android:textSize="16sp" />
+</LinearLayout>

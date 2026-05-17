@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.graphics.PorterDuff
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import android.widget.RemoteViews
 import com.chanclastudio.dayflow.MainActivity
 import com.chanclastudio.dayflow.R
@@ -17,7 +18,15 @@ import com.chanclastudio.dayflow.R
 class TodayWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
-        ids.forEach { id -> renderWidget(ctx, mgr, id) }
+        ids.forEach { id ->
+            try {
+                renderWidget(ctx, mgr, id)
+            } catch (t: Throwable) {
+                // Swallow so the launcher doesn't latch onto a permanent error
+                // state; log so we can find the cause in `adb logcat -s DayFlowWidget`.
+                Log.e("DayFlowWidget", "renderWidget failed for id=$id", t)
+            }
+        }
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -101,6 +110,23 @@ class TodayWidgetProvider : AppWidgetProvider() {
                 PendingIntent.getActivity(
                     ctx, widgetId * 100 + 2,
                     configIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            )
+
+            // ── Header: + button → opens the calendar with the create-activity modal ──
+            // The /dashboard route already handles ?create=today by opening the modal
+            // immediately (see components/calendar/calendar-view.tsx).
+            val addIntent = Intent(ctx, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                putExtra("dayflow:gotoPath", "/dashboard?create=today")
+            }
+            views.setOnClickPendingIntent(
+                R.id.widget_btn_add,
+                PendingIntent.getActivity(
+                    ctx, widgetId * 100 + 3,
+                    addIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
             )

@@ -4,4 +4,6 @@
     <string name="title_activity_main">DayFlow</string>
     <string name="package_name">com.chanclastudio.dayflow</string>
     <string name="custom_url_scheme">com.chanclastudio.dayflow</string>
+    <string name="widget_label">DayFlow — Hoy</string>
+    <string name="widget_description">Mira tus tareas de hoy y márcalas como completadas desde la pantalla de inicio.</string>
 </resources>
