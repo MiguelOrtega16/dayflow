@@ -29,9 +29,10 @@
         android:layout_height="wrap_content"
         android:paddingTop="14dp"
         android:paddingBottom="6dp"
-        android:text="Hoy"
+        android:text="HOY"
         android:textColor="#666666"
-        android:textSize="13sp"
+        android:textSize="11sp"
+        android:letterSpacing="0.06"
         android:textStyle="bold" />
 
     <TextView

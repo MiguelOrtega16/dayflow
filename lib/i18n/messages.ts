@@ -32,6 +32,12 @@ export const messages = {
       retry: 'Reintentar',
       unexpectedError: 'Error inesperado',
     },
+    app: {
+      quitTitle: '¿Salir de DayFlow?',
+      quitBody: '¿Estás seguro que quieres salir de la aplicación?',
+      cancel: 'Cancelar',
+      quit: 'Salir',
+    },
     nav: {
       calendar: 'Calendario',
       tasks: 'Tareas',
@@ -407,6 +413,7 @@ export const messages = {
       addActivity: 'Agregar actividad',
       noActivities: 'Sin actividades aún',
       noActivitiesHelp: 'Haz clic en "Agregar" para planear tu día',
+      loadingActivities: 'Cargando actividades…',
       noCommentsYet: 'Sin comentarios aún. ¡Sé el primero!',
       loadingComments: 'Cargando comentarios…',
       writeComment: 'Escribe un comentario…',
@@ -541,6 +548,12 @@ export const messages = {
       send: 'Send',
       retry: 'Retry',
       unexpectedError: 'Unexpected error',
+    },
+    app: {
+      quitTitle: 'Quit DayFlow?',
+      quitBody: 'Are you sure you want to leave the app?',
+      cancel: 'Cancel',
+      quit: 'Quit',
     },
     nav: {
       calendar: 'Calendar',
@@ -917,6 +930,7 @@ export const messages = {
       addActivity: 'Add activity',
       noActivities: 'No activities yet',
       noActivitiesHelp: 'Click "Add" to plan your day',
+      loadingActivities: 'Loading activities…',
       noCommentsYet: 'No comments yet. Be the first!',
       loadingComments: 'Loading comments…',
       writeComment: 'Write a comment…',

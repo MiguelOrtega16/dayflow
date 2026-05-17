@@ -299,8 +299,10 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     setShowAddModal(true)
   }
 
-  // ── Swipe + pull-to-refresh gesture handling (mobile) ────────────────────────
-  const [refreshing, setRefreshing] = useState(false)
+  // ── Horizontal swipe → previous/next period (mobile) ─────────────────────────
+  // Pull-to-refresh was removed (per tester feedback); only horizontal swipe
+  // remains here, and it navigates the calendar by month / week / day based
+  // on the current `mode` via the existing navigate() function.
   const touchStartX = useRef(0)
   const touchStartY = useRef(0)
 
@@ -311,18 +313,10 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     const dx = touchStartX.current - e.changedTouches[0].clientX
-    const rawDy = e.changedTouches[0].clientY - touchStartY.current  // positive = pulled down
-    const absDy = Math.abs(rawDy)
-
-    // Pull-to-refresh: downward drag > 80px, mostly vertical
-    if (rawDy > 80 && absDy > Math.abs(dx) * 1.5) {
-      setRefreshing(true)
-      fetchActivities().finally(() => setRefreshing(false))
-      return
-    }
-
-    // Horizontal swipe — ignore vertical scrolling
-    if (Math.abs(dx) < 50 || absDy > 80) return
+    const dy = e.changedTouches[0].clientY - touchStartY.current
+    // Require a clearly-horizontal gesture so we don't hijack the day-detail
+    // scroll: |dx| >= 60 and |dx| > |dy| * 1.3.
+    if (Math.abs(dx) < 60 || Math.abs(dx) <= Math.abs(dy) * 1.3) return
     navigate(dx > 0 ? 'next' : 'prev')
   }
   const closeModal = () => { setShowAddModal(false); setEditingActivity(null); setModalInitialTime(null) }
@@ -337,6 +331,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     onAddActivity:    () => setShowAddModal(true),
     onEditActivity:   setEditingActivity,
     onActivityUpdated: fetchActivities,
+    loading,
   }
 
   // ── Mobile day view (time grid, full screen) ──────────────────────────────
@@ -410,16 +405,6 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           )}
         />
 
-        {/* Pull-to-refresh indicator */}
-        {refreshing && (
-          <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground bg-muted/40 animate-pulse">
-            <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
-            {t('calendar.refreshing')}
-          </div>
-        )}
-
         {/* Compact grid — swipeable on mobile */}
         <div
           onTouchStart={handleTouchStart}
@@ -446,8 +431,16 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           />
         </div>
 
-        {/* Day detail — remaining space, min-h-0 ensures flex child can shrink below content */}
-        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+        {/* Day detail — remaining space, min-h-0 ensures flex child can shrink below content.
+            Also handles horizontal swipe so users can navigate the calendar from
+            anywhere on the screen, not just the compact grid up top. The handler
+            ignores anything that's mostly vertical, so internal scrolling of the
+            detail panel still works. */}
+        <div
+          className="flex-1 overflow-hidden flex flex-col min-h-0"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           <DayDetailPanel {...detailProps} />
         </div>
 

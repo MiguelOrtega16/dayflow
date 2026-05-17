@@ -161,27 +161,22 @@ export default function OverviewPage() {
         </div>
       </div>
 
+      {/*
+        Status-ring + per-status breakdown card hidden — it duplicates the
+        donut + tiles already shown on Estadísticas, and the Kanban column
+        headers below already surface per-status counts. The <StatsCard>
+        component is still exported so this can be re-enabled by uncommenting
+        the block below.
+      */}
+      {/*
       {loading ? (
         <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mb-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full shimmer" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 w-40 rounded shimmer" />
-              <div className="h-3 w-64 rounded shimmer" />
-            </div>
-          </div>
+          ...
         </div>
       ) : (
-        <StatsCard
-          pct={pct}
-          done={doneFiltered}
-          total={totalFiltered}
-          totalAll={totalAll}
-          rangeLabel={rangeLabel(range)}
-          grouped={grouped}
-          hasFilter={hasFilter}
-        />
+        <StatsCard ... />
       )}
+      */}
 
       <div className="mb-5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
         <div className="relative flex-1 min-w-0">

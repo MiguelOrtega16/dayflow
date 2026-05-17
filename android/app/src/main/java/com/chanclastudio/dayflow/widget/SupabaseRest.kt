@@ -40,10 +40,22 @@ object SupabaseRest {
      * Returns null if we have no auth or refresh failed.
      */
     fun ensureAccessToken(ctx: Context): WidgetStore.Auth? {
-        val auth = WidgetStore.readAuth(ctx) ?: return null
+        val auth = WidgetStore.readAuth(ctx)
+        if (auth == null) {
+            Log.w(TAG, "ensureAccessToken: no auth in prefs — open the app once so the web can syncWidgetAuth()")
+            return null
+        }
         val nowSec = System.currentTimeMillis() / 1000
-        if (auth.expiresAt > nowSec + 60) return auth
-        return refreshSession(ctx, auth)
+        if (auth.expiresAt > nowSec + 60) {
+            // Token is still valid; no need to refresh.
+            return auth
+        }
+        Log.d(TAG, "ensureAccessToken: token expired (expiresAt=${auth.expiresAt} now=$nowSec) — refreshing")
+        val refreshed = refreshSession(ctx, auth)
+        if (refreshed == null) {
+            Log.w(TAG, "ensureAccessToken: refresh failed — refresh_token likely expired (~30d), open the app to re-sync")
+        }
+        return refreshed
     }
 
     private fun refreshSession(ctx: Context, auth: WidgetStore.Auth): WidgetStore.Auth? {

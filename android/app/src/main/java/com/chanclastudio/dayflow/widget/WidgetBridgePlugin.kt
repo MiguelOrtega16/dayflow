@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import com.getcapacitor.JSArray
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -45,14 +46,28 @@ class WidgetBridgePlugin : Plugin() {
                 anonKey      = call.getString("anonKey")      ?: error("anonKey"),
                 accessToken  = call.getString("accessToken")  ?: error("accessToken"),
                 refreshToken = call.getString("refreshToken") ?: error("refreshToken"),
-                expiresAt    = call.getLong("expiresAt")      ?: error("expiresAt"),
+                // Capacitor serializes JS numbers inconsistently across versions —
+                // sometimes Long, sometimes Int, sometimes Double. Walk through
+                // each typed accessor so the bridge call doesn't fail just
+                // because a 10-digit epoch landed as a Double on this version.
+                expiresAt    = call.longLikeOrNull("expiresAt") ?: error("expiresAt"),
                 userId       = call.getString("userId")       ?: error("userId"),
             )
             WidgetStore.writeAuth(context, auth)
+            Log.d("DayFlowWidget", "writeAuth OK userId=${auth.userId} expiresAt=${auth.expiresAt}")
             call.resolve()
         } catch (t: Throwable) {
+            Log.w("DayFlowWidget", "writeAuth failed — ${t.message}")
             call.reject("Missing field: ${t.message}")
         }
+    }
+
+    /** Capacitor-version-agnostic number→Long coercion. */
+    private fun PluginCall.longLikeOrNull(key: String): Long? {
+        getLong(key)?.let { return it }
+        getInt(key)?.let { return it.toLong() }
+        getDouble(key)?.let { return it.toLong() }
+        return getString(key)?.toLongOrNull()
     }
 
     @PluginMethod

@@ -18,6 +18,10 @@ interface DayDetailPanelProps {
   onAddActivity: () => void
   onEditActivity: (activity: Activity) => void
   onActivityUpdated: () => void
+  /** True while the parent is fetching activities — used to show a spinner
+      instead of the empty-state ("no activities") so a slow fetch doesn't
+      flash a false-empty message before real data arrives. */
+  loading?: boolean
 }
 
 const STATUS_CYCLE: ActivityStatus[] = ['todo', 'in_progress', 'done', 'blocked', 'skipped']
@@ -53,7 +57,7 @@ const STATUS_ICON = {
 
 export function DayDetailPanel({
   date, activities, currentUserId, currentUserColor,
-  allUsers, onAddActivity, onEditActivity, onActivityUpdated
+  allUsers, onAddActivity, onEditActivity, onActivityUpdated, loading = false,
 }: DayDetailPanelProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [openCommentId, setOpenCommentId] = useState<string | null>(null)
@@ -686,7 +690,15 @@ export function DayDetailPanel({
 
       {/* Lista de actividades */}
       <div className={cn('flex-1 overflow-y-auto transition-opacity duration-200', transitioning && 'opacity-40 pointer-events-none')}>
-        {total === 0 ? (
+        {(loading || transitioning) && total === 0 ? (
+          // Fetch in flight (or fast day-switch fade) — don't show the empty
+          // state yet, it would flash a misleading "no activities" message
+          // before the data lands.
+          <div className="flex flex-col items-center justify-center h-full text-center p-6">
+            <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
+            <p className="text-xs text-muted-foreground/70 mt-3">{t('calendar.loadingActivities')}</p>
+          </div>
+        ) : total === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-6">
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
               <span className="text-2xl">✦</span>

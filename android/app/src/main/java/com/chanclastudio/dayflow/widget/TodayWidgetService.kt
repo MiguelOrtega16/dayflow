@@ -113,10 +113,12 @@ class TodayWidgetFactory(private val ctx: Context) : RemoteViewsService.RemoteVi
 
                 setTextViewText(R.id.item_time, row.time ?: "")
 
-                // Circle: filled green ● when done, hollow grey ○ otherwise.
-                // Rendered as text so the launcher doesn't have to inflate a
-                // vector drawable (which Samsung One UI breaks on).
-                setTextViewText(R.id.item_circle, if (row.done) "●" else "○")
+                // Circle: filled green ⬤ when done, hollow grey ○ otherwise.
+                // U+2B24 (⬤ BLACK LARGE CIRCLE) is used instead of U+25CF (●) so
+                // the filled and hollow states render at matching visual sizes —
+                // ● has no stroke and renders ~30% smaller than ○ at the same
+                // text size, which made completed tasks look like tiny dots.
+                setTextViewText(R.id.item_circle, if (row.done) "⬤" else "○")
                 setTextColor(
                     R.id.item_circle,
                     if (row.done) Color.parseColor("#22C55E") else Color.parseColor("#888888"),

@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { X, Clock, Smile, Target, UserPlus, CheckCircle2, XCircle } from 'lucide-react'
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG, statusLabel, categoryLabel } from '@/lib/utils'
 import { useI18n, weekdayNarrow } from '@/lib/i18n'
+import { useBackButtonClose } from '@/lib/back-button'
 import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
   getActivityTitleSuggestions, getActivityInvitations, inviteToActivity,
@@ -50,6 +51,9 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const { t, locale } = useI18n()
   const isEditing = !!activity
   const router = useRouter()
+
+  // Hardware back button on Android closes this modal instead of the app.
+  useBackButtonClose(true, onClose)
 
   // Core fields
   const [title, setTitle]             = useState(activity?.title || '')

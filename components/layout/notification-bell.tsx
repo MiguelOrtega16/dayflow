@@ -10,6 +10,7 @@ import {
 } from '@/lib/api'
 import { cn, formatRelativeTime, getInitials } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n'
+import { useBackButtonClose } from '@/lib/back-button'
 import type { Notification } from '@/types'
 
 // Shared AudioContext — created once, resumed on first user gesture to satisfy autoplay policy
@@ -87,6 +88,9 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
   const router = useRouter()
   const dropdownRef = useRef<HTMLDivElement>(null)
   const closeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Hardware back closes the panel before exiting the app.
+  useBackButtonClose(open, () => setOpen(false))
 
   const toggleOpen = () => {
     setBellAnimKey(k => k + 1)
