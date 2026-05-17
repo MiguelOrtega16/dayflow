@@ -4,6 +4,41 @@ export type ActivityCategory = 'task' | 'habit' | 'event' | 'note' | 'reminder'
 export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly' | 'weekdays' | 'custom'
 export type InvitationStatus = 'pending' | 'accepted' | 'declined'
 export type TaskCategory = 'task' | 'habit' | 'event' | 'note'
+export type BillingProvider = 'stripe' | 'revenuecat'
+export type BillingPlatform = 'web' | 'android' | 'ios'
+export type BillingProductId = 'pro_monthly' | 'pro_annual' | 'pro_lifetime'
+export type SubscriptionStatus =
+  | 'trialing'
+  | 'active'
+  | 'canceled'
+  | 'expired'
+  | 'past_due'
+  | 'paused'
+
+export interface Subscription {
+  id: string
+  user_id: string
+  provider: BillingProvider
+  provider_subscription_id: string
+  product_id: BillingProductId
+  status: SubscriptionStatus
+  platform: BillingPlatform
+  current_period_end: string | null
+  cancel_at_period_end: boolean
+  trial_end: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Entitlement {
+  isPro: boolean
+  isInTrial: boolean
+  plan: BillingProductId | null
+  platform: BillingPlatform | null
+  expiresAt: string | null
+  cancelAtPeriodEnd: boolean
+}
+
 export type NotificationType =
   | 'status_update'
   | 'task_completed'

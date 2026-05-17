@@ -466,6 +466,78 @@ create policy "Users can delete own notifications"
   using (recipient_id = auth.uid());
 
 -- ============================================================
+-- SUBSCRIPTIONS  (billing entitlement — written by webhooks only)
+-- ============================================================
+create table if not exists public.subscriptions (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  provider text not null,                  -- 'stripe' | 'revenuecat'
+  provider_subscription_id text not null,  -- Stripe sub id or RC original_transaction_id / app_user_id+product
+  product_id text not null,                -- 'pro_monthly' | 'pro_annual' | 'pro_lifetime'
+  status text not null,                    -- 'trialing' | 'active' | 'canceled' | 'expired' | 'past_due' | 'paused'
+  platform text not null,                  -- 'web' | 'android' | 'ios'
+  current_period_end timestamptz,          -- null for lifetime
+  cancel_at_period_end boolean not null default false,
+  trial_end timestamptz,
+  raw jsonb,                               -- last webhook payload (debugging)
+  created_at timestamptz default now() not null,
+  updated_at timestamptz default now() not null,
+  unique(provider, provider_subscription_id)
+);
+
+do $$ begin
+  alter table public.subscriptions add constraint subscriptions_provider_check
+    check (provider in ('stripe', 'revenuecat'));
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table public.subscriptions add constraint subscriptions_product_check
+    check (product_id in ('pro_monthly', 'pro_annual', 'pro_lifetime'));
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table public.subscriptions add constraint subscriptions_status_check
+    check (status in ('trialing', 'active', 'canceled', 'expired', 'past_due', 'paused'));
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter table public.subscriptions add constraint subscriptions_platform_check
+    check (platform in ('web', 'android', 'ios'));
+exception when duplicate_object then null; end $$;
+
+create index if not exists subscriptions_user_id_idx on public.subscriptions(user_id);
+create index if not exists subscriptions_user_status_idx on public.subscriptions(user_id, status);
+
+alter table public.subscriptions enable row level security;
+
+-- Clients can read their own subscription rows. All writes happen via webhooks (service_role).
+drop policy if exists "Users can view their own subscriptions" on public.subscriptions;
+create policy "Users can view their own subscriptions"
+  on public.subscriptions for select to authenticated
+  using (user_id = auth.uid());
+
+-- Single source of truth for entitlement. Used by client and by gated-feature RLS policies.
+create or replace function public.is_pro(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.subscriptions
+    where user_id = uid
+      and (
+        (product_id = 'pro_lifetime' and status = 'active')
+        or (status in ('trialing', 'active')
+            and (current_period_end is null or current_period_end > now()))
+      )
+  );
+$$;
+
+grant execute on function public.is_pro(uuid) to anon, authenticated, service_role;
+
+-- ============================================================
 -- TRIGGERS — updated_at
 -- ============================================================
 create or replace function public.handle_updated_at()
@@ -490,6 +562,10 @@ create trigger handle_updated_at before update on public.activities
 
 drop trigger if exists handle_updated_at on public.activity_comments;
 create trigger handle_updated_at before update on public.activity_comments
+  for each row execute procedure public.handle_updated_at();
+
+drop trigger if exists handle_updated_at on public.subscriptions;
+create trigger handle_updated_at before update on public.subscriptions
   for each row execute procedure public.handle_updated_at();
 
 -- ============================================================
@@ -611,6 +687,9 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.activity_invitations;
 exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.subscriptions;
+exception when duplicate_object then null; end $$;
 
 -- ============================================================
 -- ROLE GRANTS
@@ -626,6 +705,7 @@ grant select, insert, update, delete on public.shared_calendars     to authentic
 grant select, insert, update, delete on public.notifications        to authenticated;
 grant select, insert, update, delete on public.activity_comments    to authenticated;
 grant select, insert, update, delete on public.activity_invitations to authenticated;
+grant select                         on public.subscriptions         to authenticated;
 
 grant usage on all sequences in schema public to authenticated;
 
@@ -643,6 +723,8 @@ grant delete on public.shared_calendars     to service_role;
 grant delete on public.activities           to service_role;
 grant delete on public.goals                to service_role;
 grant delete on public.profiles             to service_role;
+-- Billing webhooks (write subscription state from Stripe / RevenueCat)
+grant select, insert, update, delete on public.subscriptions to service_role;
 
 -- ============================================================
 -- STORAGE

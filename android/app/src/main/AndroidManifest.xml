@@ -73,4 +73,6 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- Re-schedules alarms after device reboot (otherwise all pending notifications are lost) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Google Play Billing — required for in-app purchases / subscriptions -->
+    <uses-permission android:name="com.android.vending.BILLING" />
 </manifest>
