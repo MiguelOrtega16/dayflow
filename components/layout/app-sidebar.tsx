@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { cn, getInitials } from '@/lib/utils'
@@ -12,13 +12,14 @@ import type { Profile } from '@/types'
 import {
   ListChecks, Users, Settings,
   LogOut, Sun, Moon, ChevronLeft, ChevronRight,
-  Target, BarChart2, CalendarDays, LayoutPanelTop
+  BarChart2, CalendarDays, LayoutPanelTop
 } from 'lucide-react'
 
 const NAV_KEYS = [
   { href: '/dashboard',          icon: CalendarDays,    key: 'calendar' },
   { href: '/dashboard/overview', icon: ListChecks,      key: 'tasks'    },
-  { href: '/dashboard/goals',    icon: Target,          key: 'goals'    },
+  // Metas/Goals temporarily hidden — page + API still exist, just removed from nav.
+  // { href: '/dashboard/goals',    icon: Target,          key: 'goals'    },
   { href: '/dashboard/stats',    icon: BarChart2,       key: 'stats'    },
   { href: '/dashboard/people',   icon: Users,           key: 'people'   },
 ] as const
@@ -35,6 +36,10 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
   const { t } = useI18n()
   const [collapsed, setCollapsed] = useState(false)
   const [isNative, setIsNative]   = useState(false)
+  const [, startTransition]       = useTransition()
+  // Optimistic active item — set on tap, cleared once pathname updates.
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
+  useEffect(() => { setPendingHref(null) }, [pathname])
   const supabase = createClient()
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
@@ -76,15 +81,24 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
       {/* Navigation */}
       <nav className="flex-1 py-4 px-2 space-y-0.5">
         {navItems.map(({ href, icon: Icon, key }) => {
+          // Active = optimistic pending OR real current pathname.
+          const effectivePath = pendingHref ?? pathname
           const isActive = href === '/dashboard'
-            ? pathname === '/dashboard'
-            : pathname.startsWith(href)
+            ? effectivePath === '/dashboard'
+            : effectivePath.startsWith(href)
           const label = t(`nav.${key}`)
           return (
             <Link
               key={href}
               href={href}
-              onClick={onNavClick}
+              prefetch
+              onClick={(e) => {
+                onNavClick?.()
+                if (href === pathname) return
+                e.preventDefault()
+                setPendingHref(href)
+                startTransition(() => router.push(href))
+              }}
               className={cn(
                 'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-medium transition-all duration-150 min-w-0 overflow-hidden',
                 isActive

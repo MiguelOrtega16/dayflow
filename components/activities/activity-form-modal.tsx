@@ -515,8 +515,10 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
               {/* Evidence hidden — feature preserved in DB/API but not exposed in UI */}
 
-              {/* Goal — hidden for reminders */}
-              {!isReminder && goals.length > 0 && (
+              {/* Goal — temporarily hidden together with the Metas nav item.
+                  goalId state still flows through to the payload (empty string),
+                  so re-enabling is just removing the `false &&` guard below. */}
+              {false && !isReminder && goals.length > 0 && (
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
                     <Target className="w-3 h-3" /> {t('activityForm.linkGoal')}

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
-    <color name="splash_background">#6366f1</color>
+    <!-- Background colour for the splash screen on both legacy
+         (windowBackground) and Android 12+ (windowSplashScreenBackground)
+         code paths. White matches the generated splash PNGs in
+         drawable-*/splash.png that include the icon + DayFlow wordmark. -->
+    <color name="splash_background">#FFFFFFFF</color>
 </resources>

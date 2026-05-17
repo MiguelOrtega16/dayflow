@@ -37,6 +37,19 @@ export default function OverviewPage() {
   const [search, setSearch] = useState('')
   const [activeCategories, setActiveCategories] = useState<Set<ActivityCategory>>(new Set())
   const [secondaryOpen, setSecondaryOpen] = useState(false)
+  // Per-status accordion open state. All three primary columns + the two
+  // secondary ones default to open; user can collapse any to focus.
+  const [openStatuses, setOpenStatuses] = useState<Set<ActivityStatus>>(
+    () => new Set<ActivityStatus>(['todo', 'in_progress', 'done', 'blocked', 'skipped'])
+  )
+  const toggleStatus = (s: ActivityStatus) => {
+    setOpenStatuses(prev => {
+      const next = new Set(prev)
+      if (next.has(s)) next.delete(s)
+      else next.add(s)
+      return next
+    })
+  }
   const supabase = createClient()
 
   useEffect(() => { setLoading(true); loadData() // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,7 +237,7 @@ export default function OverviewPage() {
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
             {PRIMARY_STATUSES.map(status => (
               <StatusColumn
                 key={status}
@@ -233,6 +246,8 @@ export default function OverviewPage() {
                 range={range}
                 updatingIds={updatingIds}
                 onCycle={handleCycleStatus}
+                open={openStatuses.has(status)}
+                onToggle={() => toggleStatus(status)}
               />
             ))}
           </div>
@@ -265,6 +280,8 @@ export default function OverviewPage() {
                         range={range}
                         updatingIds={updatingIds}
                         onCycle={handleCycleStatus}
+                        open={openStatuses.has(status)}
+                        onToggle={() => toggleStatus(status)}
                         compact
                       />
                     ) : null
@@ -384,7 +401,7 @@ function StatsCard({
 }
 
 function StatusColumn({
-  status, activities, range, updatingIds, onCycle, compact,
+  status, activities, range, updatingIds, onCycle, compact, open, onToggle,
 }: {
   status: ActivityStatus
   activities: Activity[]
@@ -392,6 +409,8 @@ function StatusColumn({
   updatingIds: Set<string>
   onCycle: (a: Activity) => void
   compact?: boolean
+  open: boolean
+  onToggle: () => void
 }) {
   const { t } = useI18n()
   const cfg = STATUS_CONFIG[status]
@@ -400,30 +419,45 @@ function StatusColumn({
       'flex flex-col rounded-2xl border border-border bg-card overflow-hidden',
       compact && 'shadow-none'
     )}>
-      <header className={cn('flex items-center justify-between px-4 py-2.5 border-b border-border/70')}>
-        <div className="flex items-center gap-2">
-          <span className={cn('w-2 h-2 rounded-full', cfg.dotColor)} />
-          <h3 className={cn('text-xs font-semibold uppercase tracking-wider', cfg.textColor)}>{t(`status.${status}`)}</h3>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className={cn(
+          'flex items-center justify-between px-4 py-2.5 w-full text-left hover:bg-muted/40 transition-colors',
+          open && 'border-b border-border/70'
+        )}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <ChevronDown
+            className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', !open && '-rotate-90')}
+          />
+          <span className={cn('w-2 h-2 rounded-full shrink-0', cfg.dotColor)} />
+          <h3 className={cn('text-xs font-semibold uppercase tracking-wider truncate', cfg.textColor)}>
+            {t(`status.${status}`)}
+          </h3>
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums">{activities.length}</span>
-      </header>
-      {activities.length === 0 ? (
-        <div className="px-4 py-6 text-center text-xs text-muted-foreground/70">
-          {t('overview.noActivitiesStatus')}
-        </div>
-      ) : (
-        <ul className="p-2 space-y-1.5">
-          {activities.map(a => (
-            <ActivityCard
-              key={a.id}
-              activity={a}
-              status={status}
-              range={range}
-              loading={updatingIds.has(a.id)}
-              onCycle={() => onCycle(a)}
-            />
-          ))}
-        </ul>
+        <span className="text-xs text-muted-foreground tabular-nums shrink-0 ml-2">{activities.length}</span>
+      </button>
+      {open && (
+        activities.length === 0 ? (
+          <div className="px-4 py-6 text-center text-xs text-muted-foreground/70">
+            {t('overview.noActivitiesStatus')}
+          </div>
+        ) : (
+          <ul className="p-2 space-y-1.5">
+            {activities.map(a => (
+              <ActivityCard
+                key={a.id}
+                activity={a}
+                status={status}
+                range={range}
+                loading={updatingIds.has(a.id)}
+                onCycle={() => onCycle(a)}
+              />
+            ))}
+          </ul>
+        )
       )}
     </section>
   )

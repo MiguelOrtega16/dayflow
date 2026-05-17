@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState, useTransition } from 'react'
 import { Menu, CalendarDays, ListChecks, BarChart2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n'
@@ -20,7 +21,22 @@ const TABS = [
 
 export function MobileBottomNav({ userId, onMenuClick }: MobileBottomNavProps) {
   const pathname = usePathname()
-  const { t } = useI18n()
+  const router   = useRouter()
+  const { t }    = useI18n()
+  const [, startTransition] = useTransition()
+
+  // Optimistic active tab — set on tap, cleared once pathname catches up.
+  // Without this, the active highlight only updates when the new page is
+  // fully ready, which reads as input lag on slower devices.
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
+  useEffect(() => { setPendingHref(null) }, [pathname])
+
+  const handleTap = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (href === pathname) return                  // already there
+    e.preventDefault()                              // we'll navigate manually
+    setPendingHref(href)                            // light up the new tab now
+    startTransition(() => router.push(href))        // marks navigation as a transition
+  }
 
   return (
     <nav className="xl:hidden shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
@@ -34,14 +50,16 @@ export function MobileBottomNav({ userId, onMenuClick }: MobileBottomNavProps) {
           <span className="text-[10px] font-medium">{t('nav.menu')}</span>
         </button>
         {TABS.map(tab => {
-          const active = pathname === tab.href
+          const active = (pendingHref ?? pathname) === tab.href
           const Icon = tab.icon
           return (
             <Link
               key={tab.href}
               href={tab.href}
+              prefetch
+              onClick={handleTap(tab.href)}
               className={cn(
-                'flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors',
+                'flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95',
                 active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
               )}
             >

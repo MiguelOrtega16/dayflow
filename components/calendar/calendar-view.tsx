@@ -19,7 +19,7 @@ import { UserFilterBar } from './user-filter-bar'
 import { ActivityFormModal } from '../activities/activity-form-modal'
 import { useI18n, weekdayShort, dateFnsLocale } from '@/lib/i18n'
 import { scheduleActivityReminders } from '@/lib/activity-reminders'
-import { syncWidgetSnapshot, startWidgetAuthSync } from '@/lib/widget-sync'
+import { syncWidgetSnapshot } from '@/lib/widget-sync'
 import { CompactMonthGrid } from './compact-month-grid'
 import { TimeGridView } from './time-grid-view'
 
@@ -163,9 +163,8 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
   useEffect(() => { fetchActivities() }, [fetchActivities])
 
-  // Mirror the Supabase session into native storage so the widget can refresh
-  // / toggle-done on its own. No-op on web.
-  useEffect(() => startWidgetAuthSync(), [])
+  // Widget auth sync is now hoisted into the dashboard shell so it runs
+  // across the whole dashboard, not just when the calendar view is mounted.
 
   useEffect(() => {
     if (activeUserIds.length === 0) return
@@ -199,10 +198,12 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     return () => window.removeEventListener('dayflow:navigate', onNavigate)
   }, [])
 
-  // Persist the selected date so a page refresh returns to the same day
+  // Persist the selected date so a page refresh returns to the same day.
+  // IMPORTANT: format in LOCAL timezone, not UTC. toISOString() returns the
+  // UTC date, which jumps a day forward in negative-UTC timezones during the
+  // evening — so navigating away then back would land on tomorrow.
   useEffect(() => {
-    const str = selectedDate.toISOString().slice(0, 10)
-    sessionStorage.setItem('dayflow:selectedDate', str)
+    sessionStorage.setItem('dayflow:selectedDate', format(selectedDate, 'yyyy-MM-dd'))
   }, [selectedDate])
 
   // Pick up a date stored by push-notification deep links (fires after full-page reload)

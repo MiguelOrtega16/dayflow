@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import org.json.JSONObject
 
 /**
@@ -41,25 +42,32 @@ class WidgetActionReceiver : BroadcastReceiver() {
     }
 
     private fun handleRowClick(ctx: Context, intent: Intent) {
-        val id        = intent.getStringExtra(EXTRA_ACTIVITY_ID) ?: return
+        val id        = intent.getStringExtra(EXTRA_ACTIVITY_ID)
         val wasDone   = intent.getBooleanExtra(EXTRA_CURRENTLY_DONE, false)
+        Log.d("DayFlowWidget", "ROW_CLICK received id=$id wasDone=$wasDone")
+        if (id.isNullOrBlank() || id == "null") {
+            Log.w("DayFlowWidget", "ROW_CLICK ignored — empty/invalid activity id")
+            return
+        }
         val newStatus = if (wasDone) "todo" else "done"
 
         // Optimistic local update so the widget redraws instantly
         optimisticUpdate(ctx, id, newStatus)
         mainHandler.post { TodayWidgetProvider.renderAll(ctx) }
 
-        // Then push to Supabase; on failure, refetch so the widget falls back to truth
+        // Push to Supabase, then re-sync from DB on BOTH paths. If the PATCH
+        // failed (auth, RLS, 0 rows), the refetch overwrites the optimistic
+        // snapshot with truth so the widget can't get stuck in a wrong state.
         runOnIo {
             val ok = SupabaseRest.updateStatus(ctx, id, newStatus)
-            if (!ok) {
-                val list = SupabaseRest.fetchActivities(ctx)
-                if (list != null) {
-                    val snap = JSONObject().put("activities", list)
-                    WidgetStore.writeSnapshot(ctx, snap.toString())
-                }
-                mainHandler.post { TodayWidgetProvider.renderAll(ctx) }
+            val list = SupabaseRest.fetchActivities(ctx)
+            if (list != null) {
+                val snap = JSONObject().put("activities", list)
+                WidgetStore.writeSnapshot(ctx, snap.toString())
+            } else {
+                Log.w("DayFlowWidget", "post-update refetch failed; widget may show stale state until next refresh (ok=$ok)")
             }
+            mainHandler.post { TodayWidgetProvider.renderAll(ctx) }
         }
     }
 

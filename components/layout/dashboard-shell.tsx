@@ -6,6 +6,8 @@ import { AppSidebar } from './app-sidebar'
 import { MobileBottomNav } from './mobile-bottom-nav'
 import { cn } from '@/lib/utils'
 import { initPushNotifications } from '@/lib/push-notifications'
+import { startWidgetAuthSync } from '@/lib/widget-sync'
+import { TopProgressBar } from './top-progress-bar'
 import type { Profile } from '@/types'
 
 interface DashboardShellProps {
@@ -24,6 +26,12 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
   useEffect(() => {
     if (profile?.id) initPushNotifications(profile.id)
   }, [profile?.id])
+
+  // Mirror the Supabase session into native storage so the home-screen widget
+  // can refresh / toggle-done on its own. Hoisted to the dashboard shell so
+  // the auth stays in sync regardless of which dashboard sub-page the user
+  // is on (previously only the calendar view ran this).
+  useEffect(() => startWidgetAuthSync(), [])
 
   // Returns true if the element (or any ancestor up to <main>) is itself scrollable.
   // Used to avoid triggering pull-to-refresh when the user is scrolling a nested
@@ -80,6 +88,11 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
+
+      {/* Top progress bar — fixed, shows on every route change. Gives users
+          instant visual feedback that their tap registered, masking the
+          page-rendering latency that otherwise reads as "lag". */}
+      <TopProgressBar />
 
       {/* Mobile backdrop */}
       {sidebarOpen && (

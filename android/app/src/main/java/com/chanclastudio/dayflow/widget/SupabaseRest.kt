@@ -95,21 +95,50 @@ object SupabaseRest {
         return list
     }
 
-    /** PATCH the status of one activity. Returns true on 2xx. */
+    /**
+     * PATCH the status of one activity. Uses `Prefer: return=representation`
+     * so we can verify that a row actually came back — Supabase returns 200
+     * with an empty `[]` body when the filter matches nothing (e.g. RLS
+     * denied the row), and we need to detect that as a failure.
+     */
     fun updateStatus(ctx: Context, activityId: String, status: String): Boolean {
-        val auth = ensureAccessToken(ctx) ?: return false
+        if (activityId.isBlank() || activityId == "null") {
+            Log.w(TAG, "updateStatus skipped — invalid activityId='$activityId'")
+            return false
+        }
+        val auth = ensureAccessToken(ctx)
+        if (auth == null) {
+            Log.w(TAG, "updateStatus failed — no auth (token refresh failed or user logged out)")
+            return false
+        }
         val url  = "${auth.supabaseUrl}/rest/v1/activities?id=eq.$activityId"
         val pct  = if (status == "done") 100 else 0
         val body = JSONObject()
             .put("status", status)
             .put("completion_percentage", pct)
             .toString()
+        Log.d(TAG, "updateStatus id=$activityId → status=$status")
         val resp = httpJson("PATCH", url, body, mapOf(
             "apikey"        to auth.anonKey,
             "Authorization" to "Bearer ${auth.accessToken}",
-            "Prefer"        to "return=minimal",
+            "Prefer"        to "return=representation",
         ))
-        return resp != null && resp.status in 200..299
+        if (resp == null) {
+            Log.w(TAG, "updateStatus network error for id=$activityId")
+            return false
+        }
+        if (resp.status !in 200..299) {
+            Log.w(TAG, "updateStatus HTTP ${resp.status} for id=$activityId — body=${resp.body.take(200)}")
+            return false
+        }
+        // Supabase returns 200 + [] when 0 rows matched — surface that as failure.
+        val rows = runCatching { JSONArray(resp.body) }.getOrNull()
+        if (rows == null || rows.length() == 0) {
+            Log.w(TAG, "updateStatus 200 but 0 rows updated for id=$activityId — likely RLS or stale id")
+            return false
+        }
+        Log.d(TAG, "updateStatus OK for id=$activityId")
+        return true
     }
 
     // ── HTTP ────────────────────────────────────────────────────────────────
