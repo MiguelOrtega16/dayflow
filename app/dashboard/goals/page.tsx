@@ -10,6 +10,12 @@ import { getGoals, createGoal, updateGoal, deleteGoal } from '@/lib/api'
 import { STATUS_CONFIG, PRIORITY_CONFIG } from '@/lib/utils'
 import type { Goal, ActivityStatus, ActivityPriority, Profile } from '@/types'
 import { useI18n, useFormatDate } from '@/lib/i18n'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
+import { usePaywall } from '@/components/paywall/paywall-provider'
+
+// Free tier can have this many active goals (status not in done/skipped).
+// Keep in sync with the RLS subquery in schema.sql.
+const FREE_GOAL_LIMIT = 2
 
 const GOAL_EMOJIS = ['🎯', '🚀', '💪', '📚', '🏃', '🌱', '💡', '⭐', '🎨', '🏆', '💼', '🔬']
 
@@ -30,6 +36,18 @@ export default function GoalsPage() {
   const [newPriority, setNewPriority] = useState<ActivityPriority>('medium')
   const [creating, setCreating] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const { entitlement } = useEntitlement(profile?.id ?? null)
+  const { open: openPaywall } = usePaywall()
+
+  const activeGoalCount = goals.filter(g => g.status !== 'done' && g.status !== 'skipped').length
+
+  const tryOpenCreate = () => {
+    if (!entitlement.isPro && activeGoalCount >= FREE_GOAL_LIMIT) {
+      openPaywall('goals_limit')
+      return
+    }
+    setShowCreateForm(true)
+  }
 
   useEffect(() => { loadData() // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -47,6 +65,15 @@ export default function GoalsPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newTitle.trim() || !profile) return
+
+    // Fallback cap check — UI normally blocks reaching this with form open,
+    // but if it does (race, manual state), still respect the limit.
+    if (!entitlement.isPro && activeGoalCount >= FREE_GOAL_LIMIT) {
+      setShowCreateForm(false)
+      openPaywall('goals_limit')
+      return
+    }
+
     setCreating(true)
     try {
       const goal = await createGoal({
@@ -67,6 +94,14 @@ export default function GoalsPage() {
       setNewEmoji('🎯')
       setNewPriority('medium')
       setShowCreateForm(false)
+    } catch (err) {
+      const msg = String((err as { message?: string })?.message ?? err)
+      if (msg.includes('row-level security') || msg.includes('violates')) {
+        setShowCreateForm(false)
+        openPaywall('goals_limit')
+      } else {
+        console.error('[goals] createGoal failed', err)
+      }
     } finally {
       setCreating(false)
     }
@@ -107,7 +142,7 @@ export default function GoalsPage() {
           <p className="text-sm text-muted-foreground">{t('goals.subtitle')}</p>
         </div>
         <button
-          onClick={() => setShowCreateForm(true)}
+          onClick={tryOpenCreate}
           className="shrink-0 w-9 h-9 flex items-center justify-center bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors"
           title={t('goals.newGoal')}
         >
@@ -215,7 +250,7 @@ export default function GoalsPage() {
           <p className="font-medium mb-1">{t('goals.empty')}</p>
           <p className="text-sm text-muted-foreground mb-4">{t('goals.emptyHelp')}</p>
           <button
-            onClick={() => setShowCreateForm(true)}
+            onClick={tryOpenCreate}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
           >
             {t('goals.firstGoal')}

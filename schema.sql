@@ -97,7 +97,20 @@ create policy "Users can view their shared calendars"
 drop policy if exists "Users can create shares for their own calendar" on public.shared_calendars;
 create policy "Users can create shares for their own calendar"
   on public.shared_calendars for insert to authenticated
-  with check (owner_id = auth.uid());
+  with check (
+    owner_id = auth.uid()
+    and (
+      public.is_pro(auth.uid())
+      or (
+        -- Free tier: up to 2 active shares per owner.
+        -- Declined invites don't count (recipient opted out, slot is free).
+        -- Keep in sync with FREE_SHARE_LIMIT in app/dashboard/people/page.tsx.
+        select count(*) from public.shared_calendars sc
+        where sc.owner_id = auth.uid()
+          and sc.status <> 'declined'
+      ) < 2
+    )
+  );
 
 drop policy if exists "Recipients can respond to calendar shares" on public.shared_calendars;
 create policy "Recipients can respond to calendar shares"
@@ -159,7 +172,20 @@ create policy "Users can view own goals"
 
 drop policy if exists "Users can insert own goals" on public.goals;
 create policy "Users can insert own goals"
-  on public.goals for insert to authenticated with check (user_id = auth.uid());
+  on public.goals for insert to authenticated with check (
+    user_id = auth.uid()
+    and (
+      public.is_pro(auth.uid())
+      or (
+        -- Free tier: up to 2 active goals per user.
+        -- Done/skipped goals don't count (they're terminal states; slot is free).
+        -- Keep in sync with FREE_GOAL_LIMIT in app/dashboard/goals/page.tsx.
+        select count(*) from public.goals g
+        where g.user_id = auth.uid()
+          and g.status not in ('done', 'skipped')
+      ) < 2
+    )
+  );
 
 drop policy if exists "Users can update own goals" on public.goals;
 create policy "Users can update own goals"
@@ -214,9 +240,12 @@ do $$ begin
     check (category in ('task', 'habit', 'event', 'note', 'reminder'));
 exception when duplicate_object then null; end $$;
 
+-- Drop the old check before recreating (idempotent — new values 'hourly'/'yearly'
+-- weren't in the original list). Older databases will recreate with the full set.
+alter table public.activities drop constraint if exists activities_recurrence_check;
 do $$ begin
   alter table public.activities add constraint activities_recurrence_check
-    check (recurrence_type in ('none', 'daily', 'weekly', 'monthly', 'weekdays', 'custom'));
+    check (recurrence_type in ('none', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'weekdays', 'custom'));
 exception when duplicate_object then null; end $$;
 
 do $$ begin
@@ -266,7 +295,20 @@ create policy "Users can view own activities"
 drop policy if exists "Users can insert own activities" on public.activities;
 create policy "Users can insert own activities"
   on public.activities for insert to authenticated
-  with check (user_id = auth.uid());
+  with check (
+    user_id = auth.uid()
+    and (
+      -- Free tier presets: none, hourly, daily, weekly, monthly, yearly.
+      -- Pro unlocks 'custom'. Legacy 'weekdays' value is also Pro-only since
+      -- new activities should use 'custom' with days_of_week instead.
+      -- Keep in sync with PRO_RECURRENCE in components/activities/activity-form-modal.tsx.
+      -- UPDATE policy is intentionally NOT restricted — RLS can't compare OLD
+      -- vs NEW in `with check`, and we want to grandfather any existing Pro
+      -- recurrence so users can still edit other fields after downgrading.
+      recurrence_type in ('none', 'hourly', 'daily', 'weekly', 'monthly', 'yearly')
+      or public.is_pro(auth.uid())
+    )
+  );
 
 drop policy if exists "Users can update own activities" on public.activities;
 create policy "Users can update own activities"
@@ -536,6 +578,31 @@ as $$
 $$;
 
 grant execute on function public.is_pro(uuid) to anon, authenticated, service_role;
+
+-- Profile accent color gate: free tier limited to the first four colors in
+-- USER_COLORS (see lib/utils.ts). Implemented as a trigger so we can compare
+-- OLD vs NEW (RLS `with check` only sees the new row) — grandfathered Pro
+-- users keep their existing color and can still edit other profile fields.
+create or replace function public.check_profile_color()
+returns trigger as $$
+begin
+  -- Insert path is unrestricted (handle_new_user generates a random hex on signup).
+  if TG_OP = 'INSERT' then return NEW; end if;
+  -- Only validate when the color is actually being changed.
+  if NEW.color is distinct from OLD.color
+     and NEW.color not in ('#6366f1', '#8b5cf6', '#ec4899', '#f43f5e')
+     and not public.is_pro(NEW.id)
+  then
+    raise exception 'Pro color requires subscription' using errcode = '42501';
+  end if;
+  return NEW;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists check_profile_color_trigger on public.profiles;
+create trigger check_profile_color_trigger
+  before update on public.profiles
+  for each row execute procedure public.check_profile_color();
 
 -- ============================================================
 -- TRIGGERS — updated_at

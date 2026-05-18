@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Entitlement, Subscription } from '@/types'
 import { EMPTY_ENTITLEMENT, computeEntitlement } from './entitlement'
@@ -13,6 +13,10 @@ interface UseEntitlementResult {
 export function useEntitlement(userId: string | null | undefined): UseEntitlementResult {
   const [entitlement, setEntitlement] = useState<Entitlement>(EMPTY_ENTITLEMENT)
   const [loading, setLoading] = useState<boolean>(true)
+  // Supabase reuses channels by name. Multiple components calling useEntitlement
+  // with the same userId (sidebar + people page, etc.) need distinct channel
+  // names or the second .on() throws "cannot add callbacks after subscribe()".
+  const instanceId = useId()
 
   useEffect(() => {
     if (!userId) {
@@ -37,7 +41,7 @@ export function useEntitlement(userId: string | null | undefined): UseEntitlemen
     load()
 
     const channel = supabase
-      .channel(`subscriptions:${userId}`)
+      .channel(`subscriptions:${userId}:${instanceId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'subscriptions', filter: `user_id=eq.${userId}` },
@@ -49,7 +53,7 @@ export function useEntitlement(userId: string | null | undefined): UseEntitlemen
       mounted = false
       supabase.removeChannel(channel)
     }
-  }, [userId])
+  }, [userId, instanceId])
 
   return { entitlement, loading }
 }

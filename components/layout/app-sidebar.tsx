@@ -178,11 +178,11 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
                       )}
                       title={
                         entitlement.isInTrial
-                          ? `Trial — ends ${entitlement.expiresAt ? new Date(entitlement.expiresAt).toLocaleDateString() : ''}`
-                          : `Pro — ${entitlement.plan?.replace('pro_', '') ?? ''}`
+                          ? `${t('billing.trialPill')} — ${entitlement.expiresAt ? new Date(entitlement.expiresAt).toLocaleDateString() : ''}`
+                          : `${t('billing.proPill')} — ${entitlement.plan?.replace('pro_', '') ?? ''}`
                       }
                     >
-                      {entitlement.isInTrial ? 'Trial' : 'Pro'}
+                      {entitlement.isInTrial ? t('billing.trialPill') : t('billing.proPill')}
                     </span>
                   )}
                 </p>

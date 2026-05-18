@@ -1,7 +1,17 @@
 export type ActivityStatus = 'todo' | 'in_progress' | 'done' | 'blocked' | 'skipped'
 export type ActivityPriority = 'low' | 'medium' | 'high' | 'critical'
 export type ActivityCategory = 'task' | 'habit' | 'event' | 'note' | 'reminder'
-export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly' | 'weekdays' | 'custom'
+export type RecurrenceType =
+  | 'none'
+  | 'hourly'
+  | 'daily'
+  | 'weekly'
+  | 'monthly'
+  | 'yearly'
+  | 'weekdays' // legacy — kept for grandfathered activities; not surfaced in the picker
+  | 'custom'   // Pro-only
+
+export type RecurrenceFrequency = 'hour' | 'day' | 'week' | 'month' | 'year'
 export type InvitationStatus = 'pending' | 'accepted' | 'declined'
 export type TaskCategory = 'task' | 'habit' | 'event' | 'note'
 export type BillingProvider = 'stripe' | 'revenuecat'
@@ -142,6 +152,9 @@ export interface RecurrenceConfig {
   days_of_week?: number[]
   day_of_month?: number
   interval?: number
+  // For custom recurrence: which unit `interval` is in. Ignored for non-custom
+  // presets (daily uses 'day' implicitly, hourly uses 'hour', etc.).
+  frequency?: RecurrenceFrequency
   end_date?: string
   occurrences?: number
 }

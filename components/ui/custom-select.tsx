@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useRef, useState, useLayoutEffect } from 'react'
-import { ChevronDown, Check } from 'lucide-react'
+import { ChevronDown, Check, Crown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface CustomSelectOption<T extends string = string> {
   value: T
   label: string
+  // Render an indigo Crown icon alongside the label to signal that this option
+  // is a Pro feature. Visual only — the caller is still responsible for gating
+  // the actual onChange behavior.
+  pro?: boolean
 }
 
 interface CustomSelectProps<T extends string = string> {
@@ -80,8 +84,9 @@ export function CustomSelect<T extends string = string>({
           buttonClassName,
         )}
       >
-        <span className={cn('truncate text-left', !selected && 'text-muted-foreground')}>
-          {selected?.label ?? placeholder ?? ''}
+        <span className={cn('truncate text-left flex items-center gap-1.5', !selected && 'text-muted-foreground')}>
+          <span className="truncate">{selected?.label ?? placeholder ?? ''}</span>
+          {selected?.pro && <Crown className="w-3 h-3 shrink-0 text-indigo-500" />}
         </span>
         <ChevronDown className={cn('w-4 h-4 text-muted-foreground shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
@@ -112,7 +117,10 @@ export function CustomSelect<T extends string = string>({
                   isSelected && 'bg-primary/10 text-primary font-medium',
                 )}
               >
-                <span className="truncate">{opt.label}</span>
+                <span className="truncate flex items-center gap-1.5">
+                  <span className="truncate">{opt.label}</span>
+                  {opt.pro && <Crown className="w-3 h-3 shrink-0 text-indigo-500" />}
+                </span>
                 {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
               </button>
             )

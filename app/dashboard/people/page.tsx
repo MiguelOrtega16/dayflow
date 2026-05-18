@@ -7,7 +7,13 @@ import { cn, getInitials } from '@/lib/utils'
 import { Search, UserPlus, X, Check, Users, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useI18n } from '@/lib/i18n'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
+import { usePaywall } from '@/components/paywall/paywall-provider'
 import type { Profile, SharedCalendar } from '@/types'
+
+// Free tier can share with this many people. Pro is unlimited.
+// Keep in sync with the RLS subquery in schema.sql.
+const FREE_SHARE_LIMIT = 2
 
 export default function PeoplePage() {
   const { t } = useI18n()
@@ -19,6 +25,8 @@ export default function PeoplePage() {
   const [, setLoading]                      = useState(true)
   const [responding, setResponding]         = useState<string | null>(null)
   const supabase = createClient()
+  const { entitlement } = useEntitlement(currentUser?.id ?? null)
+  const { open: openPaywall } = usePaywall()
 
   useEffect(() => { loadData() // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -67,10 +75,32 @@ export default function PeoplePage() {
 
   const handleShare = async (targetUser: Profile) => {
     if (!currentUser) return
-    await shareCalendar(currentUser.id, targetUser.id)
-    setSearchQuery('')
-    setSearchResults([])
-    loadData()
+
+    // Cap: free users can share with FREE_SHARE_LIMIT people. Declined invites
+    // don't count toward the cap (the recipient said no, so the slot is open).
+    const activeShareCount = sharedCalendars.filter(
+      sc => sc.owner_id === currentUser.id && sc.status !== 'declined'
+    ).length
+    if (!entitlement.isPro && activeShareCount >= FREE_SHARE_LIMIT) {
+      openPaywall('sharing_limit')
+      return
+    }
+
+    try {
+      await shareCalendar(currentUser.id, targetUser.id)
+      setSearchQuery('')
+      setSearchResults([])
+      loadData()
+    } catch (err) {
+      // Server-side RLS rejection (e.g. raced limit, client check bypassed) —
+      // fall back to the paywall instead of a silent failure.
+      const msg = String((err as { message?: string })?.message ?? err)
+      if (msg.includes('row-level security') || msg.includes('violates')) {
+        openPaywall('sharing_limit')
+      } else {
+        console.error('[people] shareCalendar failed', err)
+      }
+    }
   }
 
   const handleRemove = async (shareId: string) => {

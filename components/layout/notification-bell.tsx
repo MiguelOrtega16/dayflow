@@ -241,14 +241,17 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
   const handleCalendarShare = async (n: Notification, accept: boolean) => {
     setResponding({ id: n.id, action: accept ? 'accept' : 'decline' })
     try {
-      // Find pending calendar share for this actor→recipient pair
+      // Find pending calendar share for this actor→recipient pair. Use
+      // maybeSingle() so a missing row (e.g. user already responded from the
+      // People page or double-tapped) silently no-ops instead of throwing
+      // PGRST116 into the console.
       const { data } = await supabase
         .from('shared_calendars')
         .select('id')
         .eq('owner_id', n.actor_id)
         .eq('shared_with_id', userId)
         .eq('status', 'pending')
-        .single()
+        .maybeSingle()
 
       if (data?.id) {
         await respondToCalendarShare(data.id, accept, userId)

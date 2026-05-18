@@ -6,6 +6,7 @@ import { MobileBottomNav } from './mobile-bottom-nav'
 import { cn } from '@/lib/utils'
 import { initPushNotifications } from '@/lib/push-notifications'
 import { initRevenueCat } from '@/lib/billing/revenuecat'
+import { PaywallProvider } from '@/components/paywall/paywall-provider'
 import { startWidgetAuthSync } from '@/lib/widget-sync'
 import { BackButtonProvider } from '@/lib/back-button'
 import { TopProgressBar } from './top-progress-bar'
@@ -42,6 +43,7 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
 
   return (
     <BackButtonProvider>
+    <PaywallProvider>
     <div className="flex h-screen bg-background overflow-hidden">
 
       {/* Top progress bar — fixed, shows on every route change. Gives users
@@ -76,6 +78,7 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
         <MobileBottomNav userId={profile?.id} onMenuClick={() => setSidebarOpen(true)} />
       </div>
     </div>
+    </PaywallProvider>
     </BackButtonProvider>
   )
 }

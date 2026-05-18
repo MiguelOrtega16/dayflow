@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Crown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { USER_COLORS, getInitials } from '@/lib/utils'
+import { USER_COLORS, FREE_USER_COLORS, isProColor, getInitials } from '@/lib/utils'
 import { useI18n, LOCALE_NAMES, LOCALES, type Locale } from '@/lib/i18n'
 import { CustomSelect } from '@/components/ui/custom-select'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
+import { usePaywall } from '@/components/paywall/paywall-provider'
 import type { Profile } from '@/types'
 import { useRouter } from 'next/navigation'
 
@@ -18,6 +21,16 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+  const { entitlement } = useEntitlement(profile?.id ?? null)
+  const { open: openPaywall } = usePaywall()
+
+  const handleColorClick = (c: string) => {
+    if (isProColor(c) && !entitlement.isPro) {
+      openPaywall('locked_theme')
+      return
+    }
+    setColor(c)
+  }
 
   useEffect(() => {
     loadProfile()
@@ -48,6 +61,15 @@ export default function SettingsPage() {
     if (!error) {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
+      return
+    }
+    // The check_profile_color trigger raises 42501 when a free user tries to
+    // pick a Pro color through a bypass route — open the paywall as fallback.
+    const msg = String(error.message || '')
+    if (error.code === '42501' || msg.includes('Pro color')) {
+      openPaywall('locked_theme')
+    } else {
+      console.error('[settings] save failed', error)
     }
   }
 
@@ -109,20 +131,28 @@ export default function SettingsPage() {
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('settings.colorLabel')}</label>
             <div className="flex flex-wrap gap-2">
-              {USER_COLORS.map(c => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
-                  style={{
-                    backgroundColor: c,
-                    borderColor: color === c ? 'white' : c,
-                    outline: color === c ? `2px solid ${c}` : 'none',
-                    outlineOffset: '2px',
-                  }}
-                />
-              ))}
+              {USER_COLORS.map(c => {
+                const isPro = isProColor(c)
+                const locked = isPro && !entitlement.isPro
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => handleColorClick(c)}
+                    className="relative w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
+                    style={{
+                      backgroundColor: c,
+                      borderColor: color === c ? 'white' : c,
+                      outline: color === c ? `2px solid ${c}` : 'none',
+                      outlineOffset: '2px',
+                    }}
+                  >
+                    {locked && (
+                      <Crown className="absolute -top-1 -right-1 w-3 h-3 text-indigo-500 bg-background rounded-full p-[1px]" />
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

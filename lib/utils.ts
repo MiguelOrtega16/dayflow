@@ -79,11 +79,24 @@ export function priorityLabel(p: ActivityPriority, locale: Locale = DEFAULT_LOCA
   return getMessage(locale, `priority.${p}`) ?? p
 }
 
-export const USER_COLORS = [
+// Profile accent colors. Free users get the first four; Pro unlocks the rest.
+// The full list is still exported as USER_COLORS for renderers that need to
+// resolve a stored color regardless of tier (e.g. the sidebar avatar).
+// Keep in sync with the RLS check on profiles.color in schema.sql.
+export const FREE_USER_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
+] as const
+
+export const PRO_USER_COLORS = [
   '#f97316', '#eab308', '#22c55e', '#14b8a6',
   '#06b6d4', '#3b82f6', '#a855f7', '#ef4444',
-]
+] as const
+
+export const USER_COLORS = [...FREE_USER_COLORS, ...PRO_USER_COLORS]
+
+export function isProColor(hex: string): boolean {
+  return (PRO_USER_COLORS as readonly string[]).includes(hex)
+}
 
 export function getInitials(name: string | null | undefined, email?: string): string {
   if (name) {

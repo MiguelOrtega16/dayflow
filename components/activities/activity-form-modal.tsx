@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { X, Clock, Smile, Target, UserPlus, CheckCircle2, XCircle } from 'lucide-react'
+import { X, Clock, Smile, Target, UserPlus, CheckCircle2, XCircle, Crown } from 'lucide-react'
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG, statusLabel, categoryLabel } from '@/lib/utils'
 import { useI18n, weekdayNarrow } from '@/lib/i18n'
 import { useBackButtonClose } from '@/lib/back-button'
@@ -11,12 +11,54 @@ import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
   getActivityTitleSuggestions, getActivityInvitations, inviteToActivity,
   cancelActivityInvitation, searchUsers, getSharedCalendarUsers,
+  generateRecurrenceDates, RECURRENCE_HARD_CAP,
 } from '@/lib/api'
 import { CustomSelect } from '@/components/ui/custom-select'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
+import { usePaywall } from '@/components/paywall/paywall-provider'
 import type {
-  Activity, ActivityStatus, ActivityCategory, RecurrenceType,
+  Activity, ActivityStatus, ActivityCategory, RecurrenceType, RecurrenceFrequency,
   Profile, Goal, ActivityInvitation,
 } from '@/types'
+
+// Free presets: none, hourly, daily, weekly, monthly, yearly.
+// Pro: 'custom' (interval+freq or days-of-week) and legacy 'weekdays'.
+// Keep in sync with the activities insert RLS in schema.sql.
+const PRO_RECURRENCE: RecurrenceType[] = ['weekdays', 'custom']
+
+// Per-frequency cap on total instances. Stops casual abuse without preventing
+// legitimate long-running schedules. The lib/api.ts RECURRENCE_HARD_CAP is the
+// floor under all of these.
+const MAX_INSTANCES_BY_UNIT: Record<RecurrenceFrequency, number> = {
+  hour:  168, // 1 week of hourly
+  day:   365, // 1 year
+  week:  104, // 2 years
+  month: 60,  // 5 years
+  year:  20,  // 20 years
+}
+
+function effectiveFrequency(
+  type: RecurrenceType,
+  freq: RecurrenceFrequency | undefined,
+  daysOfWeek: number[],
+): RecurrenceFrequency {
+  if (type === 'hourly')  return 'hour'
+  if (type === 'daily')   return 'day'
+  if (type === 'weekly')  return 'week'
+  if (type === 'monthly') return 'month'
+  if (type === 'yearly')  return 'year'
+  if (type === 'weekdays') return 'day'
+  if (type === 'custom') {
+    if (daysOfWeek.length > 0) return 'day'
+    return freq ?? 'day'
+  }
+  return 'day'
+}
+
+// Repeats = total instances - 1 (the first occurrence isn't a "repeat").
+function maxRepeatsForFrequency(unit: RecurrenceFrequency): number {
+  return Math.min(MAX_INSTANCES_BY_UNIT[unit], RECURRENCE_HARD_CAP) - 1
+}
 
 const EMOJIS = ['🎯', '✅', '📚', '💪', '🏃', '🧘', '💻', '🎨', '📝', '🔧', '🌱', '⭐', '🚀', '💡', '🎵', '🍎']
 
@@ -92,16 +134,64 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const existingPriority = activity?.priority || 'medium'
   const existingNotes    = activity?.notes    || null
 
-  // Recurrence
+  // Recurrence — initialise from the existing activity's stored config so
+  // editing a recurring activity actually shows its real settings.
+  const initialRecurrenceConfig = activity?.recurrence_config ?? {}
   const [recurrenceType, setRecurrenceType]     = useState<RecurrenceType>(activity?.recurrence_type || 'none')
-  const [recurrenceCount, setRecurrenceCount]   = useState(1)
-  const [daysOfWeek, setDaysOfWeek]             = useState<number[]>([])
+  // The input shows REPEATS (how many extra instances after the first); the
+  // generator works in total occurrences. Store as repeats, convert when saving.
+  const [recurrenceCount, setRecurrenceCount]   = useState(
+    Math.max(1, (initialRecurrenceConfig.occurrences ?? 10) - 1)
+  )
+  const [daysOfWeek, setDaysOfWeek]             = useState<number[]>(initialRecurrenceConfig.days_of_week ?? [])
+  const [customInterval, setCustomInterval]     = useState(initialRecurrenceConfig.interval ?? 1)
+  const [customFrequency, setCustomFrequency]   = useState<RecurrenceFrequency>(initialRecurrenceConfig.frequency ?? 'day')
+  const [customMode, setCustomMode]             = useState<'interval' | 'days'>(
+    (initialRecurrenceConfig.days_of_week?.length ?? 0) > 0 ? 'days' : 'interval'
+  )
+  const [limitMode, setLimitMode]               = useState<'count' | 'end_date'>(
+    initialRecurrenceConfig.end_date ? 'end_date' : 'count'
+  )
+  const [endDate, setEndDate]                   = useState<string>(initialRecurrenceConfig.end_date ?? '')
   const isReminder = category === 'reminder'
+
+  // Per-frequency clamp on the repeats input. Recomputed when the user changes
+  // the recurrence type or custom interval/days mode.
+  const effectiveUnit = effectiveFrequency(recurrenceType, customFrequency, daysOfWeek)
+  const maxRepeats = maxRepeatsForFrequency(effectiveUnit)
+
+  // Whenever the cap drops below the current value (e.g. user switched from
+  // 'daily' to 'yearly'), pull the input back into range.
+  useEffect(() => {
+    if (recurrenceCount > maxRepeats) setRecurrenceCount(maxRepeats)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maxRepeats])
+
+  // Live count of how many activities will actually be created. Reuses the
+  // canonical generator so the preview always matches what the server stores.
+  const previewCount = useMemo(() => {
+    if (recurrenceType === 'none') return 0
+    const cfg: Record<string, unknown> = {}
+    if (limitMode === 'count') {
+      cfg.occurrences = recurrenceCount + 1
+    } else if (endDate) {
+      cfg.end_date = endDate
+    } else {
+      cfg.occurrences = recurrenceCount + 1
+    }
+    if (recurrenceType === 'custom') {
+      if (customMode === 'days') cfg.days_of_week = daysOfWeek
+      else { cfg.interval = customInterval; cfg.frequency = customFrequency }
+    }
+    return generateRecurrenceDates(selectedDate, recurrenceType, cfg, startTime || null).length
+  }, [recurrenceType, recurrenceCount, daysOfWeek, customInterval, customFrequency, customMode, limitMode, endDate, selectedDate, startTime])
 
   // UI state
   const [saving, setSaving]               = useState(false)
   const [saveError, setSaveError]         = useState<string | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const { entitlement } = useEntitlement(currentUser?.id ?? null)
+  const { open: openPaywall } = usePaywall()
   const [showTitleEmoji, setShowTitleEmoji]   = useState(false)
   const [goals, setGoals]                 = useState<Goal[]>([])
   const [titleTouched, setTitleTouched]   = useState(false)
@@ -210,8 +300,17 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
         tags,
         recurrence_type:    recurrenceType,
         recurrence_config:  recurrenceType !== 'none' ? {
-          occurrences: recurrenceCount,
-          days_of_week: recurrenceType === 'custom' ? daysOfWeek : undefined,
+          // recurrenceCount is the user-facing REPEATS count; the generator
+          // expects total occurrences including the first → +1.
+          ...(limitMode === 'count'
+              ? { occurrences: recurrenceCount + 1 }
+              : (endDate ? { end_date: endDate } : { occurrences: recurrenceCount + 1 })),
+          ...(recurrenceType === 'custom' && customMode === 'days'
+              ? { days_of_week: daysOfWeek }
+              : {}),
+          ...(recurrenceType === 'custom' && customMode === 'interval'
+              ? { interval: customInterval, frequency: customFrequency }
+              : {}),
         } : null,
         color:              null,
         parent_activity_id: activity?.parent_activity_id || null,
@@ -454,48 +553,173 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 </div>
               </div>}
 
-              {/* ── Repeat — compact dropdown ── */}
-              <div className="border-t border-border/50 pt-4">
+              {/* ── Repeat ── */}
+              <div className="border-t border-border/50 pt-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <label className="text-xs font-medium text-muted-foreground shrink-0">{t('activityForm.repeat')}</label>
                   <div className="flex-1">
                     <CustomSelect
                       value={recurrenceType}
-                      onChange={(v) => setRecurrenceType(v as RecurrenceType)}
+                      onChange={(v) => {
+                        const next = v as RecurrenceType
+                        // Pro-only recurrence patterns trigger the paywall for
+                        // free users. Existing values stay (re-selecting same
+                        // value doesn't fire onChange, so grandfathered Pro
+                        // recurrence on edited activities is preserved).
+                        if (!entitlement.isPro && PRO_RECURRENCE.includes(next)) {
+                          openPaywall('advanced_recurrence')
+                          return
+                        }
+                        setRecurrenceType(next)
+                      }}
                       ariaLabel={t('activityForm.repeatFreq')}
-                      options={([
-                        { value: 'none',     label: t('activityForm.recurrence.none')     },
-                        { value: 'daily',    label: t('activityForm.recurrence.daily')    },
-                        { value: 'weekdays', label: t('activityForm.recurrence.weekdays') },
-                        { value: 'weekly',   label: t('activityForm.recurrence.weekly')   },
-                        { value: 'monthly',  label: t('activityForm.recurrence.monthly')  },
-                        { value: 'custom',   label: t('activityForm.recurrence.custom')   },
-                      ] as const).filter(opt => isReminder ? ['none','daily','weekly','monthly'].includes(opt.value) : true)}
+                      options={(() => {
+                        const base = [
+                          { value: 'none',    label: t('activityForm.recurrence.none')    },
+                          { value: 'hourly',  label: t('activityForm.recurrence.hourly')  },
+                          { value: 'daily',   label: t('activityForm.recurrence.daily')   },
+                          { value: 'weekly',  label: t('activityForm.recurrence.weekly')  },
+                          { value: 'monthly', label: t('activityForm.recurrence.monthly') },
+                          { value: 'yearly',  label: t('activityForm.recurrence.yearly')  },
+                          { value: 'custom',  label: t('activityForm.recurrence.custom'),  pro: true },
+                        ] as const
+                        // Surface the legacy 'weekdays' option only when the
+                        // current activity already uses it — keeps grandfathered
+                        // edits working without polluting new-activity choices.
+                        const opts: Array<{ value: RecurrenceType; label: string; pro?: boolean }> = [...base]
+                        if (recurrenceType === 'weekdays') {
+                          opts.splice(opts.length - 1, 0, {
+                            value: 'weekdays',
+                            label: t('activityForm.recurrence.weekdays'),
+                            pro: true,
+                          })
+                        }
+                        // Reminders historically only allowed a subset.
+                        return isReminder
+                          ? opts.filter(o => ['none','hourly','daily','weekly','monthly','yearly'].includes(o.value))
+                          : opts
+                      })()}
                     />
                   </div>
                 </div>
+
+                {/* Hourly requires a start time so we know where to anchor each instance. */}
+                {recurrenceType === 'hourly' && !startTime && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    {t('activityForm.hourlyNeedsStartTime')}
+                  </p>
+                )}
+
+                {/* Custom recurrence: interval+frequency OR days-of-week. */}
                 {recurrenceType === 'custom' && (
-                  <div className="mt-3">
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('activityForm.daysOfWeek')}</label>
-                    <div className="flex gap-1.5">
-                      {DAY_LABELS.map((label, i) => (
-                        <button key={i} type="button"
-                          onClick={() => setDaysOfWeek(prev => prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i])}
-                          className={cn('w-8 h-8 rounded-full text-xs font-medium border transition-all',
-                            daysOfWeek.includes(i) ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40'
-                          )}
-                        >{label}</button>
-                      ))}
+                  <div className="space-y-2">
+                    <div className="flex gap-1 rounded-lg bg-muted/40 p-1 text-xs">
+                      <button type="button" onClick={() => setCustomMode('interval')}
+                        className={cn('flex-1 rounded-md py-1.5 font-medium transition-colors',
+                          customMode === 'interval' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                      >{t('activityForm.recurrenceCustom.modeInterval')}</button>
+                      <button type="button" onClick={() => setCustomMode('days')}
+                        className={cn('flex-1 rounded-md py-1.5 font-medium transition-colors',
+                          customMode === 'days' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                      >{t('activityForm.recurrenceCustom.modeDays')}</button>
                     </div>
+
+                    {customMode === 'interval' ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground shrink-0">{t('activityForm.recurrenceCustom.every')}</span>
+                        <input type="number" min={1} max={999} value={customInterval}
+                          onChange={e => setCustomInterval(Math.max(1, Math.min(999, Number(e.target.value) || 1)))}
+                          className="w-16 text-center rounded-lg border border-input bg-background px-2 py-1.5 outline-none focus:ring-2 focus:ring-ring tabular-nums"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <CustomSelect
+                            value={customFrequency}
+                            onChange={(v) => setCustomFrequency(v as RecurrenceFrequency)}
+                            options={[
+                              { value: 'hour',  label: t('activityForm.recurrenceCustom.freqHour')  },
+                              { value: 'day',   label: t('activityForm.recurrenceCustom.freqDay')   },
+                              { value: 'week',  label: t('activityForm.recurrenceCustom.freqWeek')  },
+                              { value: 'month', label: t('activityForm.recurrenceCustom.freqMonth') },
+                              { value: 'year',  label: t('activityForm.recurrenceCustom.freqYear')  },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1.5 flex-wrap">
+                        {DAY_LABELS.map((label, i) => (
+                          <button key={i} type="button"
+                            onClick={() => setDaysOfWeek(prev => prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i])}
+                            className={cn('w-8 h-8 rounded-full text-xs font-medium border transition-all',
+                              daysOfWeek.includes(i) ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40'
+                            )}
+                          >{label}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* Limit by: count (free) vs end date (Pro). */}
                 {recurrenceType !== 'none' && (
-                  <div className="mt-3 flex items-center justify-between">
-                    <label className="text-xs text-muted-foreground">{t('activityForm.timesCount')}</label>
-                    <input type="number" min={1} max={365} value={recurrenceCount}
-                      onChange={e => setRecurrenceCount(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
-                      className="w-20 text-center rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
-                    />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">{t('activityForm.recurrenceLimit.label')}</span>
+                      <div className="flex gap-1 rounded-lg bg-muted/40 p-1 text-xs">
+                        <button type="button" onClick={() => setLimitMode('count')}
+                          className={cn('rounded-md px-2.5 py-1 font-medium transition-colors',
+                            limitMode === 'count' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                        >{t('activityForm.recurrenceLimit.count')}</button>
+                        <button type="button"
+                          onClick={() => {
+                            if (!entitlement.isPro) {
+                              openPaywall('advanced_recurrence')
+                              return
+                            }
+                            setLimitMode('end_date')
+                          }}
+                          className={cn('flex items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-colors',
+                            limitMode === 'end_date' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                        >
+                          <span>{t('activityForm.recurrenceLimit.endDate')}</span>
+                          {!entitlement.isPro && <Crown className="w-3 h-3 text-indigo-500" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {limitMode === 'count' ? (
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs text-muted-foreground">{t('activityForm.timesCount')}</label>
+                        <input type="number" min={1} max={maxRepeats} value={recurrenceCount}
+                          onChange={e => setRecurrenceCount(Math.max(1, Math.min(maxRepeats, Number(e.target.value) || 1)))}
+                          className="w-20 text-center rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
+                        />
+                      </div>
+                    ) : (
+                      <input type="date" value={endDate} min={selectedDate}
+                        onChange={e => setEndDate(e.target.value)}
+                        className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    )}
+
+                    {/* Live "will create N activities" preview. Cap-warning style
+                        when the generator hits its hard ceiling — usually means
+                        the end_date is too far out. */}
+                    {previewCount > 1 && (
+                      <p className={cn(
+                        'text-[11px]',
+                        previewCount >= RECURRENCE_HARD_CAP
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-muted-foreground'
+                      )}>
+                        {t(
+                          previewCount >= RECURRENCE_HARD_CAP
+                            ? 'activityForm.recurrencePreviewCapped'
+                            : 'activityForm.recurrencePreview',
+                          { count: previewCount },
+                        )}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
