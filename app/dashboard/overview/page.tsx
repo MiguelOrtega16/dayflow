@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useI18n, useFormatDate } from '@/lib/i18n'
+import { BillingDebugButton } from '@/components/billing-debug-button'
 
 const STATUS_ICONS = {
   todo: Circle,
@@ -134,6 +135,7 @@ export default function OverviewPage() {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 max-w-7xl mx-auto">
+      <BillingDebugButton />
       <div className="mb-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
