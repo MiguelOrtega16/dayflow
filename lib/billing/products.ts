@@ -35,7 +35,11 @@ export function productIdFromStripePrice(priceId: string): BillingProductId | nu
 }
 
 export function productIdFromPlaySku(sku: string): BillingProductId | null {
+  // Play subscription SKUs come through as `{product_id}:{base_plan_id}` (e.g.
+  // `dayflow_pro_monthly:monthly`). One-time products have no suffix. Strip the
+  // base-plan part before matching so both shapes resolve correctly.
+  const baseSku = sku.split(':')[0]
   const entry = (Object.entries(PLAY_PRODUCT_IDS) as [BillingProductId, string][])
-    .find(([, id]) => id === sku)
+    .find(([, id]) => id === baseSku)
   return entry?.[0] ?? null
 }
