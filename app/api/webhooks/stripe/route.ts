@@ -104,15 +104,25 @@ export async function POST(request: Request) {
           ? ('canceled' as SubscriptionStatus)
           : (STRIPE_STATUS_MAP[obj.status] ?? 'expired')
 
+      // Stripe API 2026-04-22 moved current_period_end onto the subscription
+      // item. Read it there first, fall back to the legacy top-level field so
+      // we keep working against older API versions or test fixtures.
+      const periodEndUnix: number | undefined =
+        obj.items?.data?.[0]?.current_period_end ?? obj.current_period_end
+
+      // Same API version stopped flipping cancel_at_period_end on portal-driven
+      // cancellations; instead it sets `cancel_at` to the scheduled-end Unix
+      // timestamp. Treat either signal as "subscription is winding down".
+      const cancelAtPeriodEnd =
+        Boolean(obj.cancel_at_period_end) || obj.cancel_at != null
+
       await upsertSubscription({
         userId,
         providerSubscriptionId: obj.id,
         productId,
         status,
-        currentPeriodEnd: obj.current_period_end
-          ? new Date(obj.current_period_end * 1000).toISOString()
-          : null,
-        cancelAtPeriodEnd: Boolean(obj.cancel_at_period_end),
+        currentPeriodEnd: periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null,
+        cancelAtPeriodEnd,
         trialEnd: obj.trial_end ? new Date(obj.trial_end * 1000).toISOString() : null,
         raw: event,
       })

@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { cn, getInitials } from '@/lib/utils'
 import { useTheme } from './theme-provider'
 import { useI18n } from '@/lib/i18n'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
 import type { Profile } from '@/types'
 import {
   ListChecks, Users, Settings,
@@ -41,6 +42,7 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
   const [pendingHref, setPendingHref] = useState<string | null>(null)
   useEffect(() => { setPendingHref(null) }, [pathname])
   const supabase = createClient()
+  const { entitlement } = useEntitlement(profile?.id ?? null)
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
 
@@ -164,7 +166,26 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
           {!collapsed && (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{profile?.full_name || profile?.email}</p>
+                <p className="text-xs font-medium truncate flex items-center gap-1.5">
+                  <span className="truncate">{profile?.full_name || profile?.email}</span>
+                  {entitlement.isPro && (
+                    <span
+                      className={cn(
+                        'shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider',
+                        entitlement.isInTrial
+                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                          : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
+                      )}
+                      title={
+                        entitlement.isInTrial
+                          ? `Trial — ends ${entitlement.expiresAt ? new Date(entitlement.expiresAt).toLocaleDateString() : ''}`
+                          : `Pro — ${entitlement.plan?.replace('pro_', '') ?? ''}`
+                      }
+                    >
+                      {entitlement.isInTrial ? 'Trial' : 'Pro'}
+                    </span>
+                  )}
+                </p>
               </div>
               <button
                 onClick={handleSignOut}
