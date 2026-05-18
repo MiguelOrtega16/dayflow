@@ -5,6 +5,7 @@ import { AppSidebar } from './app-sidebar'
 import { MobileBottomNav } from './mobile-bottom-nav'
 import { cn } from '@/lib/utils'
 import { initPushNotifications } from '@/lib/push-notifications'
+import { initRevenueCat } from '@/lib/billing/revenuecat'
 import { startWidgetAuthSync } from '@/lib/widget-sync'
 import { BackButtonProvider } from '@/lib/back-button'
 import { TopProgressBar } from './top-progress-bar'
@@ -20,6 +21,10 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
 
   useEffect(() => {
     if (profile?.id) initPushNotifications(profile.id)
+  }, [profile?.id])
+
+  useEffect(() => {
+    if (profile?.id) initRevenueCat(profile.id)
   }, [profile?.id])
 
   // Mirror the Supabase session into native storage so the home-screen widget
