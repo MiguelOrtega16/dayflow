@@ -22,6 +22,29 @@ function isAuthorized(request: Request) {
   return auth === `Bearer ${process.env.CRON_SECRET}`
 }
 
+// How wide the firing window is around each scheduled offset. Must be larger
+// than the cron interval to avoid missing fires, but not so wide that a single
+// offset fires twice within consecutive cron runs.
+const FIRE_WINDOW_MIN = 2
+
+// Default offsets when activity.reminder_offsets is null/empty — preserves the
+// legacy behavior: reminders fire AT start_time, other activities 30 min before.
+function defaultOffsets(category: string): number[] {
+  return category === 'reminder' ? [0] : [30]
+}
+
+// Format a minute count as a short Spanish phrase for the push title.
+function formatOffsetEs(min: number): string {
+  if (min === 0) return 'ahora'
+  if (min < 60) return `en ${min} min`
+  if (min < 1440) {
+    const h = Math.round(min / 60)
+    return `en ${h} h`
+  }
+  const d = Math.round(min / 1440)
+  return d === 1 ? 'en 1 día' : `en ${d} días`
+}
+
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
@@ -63,14 +86,19 @@ export async function GET(request: Request) {
     }
   }
 
-  // Query today + tomorrow to handle windows that span midnight
-  const todayLocal    = localDateStr(now, appTz)
-  const tomorrowLocal = localDateStr(new Date(now.getTime() + 32 * 60_000), appTz)
-  const dates         = todayLocal === tomorrowLocal ? [todayLocal] : [todayLocal, tomorrowLocal]
+  // ── Multi-offset reminder dispatch ──────────────────────────────────────────
+  // Look up to 7 days ahead so a 1-week-before offset can still fire. The
+  // schema check constraint caps offsets at 10080 min (7 days) so this is the
+  // maximum lookahead we'd ever need.
+  const dates: string[] = []
+  for (let i = 0; i <= 7; i++) {
+    const d = localDateStr(new Date(now.getTime() + i * 86_400_000), appTz)
+    if (!dates.includes(d)) dates.push(d)
+  }
 
   const { data: activities, error } = await supabase
     .from('activities')
-    .select('id, title, emoji, description, user_id, start_time, date, category')
+    .select('id, title, emoji, user_id, start_time, date, category, reminder_offsets')
     .in('date', dates)
     .not('start_time', 'is', null)
 
@@ -83,86 +111,129 @@ export async function GET(request: Request) {
     return NextResponse.json({ sent: 0 })
   }
 
-  // Split into reminders (fire AT exact time) and activities (fire 30 min before)
-  const withTiming = activities.map(act => {
+  // Collect every (activity, offset) pair whose fire-time falls in the current
+  // FIRE_WINDOW. A single activity may produce multiple fires across cron runs
+  // (one per offset, one per cron tick that lands in the window).
+  interface Fire {
+    activityId: string
+    title: string
+    emoji: string | null
+    userId: string
+    category: string
+    date: string
+    offset: number
+    minutesUntilStart: number
+  }
+  const fires: Fire[] = []
+
+  for (const act of activities) {
+    const offsets: number[] = act.reminder_offsets && act.reminder_offsets.length > 0
+      ? act.reminder_offsets
+      : defaultOffsets(act.category)
+
     const timeStr = act.start_time!.slice(0, 5)
     const actUtc  = localToUTC(act.date, timeStr, appTz)
-    const minutesBefore = Math.round((actUtc.getTime() - now.getTime()) / 60_000)
-    return { ...act, minutesBefore }
-  })
+    const minutesUntilStart = Math.round((actUtc.getTime() - now.getTime()) / 60_000)
 
-  const reminderCandidates  = withTiming.filter(a => a.category === 'reminder' && a.minutesBefore >= -2 && a.minutesBefore <= 2)
-  const activityCandidates  = withTiming.filter(a => a.category !== 'reminder' && a.minutesBefore >= 28 && a.minutesBefore <= 32)
-  const allCandidates       = [...reminderCandidates, ...activityCandidates]
+    for (const offset of offsets) {
+      const delta = minutesUntilStart - offset
+      if (delta >= -FIRE_WINDOW_MIN && delta <= FIRE_WINDOW_MIN) {
+        fires.push({
+          activityId: act.id,
+          title: act.title,
+          emoji: act.emoji,
+          userId: act.user_id,
+          category: act.category,
+          date: act.date,
+          offset,
+          minutesUntilStart,
+        })
+      }
+    }
+  }
 
-  if (allCandidates.length === 0) {
+  if (fires.length === 0) {
     return NextResponse.json({ sent: 0 })
   }
 
-  // Collect recipients (owner + accepted invitees)
-  const allIds = allCandidates.map(a => a.id)
-
+  // Collect recipients (owner + accepted invitees) for the activities we'll fire.
+  const firingActivityIds = Array.from(new Set(fires.map(f => f.activityId)))
   const { data: invitations } = await supabase
     .from('activity_invitations')
     .select('activity_id, invitee_id')
-    .in('activity_id', allIds)
+    .in('activity_id', firingActivityIds)
     .eq('status', 'accepted')
 
-  const recipientMap: Record<string, string[]> = {}
-  for (const act of allCandidates) recipientMap[act.id] = [act.user_id]
-  for (const inv of invitations ?? []) recipientMap[inv.activity_id]?.push(inv.invitee_id)
+  const inviteesByActivity: Record<string, string[]> = {}
+  for (const inv of invitations ?? []) {
+    if (!inviteesByActivity[inv.activity_id]) inviteesByActivity[inv.activity_id] = []
+    inviteesByActivity[inv.activity_id].push(inv.invitee_id)
+  }
 
   const allRecipients = new Set<string>()
-  for (const r of Object.values(recipientMap)) r.forEach(uid => allRecipients.add(uid))
+  for (const f of fires) {
+    allRecipients.add(f.userId)
+    for (const id of inviteesByActivity[f.activityId] ?? []) allRecipients.add(id)
+  }
 
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, fcm_token, web_push_subscription')
     .in('id', Array.from(allRecipients))
 
+  type WebPushSub = { endpoint: string; keys: { p256dh: string; auth: string } }
   const tokenMap: Record<string, string> = {}
-  const webPushMap: Record<string, any>  = {}
+  const webPushMap: Record<string, WebPushSub> = {}
   for (const p of profiles ?? []) {
-    if (p.fcm_token)              tokenMap[p.id]    = p.fcm_token
-    if (p.web_push_subscription)  webPushMap[p.id]  = p.web_push_subscription
+    if (p.fcm_token)             tokenMap[p.id]   = p.fcm_token
+    if (p.web_push_subscription) webPushMap[p.id] = p.web_push_subscription as WebPushSub
   }
 
   let sent = 0
 
-  await Promise.all(allCandidates.map(async act => {
-    const recipients = recipientMap[act.id] ?? []
-    const isReminder = act.category === 'reminder'
-    const label      = act.emoji ? `${act.emoji} ${act.title}` : act.title
+  await Promise.all(fires.map(async fire => {
+    const label  = fire.emoji ? `${fire.emoji} ${fire.title}` : fire.title
+    const recipients = [fire.userId, ...(inviteesByActivity[fire.activityId] ?? [])]
+    const isReminderCategory = fire.category === 'reminder'
+
+    // Title style differs by whether the activity is itself a "reminder" (bell)
+    // or a regular activity (clock). offset=0 collapses the "in N min" text to
+    // a more natural phrasing.
+    let pushTitle: string
+    if (fire.offset === 0) {
+      pushTitle = isReminderCategory ? `🔔 ${fire.title}` : `⏰ ${label}`
+    } else {
+      pushTitle = `${isReminderCategory ? '🔔' : '⏰'} ${formatOffsetEs(fire.offset)}: ${label}`
+    }
+    const body = randomMotivation()
+    const data = {
+      type: isReminderCategory ? 'activity_reminder' : 'activity_30min_reminder',
+      date: fire.date,
+      activityId: fire.activityId,
+      offsetMinutes: String(fire.offset),
+    }
 
     await Promise.all(recipients.map(async uid => {
-      const token = tokenMap[uid]
-
+      const token  = tokenMap[uid]
       const webSub = webPushMap[uid]
-      if (isReminder) {
-        const title = `🔔 ${act.title}`
-        const body  = randomMotivation()
-        const data  = { type: 'activity_reminder', date: act.date, activityId: act.id }
-        if (token)  { await sendFCM(token, title, body, data); sent++ }
-        if (webSub) { await sendWebPush(webSub, title, body, data); if (!token) sent++ }
-        // In-app notification so the bell lights up
-        await supabase.from('notifications').insert({
-          recipient_id: uid, actor_id: uid,
-          type: 'activity_reminder', activity_id: act.id,
-          message: `🔔 Recordatorio: ${act.title}`,
-        })
-      } else {
-        const title = `⏰ En ${act.minutesBefore} minutos: ${label}`
-        const body  = randomMotivation()
-        const data  = { type: 'activity_30min_reminder', date: act.date, activityId: act.id }
-        if (token)  { await sendFCM(token, title, body, data); sent++ }
-        if (webSub) { await sendWebPush(webSub, title, body, data); if (!token) sent++ }
-      }
+      if (token)  { await sendFCM(token, pushTitle, body, data); sent++ }
+      if (webSub) { await sendWebPush(webSub, pushTitle, body, data); if (!token) sent++ }
     }))
+
+    // In-app notification only for the reminder category, matching legacy behavior.
+    // Inserted once per fire (not once per recipient) — the bell shows the latest.
+    if (isReminderCategory) {
+      await Promise.all(recipients.map(uid =>
+        supabase.from('notifications').insert({
+          recipient_id: uid,
+          actor_id: uid,
+          type: 'activity_reminder',
+          activity_id: fire.activityId,
+          message: `🔔 Recordatorio: ${fire.title}`,
+        })
+      ))
+    }
   }))
 
-  return NextResponse.json({
-    sent,
-    reminders: reminderCandidates.length,
-    activities: activityCandidates.length,
-  })
+  return NextResponse.json({ sent, fires: fires.length })
 }

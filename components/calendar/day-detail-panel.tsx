@@ -427,8 +427,8 @@ export function DayDetailPanel({
                   <span className="text-[10px] text-primary font-medium">🔄 {t('calendar.recurring')}</span>
                 )}
 
-                {activity.tags?.slice(0, 2).map(tag => (
-                  <span key={tag} className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                {activity.tags?.slice(0, 2).map((tag, i) => (
+                  <span key={`${tag}-${i}`} className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary font-medium">
                     #{tag}
                   </span>
                 ))}

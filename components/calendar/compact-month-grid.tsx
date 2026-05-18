@@ -44,8 +44,8 @@ export function CompactMonthGrid({
     <div className="flex flex-col h-full px-2 pt-1 pb-0.5">
       {/* Day-name header */}
       <div className="grid grid-cols-7 mb-0.5">
-        {DAY_LABELS.map(d => (
-          <div key={d} className="text-center text-[10px] font-medium text-muted-foreground">{d}</div>
+        {DAY_LABELS.map((d, i) => (
+          <div key={i} className="text-center text-[10px] font-medium text-muted-foreground">{d}</div>
         ))}
       </div>
 

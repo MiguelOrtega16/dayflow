@@ -2,10 +2,18 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { format } from 'date-fns'
-import { X, Clock, Smile, Target, UserPlus, CheckCircle2, XCircle, Crown } from 'lucide-react'
+import {
+  addDays, addMonths, subMonths, format, parseISO,
+  startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  eachDayOfInterval, isSameMonth, isSameDay, isToday, nextSunday,
+} from 'date-fns'
+import {
+  X, Clock, Smile, UserPlus, CheckCircle2, XCircle, Crown,
+  Calendar as CalendarIcon, ChevronLeft, ChevronRight,
+  Bell, Repeat as RepeatIcon, Tag, Users, Eye, Lock,
+} from 'lucide-react'
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG, statusLabel, categoryLabel } from '@/lib/utils'
-import { useI18n, weekdayNarrow } from '@/lib/i18n'
+import { useI18n, weekdayNarrow, weekdayShort, dateFnsLocale } from '@/lib/i18n'
 import { useBackButtonClose } from '@/lib/back-button'
 import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
@@ -26,15 +34,12 @@ import type {
 // Keep in sync with the activities insert RLS in schema.sql.
 const PRO_RECURRENCE: RecurrenceType[] = ['weekdays', 'custom']
 
-// Per-frequency cap on total instances. Stops casual abuse without preventing
-// legitimate long-running schedules. The lib/api.ts RECURRENCE_HARD_CAP is the
-// floor under all of these.
 const MAX_INSTANCES_BY_UNIT: Record<RecurrenceFrequency, number> = {
-  hour:  168, // 1 week of hourly
-  day:   365, // 1 year
-  week:  104, // 2 years
-  month: 60,  // 5 years
-  year:  20,  // 20 years
+  hour:  168,
+  day:   365,
+  week:  104,
+  month: 60,
+  year:  20,
 }
 
 function effectiveFrequency(
@@ -55,7 +60,6 @@ function effectiveFrequency(
   return 'day'
 }
 
-// Repeats = total instances - 1 (the first occurrence isn't a "repeat").
 function maxRepeatsForFrequency(unit: RecurrenceFrequency): number {
   return Math.min(MAX_INSTANCES_BY_UNIT[unit], RECURRENCE_HARD_CAP) - 1
 }
@@ -78,6 +82,14 @@ function addMins(time: string, mins: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
+function fmt12(time: string): string {
+  if (!time) return ''
+  const [h, m] = time.split(':').map(Number)
+  const period = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 || 12
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`
+}
+
 interface ActivityFormModalProps {
   date: Date
   activity?: Activity | null
@@ -94,7 +106,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const isEditing = !!activity
   const router = useRouter()
 
-  // Hardware back button on Android closes this modal instead of the app.
   useBackButtonClose(true, onClose)
 
   // Core fields
@@ -130,16 +141,12 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [isPublic, setIsPublic]       = useState(activity?.is_public ?? false)
   const [completionPct, setCompletionPct] = useState(activity?.completion_percentage || 0)
   const tagsInput = activity?.tags?.join(', ') || ''
-  // Hidden but preserved on edit so existing priority/notes aren't lost
   const existingPriority = activity?.priority || 'medium'
   const existingNotes    = activity?.notes    || null
 
-  // Recurrence — initialise from the existing activity's stored config so
-  // editing a recurring activity actually shows its real settings.
+  // Recurrence
   const initialRecurrenceConfig = activity?.recurrence_config ?? {}
   const [recurrenceType, setRecurrenceType]     = useState<RecurrenceType>(activity?.recurrence_type || 'none')
-  // The input shows REPEATS (how many extra instances after the first); the
-  // generator works in total occurrences. Store as repeats, convert when saving.
   const [recurrenceCount, setRecurrenceCount]   = useState(
     Math.max(1, (initialRecurrenceConfig.occurrences ?? 10) - 1)
   )
@@ -155,20 +162,62 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [endDate, setEndDate]                   = useState<string>(initialRecurrenceConfig.end_date ?? '')
   const isReminder = category === 'reminder'
 
-  // Per-frequency clamp on the repeats input. Recomputed when the user changes
-  // the recurrence type or custom interval/days mode.
+  // Multi-reminder offsets
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>(
+    activity?.reminder_offsets && activity.reminder_offsets.length > 0
+      ? activity.reminder_offsets
+      : (activity?.category === 'reminder' ? [0] : [30])
+  )
+
+  // Mobile sheet — one open at a time. Each chip opens a focused bottom sheet
+  // instead of a positioned popover (popovers misbehave under the modal's
+  // transform-animated container in some browsers).
+  type SheetKey = 'type' | 'schedule' | 'invitees' | null
+  const [openSheet, setOpenSheet] = useState<SheetKey>(null)
+
+  // Inside the schedule sheet, the Time/Reminder/Repeat sub-rows expand inline.
+  type ScheduleRowKey = 'time' | 'reminder' | 'repeat' | null
+  const [openScheduleRow, setOpenScheduleRow] = useState<ScheduleRowKey>(null)
+
+  const FREE_REMINDER_LIMIT = 1
+  const REMINDER_HARD_CAP = 10
+  const REMINDER_PRESETS = [0, 5, 15, 30, 60, 1440] as const
+
+  const formatReminderOffset = (min: number): string => {
+    if (min === 0) return t('activityForm.reminderPresets.atStart')
+    if (min < 60) return t('activityForm.reminderPresets.minBefore', { count: min })
+    if (min < 1440) {
+      const h = Math.round(min / 60)
+      return t('activityForm.reminderPresets.hourBefore', { count: h })
+    }
+    const d = Math.round(min / 1440)
+    return t('activityForm.reminderPresets.dayBefore', { count: d })
+  }
+
+  const addReminderOffset = () => {
+    if (!entitlement.isPro && reminderOffsets.length >= FREE_REMINDER_LIMIT) {
+      openPaywall('multi_reminder')
+      return
+    }
+    if (reminderOffsets.length >= REMINDER_HARD_CAP) return
+    const unused = REMINDER_PRESETS.find(p => !reminderOffsets.includes(p)) ?? 30
+    setReminderOffsets(prev => [...prev, unused])
+  }
+  const updateReminderOffset = (idx: number, value: number) => {
+    setReminderOffsets(prev => prev.map((v, i) => (i === idx ? value : v)))
+  }
+  const removeReminderOffset = (idx: number) => {
+    setReminderOffsets(prev => prev.filter((_, i) => i !== idx))
+  }
+
   const effectiveUnit = effectiveFrequency(recurrenceType, customFrequency, daysOfWeek)
   const maxRepeats = maxRepeatsForFrequency(effectiveUnit)
 
-  // Whenever the cap drops below the current value (e.g. user switched from
-  // 'daily' to 'yearly'), pull the input back into range.
   useEffect(() => {
     if (recurrenceCount > maxRepeats) setRecurrenceCount(maxRepeats)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maxRepeats])
 
-  // Live count of how many activities will actually be created. Reuses the
-  // canonical generator so the preview always matches what the server stores.
   const previewCount = useMemo(() => {
     if (recurrenceType === 'none') return 0
     const cfg: Record<string, unknown> = {}
@@ -204,14 +253,11 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [showSuggestions, setShowSuggestions] = useState(false)
   const suggestTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Evidence image
-
-  // Participants — existing invitations (edit) + pending to send after save (both modes)
+  // Participants
   const [invitations, setInvitations]         = useState<ActivityInvitation[]>([])
   const [pendingInvitees, setPendingInvitees] = useState<Profile[]>([])
   const [inviteSearch, setInviteSearch]       = useState('')
   const [inviteResults, setInviteResults]     = useState<Profile[]>([])
-  // IDs of users with whom the current user has an accepted calendar share
   const [sharedUserIds, setSharedUserIds]     = useState<string[] | null>(null)
 
   useEffect(() => {
@@ -231,19 +277,21 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
       .catch(() => setSharedUserIds([]))
   }, [currentUser?.id])
 
-  // Title suggestions
   useEffect(() => {
     if (!currentUser || title.length < 2) { setSuggestions([]); setShowSuggestions(false); return }
     if (suggestTimeout.current) clearTimeout(suggestTimeout.current)
     suggestTimeout.current = setTimeout(() => {
       getActivityTitleSuggestions(currentUser.id, title)
-        .then(r => { setSuggestions(r.filter(s => s.toLowerCase() !== title.toLowerCase())); setShowSuggestions(true) })
+        .then(r => {
+          const unique = Array.from(new Set(r))
+          setSuggestions(unique.filter(s => s.toLowerCase() !== title.toLowerCase()))
+          setShowSuggestions(true)
+        })
         .catch(() => {})
     }, 280)
     return () => { if (suggestTimeout.current) clearTimeout(suggestTimeout.current) }
   }, [title, currentUser?.id])
 
-  // Invite search
   const alreadyInvitedIds = new Set([
     ...invitations.map(i => i.invitee_id),
     ...pendingInvitees.map(u => u.id),
@@ -267,7 +315,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     if (!title.trim()) { setTitleTouched(true); setSaveError(t('activityForm.titleEmpty')); return }
     if (!currentUser)  { setSaveError(t('activityForm.sessionExpired')); return }
     if (isReminder && !startTime) { setSaveError(t('activityForm.reminderRequiresTime')); return }
-    // Only the owner or an accepted invitee may edit an existing activity
     if (isEditing && activity!.user_id !== currentUser.id && !activity!.invitation_id) {
       setSaveError(t('activityForm.noPermission'))
       return
@@ -282,14 +329,13 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
       const evidenceUrl = activity?.evidence_image_url || null
 
       const payload: Record<string, unknown> = {
-        // On edit, preserve the original owner — never transfer ownership when a participant saves
         user_id:            isEditing ? activity!.user_id : currentUser.id,
         title:              title.trim(),
         description:        description.trim() || null,
         date:               selectedDate,
         status,
-        priority:           existingPriority,   // preserved; not exposed in UI
-        notes:              existingNotes,       // preserved; not exposed in UI
+        priority:           existingPriority,
+        notes:              existingNotes,
         category,
         goal_id:            goalId || null,
         emoji:              emoji || null,
@@ -300,8 +346,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
         tags,
         recurrence_type:    recurrenceType,
         recurrence_config:  recurrenceType !== 'none' ? {
-          // recurrenceCount is the user-facing REPEATS count; the generator
-          // expects total occurrences including the first → +1.
           ...(limitMode === 'count'
               ? { occurrences: recurrenceCount + 1 }
               : (endDate ? { end_date: endDate } : { occurrences: recurrenceCount + 1 })),
@@ -316,6 +360,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
         parent_activity_id: activity?.parent_activity_id || null,
         ...(activity?.invited_from_activity_id ? { invited_from_activity_id: activity.invited_from_activity_id } : {}),
         ...(evidenceUrl ? { evidence_image_url: evidenceUrl } : {}),
+        reminder_offsets: reminderOffsets.length > 0 ? reminderOffsets : null,
       }
 
       let savedId: string | null = null
@@ -330,7 +375,6 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
         savedId = created?.id ?? null
       }
 
-      // Send invitations to pending invitees
       if (savedId && pendingInvitees.length > 0) {
         for (const invitee of pendingInvitees) {
           await inviteToActivity(savedId, currentUser.id, invitee.id).catch(err =>
@@ -379,529 +423,683 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     declined: 'text-red-500',
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+  // ─── Chip value formatters ────────────────────────────────────────────────
 
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col animate-scale-in">
-        {/* Floating close button — replaces the removed header bar */}
-        <button
-          onClick={onClose}
-          aria-label={t('common.close')}
-          className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center rounded-lg bg-card/90 backdrop-blur hover:bg-muted text-muted-foreground transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
+  const dateChipValue = (() => {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd')
+    if (selectedDate === today) return t('activityForm.chip.today')
+    if (selectedDate === tomorrow) return t('activityForm.chip.tomorrow')
+    try { return format(parseISO(selectedDate), 'd MMM') } catch { return selectedDate }
+  })()
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 pt-5 pb-4 space-y-4">
+  const timeChipValue = (() => {
+    if (!startTime) return t('activityForm.dateTimeRow.noneShort')
+    if (isReminder || !endTime) return fmt12(startTime)
+    return `${fmt12(startTime)} – ${fmt12(endTime)}`
+  })()
 
+  const recurrenceChipValue = (() => {
+    if (recurrenceType === 'none') return t('activityForm.dateTimeRow.noneShort')
+    const baseLabel = t(`activityForm.recurrence.${recurrenceType}`)
+    if (limitMode === 'end_date' && endDate) {
+      try { return `${baseLabel} → ${format(parseISO(endDate), 'd MMM')}` }
+      catch { return baseLabel }
+    }
+    const repeats = recurrenceCount
+    return `${baseLabel} ×${repeats + 1}`
+  })()
 
-          {/* ── FORM ── */}
-          {true && (
-            <>
-              {/* Title with autocomplete + inline emoji picker */}
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                  {t('activityForm.titleLabel')} <span className="text-destructive">*</span>
-                </label>
-                <div className={cn(
-                  'relative flex items-center gap-2 rounded-xl border pl-2 pr-3 py-2 transition-colors',
-                  titleTouched && !title.trim()
-                    ? 'border-destructive ring-1 ring-destructive/40'
-                    : 'border-input focus-within:ring-2 focus-within:ring-ring'
-                )}>
-                  <div className="relative shrink-0">
-                    <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-base hover:bg-muted/80 transition-colors"
-                      title={t('activityForm.changeEmoji')}
-                    >
-                      {emoji || CATEGORY_CONFIG[category].emoji}
-                    </button>
-                    {showEmojiPicker && (
-                      <div className="absolute top-10 left-0 z-20 bg-popover border border-border rounded-xl p-2 shadow-lg grid grid-cols-8 gap-1 w-52">
-                        {EMOJIS.map(e => (
-                          <button key={e} type="button"
-                            onClick={ev => { ev.stopPropagation(); setEmoji(e); setShowEmojiPicker(false) }}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-base transition-colors"
-                          >{e}</button>
-                        ))}
-                        <button type="button"
-                          onClick={ev => { ev.stopPropagation(); setEmoji(''); setShowEmojiPicker(false) }}
-                          className="col-span-2 text-[10px] text-muted-foreground hover:text-foreground px-1 py-0.5 rounded hover:bg-muted transition-colors"
-                        >{t('activityForm.removeEmoji')}</button>
-                      </div>
-                    )}
-                  </div>
-                  <input ref={titleRef} type="text" value={title} onChange={e => setTitle(e.target.value)}
-                    onBlur={() => { setTitleTouched(true); setTimeout(() => setShowSuggestions(false), 150) }}
-                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                    placeholder={t('activityForm.titlePlaceholder')} required autoFocus
-                    className="flex-1 text-base font-medium bg-transparent border-none outline-none placeholder:text-muted-foreground/60 min-w-0 disabled:opacity-60"
-                  />
-                  <div className="relative shrink-0">
-                    <button type="button" onClick={() => setShowTitleEmoji(p => !p)}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                      title={t('activityForm.insertEmoji')}
-                    >
-                      <Smile className="w-4 h-4" />
-                    </button>
-                    {showTitleEmoji && (
-                      <div className="absolute top-9 right-0 z-20 bg-popover border border-border rounded-xl p-2 shadow-lg grid grid-cols-8 gap-1 w-52">
-                        {EMOJIS.map(e => (
-                          <button key={e} type="button"
-                            onClick={ev => { ev.stopPropagation(); insertTitleEmoji(e) }}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-base transition-colors"
-                          >{e}</button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {showSuggestions && suggestions.length > 0 && (
-                    <div className="absolute top-full left-0 right-8 z-20 mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
-                      {suggestions.map(s => (
-                        <button key={s} type="button"
-                          onMouseDown={() => { setTitle(s); setShowSuggestions(false) }}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors truncate"
-                        >{s}</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {titleTouched && !title.trim() && (
-                  <p className="text-xs text-destructive mt-1">{t('activityForm.titleRequired')}</p>
+  const inviteesChipValue = (() => {
+    const total = pendingInvitees.length + invitations.length
+    if (total === 0) return t('activityForm.chip.noInvitees')
+    if (total === 1) return t('activityForm.chip.onePerson')
+    return t('activityForm.chip.countPeople', { count: total })
+  })()
+
+  const remindersChipValue = (() => {
+    if (reminderOffsets.length === 0) return t('activityForm.dateTimeRow.noneShort')
+    if (reminderOffsets.length === 1) return formatReminderOffset(reminderOffsets[0])
+    return t('activityForm.chip.countReminders', { count: reminderOffsets.length })
+  })()
+
+  // ─── Schedule chip summary on mobile: brief 1-line digest ─────────────────
+  const scheduleChipSummary = (() => {
+    const parts: string[] = [dateChipValue]
+    if (startTime) parts.push(fmt12(startTime))
+    if (recurrenceType !== 'none') parts.push(t(`activityForm.recurrence.${recurrenceType}`))
+    return parts.join(' · ')
+  })()
+
+  // ─── Reusable content blocks (used by both desktop sections & mobile sheets) ─
+
+  function renderTypeContent() {
+    return (
+      <div className="grid grid-cols-2 gap-2">
+        {(Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
+          .filter(c => c !== 'habit' && c !== 'note')
+          .map(cat => {
+            const isSel = category === cat
+            return (
+              <button key={cat} type="button"
+                onClick={() => { setCategory(cat); setOpenSheet(prev => prev === 'type' ? null : prev) }}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-left transition-colors border',
+                  isSel
+                    ? 'bg-primary/10 border-primary text-primary font-medium'
+                    : 'bg-card border-border hover:border-foreground/30',
                 )}
+              >
+                <span className="text-base">{CATEGORY_CONFIG[cat].emoji}</span>
+                <span className="truncate">{categoryLabel(cat, locale)}</span>
+              </button>
+            )
+          })}
+      </div>
+    )
+  }
+
+  function renderInviteesContent() {
+    return (
+      <div className="space-y-2">
+        <p className="text-[11px] text-muted-foreground">
+          {t('activityForm.inviteHelp')}
+        </p>
+
+        {sharedUserIds !== null && sharedUserIds.length === 0 ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-xl px-3 py-2.5">
+            {t('activityForm.noContactsHint')}{' '}
+            <button
+              type="button"
+              className="font-bold underline hover:opacity-70 transition-opacity"
+              onClick={() => { onClose(); router.push('/dashboard/people') }}
+            >{t('people.title')}</button>.
+          </p>
+        ) : (
+          <input type="text" value={inviteSearch} onChange={e => setInviteSearch(e.target.value)}
+            placeholder={t('activityForm.contactsSearch')}
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        )}
+        {inviteResults.length > 0 && (
+          <div className="border border-border rounded-xl overflow-hidden">
+            {inviteResults.map(u => (
+              <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 border-b border-border last:border-b-0">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                  style={{ backgroundColor: u.color }}>
+                  {u.full_name?.[0] || u.email[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{u.full_name || u.username || u.email}</p>
+                  <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                </div>
+                <button type="button"
+                  onClick={() => handleAddPending(u)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  <UserPlus className="w-3 h-3" />
+                  {t('activityForm.invite')}
+                </button>
               </div>
+            ))}
+          </div>
+        )}
 
-              {/* Description — hidden in this build; data is still preserved on edit */}
-
-              {/* Category — compact dropdown */}
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('activityForm.categoryLabel')}</label>
-                <CustomSelect
-                  value={category}
-                  onChange={(v) => setCategory(v as ActivityCategory)}
-                  ariaLabel={t('activityForm.categoryLabel')}
-                  options={(Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
-                    .filter(c => c !== 'habit' && c !== 'note')
-                    .map(cat => ({
-                      value: cat,
-                      label: `${CATEGORY_CONFIG[cat].emoji} ${categoryLabel(cat, locale)}`,
-                    }))}
-                />
+        {pendingInvitees.length > 0 && (
+          <div className="space-y-1.5">
+            {pendingInvitees.map(u => (
+              <div key={u.id} className="flex items-center gap-3 py-1.5">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                  style={{ backgroundColor: u.color }}>
+                  {u.full_name?.[0] || u.email[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{u.full_name || u.email}</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">{t('activityForm.pendingInvite')}</p>
+                </div>
+                <button type="button" onClick={() => setPendingInvitees(prev => prev.filter(x => x.id !== u.id))}
+                  className="w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
+            ))}
+          </div>
+        )}
 
+        {invitations.length > 0 && (
+          <div className="space-y-1.5">
+            {invitations.map(inv => {
+              const person = inv.invitee
+              return (
+                <div key={inv.id} className="flex items-center gap-3 py-1.5">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                    style={{ backgroundColor: person?.color || '#6366f1' }}>
+                    {person?.avatar_url
+                      ? <img src={person.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                      : (person?.full_name?.[0] || person?.email?.[0] || '?')}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{person?.full_name || person?.email}</p>
+                    <p className={cn('text-xs font-medium', INV_STATUS_COLOR[inv.status])}>
+                      {t(`invitationStatus.${inv.status as 'pending' | 'accepted' | 'declined'}`)}
+                    </p>
+                  </div>
+                  {inv.status === 'pending' && (
+                    <button type="button" onClick={() => handleCancelInvitation(inv.id)}
+                      className="w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title={t('activityForm.cancelInvitation')}>
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {inv.status === 'accepted' && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
+                  {inv.status === 'declined' && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Renders the Schedule sub-modal body — calendar, quick picks, then three
+  // collapsible rows for Time / Reminder / Repeat. Reused on desktop with
+  // `forceOpenRows` so every section is permanently visible.
+  function renderScheduleContent({ forceOpenRows }: { forceOpenRows?: boolean } = {}) {
+    const isRowOpen = (row: NonNullable<ScheduleRowKey>) =>
+      forceOpenRows ? true : openScheduleRow === row
+    const toggleRow = (row: NonNullable<ScheduleRowKey>) =>
+      setOpenScheduleRow(prev => (prev === row ? null : row))
+
+    return (
+      <div className="space-y-3">
+        <MonthGrid
+          selectedDate={selectedDate}
+          onSelect={d => setSelectedDate(d)}
+          locale={locale}
+        />
+
+        <QuickPicks
+          selectedDate={selectedDate}
+          onPick={d => setSelectedDate(d)}
+          t={t}
+        />
+
+        <div className="border-t border-border pt-2 space-y-1">
+          {/* Time */}
+          <ScheduleRow
+            icon={<Clock className="w-4 h-4 text-muted-foreground" />}
+            label={t('activityForm.dateTimeRow.time')}
+            value={timeChipValue}
+            open={isRowOpen('time')}
+            forceOpen={!!forceOpenRows}
+            onClick={() => toggleRow('time')}
+          >
+            <div className="pt-2 space-y-2">
               {isReminder ? (
-                /* Reminder: single row — Time left, Date right */
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {t('activityForm.hour')} <span className="text-primary font-bold">*</span>
-                    </label>
-                    <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('activityForm.date')}</label>
-                    <input type="date" lang={locale} value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-                      className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
+                <div className="flex items-center gap-3">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1 shrink-0">
+                    {t('activityForm.hour')} <span className="text-primary font-bold">*</span>
+                  </label>
+                  <TimePicker value={startTime} onChange={handleStartTimeChange} />
                 </div>
               ) : (
-                <>
-                  {/* Date row */}
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('activityForm.date')}</label>
-                    <input type="date" lang={locale} value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-                      className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-muted-foreground shrink-0">
+                      {t('activityForm.startTime')}
+                    </label>
+                    <TimePicker value={startTime} onChange={handleStartTimeChange} />
                   </div>
-                  {/* Time row */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-muted-foreground shrink-0">
+                      {t('activityForm.endTime')}
+                    </label>
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {t('activityForm.startTime')}
-                      </label>
-                      <TimePicker value={startTime} onChange={handleStartTimeChange} placeholder="--" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {t('activityForm.endTime')}
-                      </label>
-                      <TimePicker value={endTime} onChange={handleEndTimeChange} placeholder="--" />
+                      <TimePicker value={endTime} onChange={handleEndTimeChange} />
                       {endTimeError && (
                         <p className="text-xs text-destructive mt-1">{t('activityForm.endAfterStart')}</p>
                       )}
                     </div>
                   </div>
-                </>
-              )}
-
-              {/* Status — hidden for reminders and during creation; shown only when editing */}
-              {!isReminder && isEditing && <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('activityForm.status')}</label>
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-                  {(Object.keys(STATUS_CONFIG) as ActivityStatus[]).map(s => (
-                    <button key={s} type="button" onClick={() => setStatus(s)}
-                      className={cn('py-1.5 px-2 rounded-xl border text-xs font-medium transition-all text-center',
-                        status === s
-                          ? cn('border-transparent', STATUS_CONFIG[s].bgColor, STATUS_CONFIG[s].textColor)
-                          : 'border-border text-muted-foreground hover:border-primary/40'
-                      )}
-                    >{statusLabel(s, locale)}</button>
-                  ))}
-                </div>
-              </div>}
-
-              {/* ── Repeat ── */}
-              <div className="border-t border-border/50 pt-4 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs font-medium text-muted-foreground shrink-0">{t('activityForm.repeat')}</label>
-                  <div className="flex-1">
-                    <CustomSelect
-                      value={recurrenceType}
-                      onChange={(v) => {
-                        const next = v as RecurrenceType
-                        // Pro-only recurrence patterns trigger the paywall for
-                        // free users. Existing values stay (re-selecting same
-                        // value doesn't fire onChange, so grandfathered Pro
-                        // recurrence on edited activities is preserved).
-                        if (!entitlement.isPro && PRO_RECURRENCE.includes(next)) {
-                          openPaywall('advanced_recurrence')
-                          return
-                        }
-                        setRecurrenceType(next)
-                      }}
-                      ariaLabel={t('activityForm.repeatFreq')}
-                      options={(() => {
-                        const base = [
-                          { value: 'none',    label: t('activityForm.recurrence.none')    },
-                          { value: 'hourly',  label: t('activityForm.recurrence.hourly')  },
-                          { value: 'daily',   label: t('activityForm.recurrence.daily')   },
-                          { value: 'weekly',  label: t('activityForm.recurrence.weekly')  },
-                          { value: 'monthly', label: t('activityForm.recurrence.monthly') },
-                          { value: 'yearly',  label: t('activityForm.recurrence.yearly')  },
-                          { value: 'custom',  label: t('activityForm.recurrence.custom'),  pro: true },
-                        ] as const
-                        // Surface the legacy 'weekdays' option only when the
-                        // current activity already uses it — keeps grandfathered
-                        // edits working without polluting new-activity choices.
-                        const opts: Array<{ value: RecurrenceType; label: string; pro?: boolean }> = [...base]
-                        if (recurrenceType === 'weekdays') {
-                          opts.splice(opts.length - 1, 0, {
-                            value: 'weekdays',
-                            label: t('activityForm.recurrence.weekdays'),
-                            pro: true,
-                          })
-                        }
-                        // Reminders historically only allowed a subset.
-                        return isReminder
-                          ? opts.filter(o => ['none','hourly','daily','weekly','monthly','yearly'].includes(o.value))
-                          : opts
-                      })()}
-                    />
-                  </div>
-                </div>
-
-                {/* Hourly requires a start time so we know where to anchor each instance. */}
-                {recurrenceType === 'hourly' && !startTime && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    {t('activityForm.hourlyNeedsStartTime')}
-                  </p>
-                )}
-
-                {/* Custom recurrence: interval+frequency OR days-of-week. */}
-                {recurrenceType === 'custom' && (
-                  <div className="space-y-2">
-                    <div className="flex gap-1 rounded-lg bg-muted/40 p-1 text-xs">
-                      <button type="button" onClick={() => setCustomMode('interval')}
-                        className={cn('flex-1 rounded-md py-1.5 font-medium transition-colors',
-                          customMode === 'interval' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
-                      >{t('activityForm.recurrenceCustom.modeInterval')}</button>
-                      <button type="button" onClick={() => setCustomMode('days')}
-                        className={cn('flex-1 rounded-md py-1.5 font-medium transition-colors',
-                          customMode === 'days' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
-                      >{t('activityForm.recurrenceCustom.modeDays')}</button>
-                    </div>
-
-                    {customMode === 'interval' ? (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground shrink-0">{t('activityForm.recurrenceCustom.every')}</span>
-                        <input type="number" min={1} max={999} value={customInterval}
-                          onChange={e => setCustomInterval(Math.max(1, Math.min(999, Number(e.target.value) || 1)))}
-                          className="w-16 text-center rounded-lg border border-input bg-background px-2 py-1.5 outline-none focus:ring-2 focus:ring-ring tabular-nums"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <CustomSelect
-                            value={customFrequency}
-                            onChange={(v) => setCustomFrequency(v as RecurrenceFrequency)}
-                            options={[
-                              { value: 'hour',  label: t('activityForm.recurrenceCustom.freqHour')  },
-                              { value: 'day',   label: t('activityForm.recurrenceCustom.freqDay')   },
-                              { value: 'week',  label: t('activityForm.recurrenceCustom.freqWeek')  },
-                              { value: 'month', label: t('activityForm.recurrenceCustom.freqMonth') },
-                              { value: 'year',  label: t('activityForm.recurrenceCustom.freqYear')  },
-                            ]}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex gap-1.5 flex-wrap">
-                        {DAY_LABELS.map((label, i) => (
-                          <button key={i} type="button"
-                            onClick={() => setDaysOfWeek(prev => prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i])}
-                            className={cn('w-8 h-8 rounded-full text-xs font-medium border transition-all',
-                              daysOfWeek.includes(i) ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40'
-                            )}
-                          >{label}</button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Limit by: count (free) vs end date (Pro). */}
-                {recurrenceType !== 'none' && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">{t('activityForm.recurrenceLimit.label')}</span>
-                      <div className="flex gap-1 rounded-lg bg-muted/40 p-1 text-xs">
-                        <button type="button" onClick={() => setLimitMode('count')}
-                          className={cn('rounded-md px-2.5 py-1 font-medium transition-colors',
-                            limitMode === 'count' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
-                        >{t('activityForm.recurrenceLimit.count')}</button>
-                        <button type="button"
-                          onClick={() => {
-                            if (!entitlement.isPro) {
-                              openPaywall('advanced_recurrence')
-                              return
-                            }
-                            setLimitMode('end_date')
-                          }}
-                          className={cn('flex items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-colors',
-                            limitMode === 'end_date' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
-                        >
-                          <span>{t('activityForm.recurrenceLimit.endDate')}</span>
-                          {!entitlement.isPro && <Crown className="w-3 h-3 text-indigo-500" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {limitMode === 'count' ? (
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs text-muted-foreground">{t('activityForm.timesCount')}</label>
-                        <input type="number" min={1} max={maxRepeats} value={recurrenceCount}
-                          onChange={e => setRecurrenceCount(Math.max(1, Math.min(maxRepeats, Number(e.target.value) || 1)))}
-                          className="w-20 text-center rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
-                        />
-                      </div>
-                    ) : (
-                      <input type="date" value={endDate} min={selectedDate}
-                        onChange={e => setEndDate(e.target.value)}
-                        className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-                      />
-                    )}
-
-                    {/* Live "will create N activities" preview. Cap-warning style
-                        when the generator hits its hard ceiling — usually means
-                        the end_date is too far out. */}
-                    {previewCount > 1 && (
-                      <p className={cn(
-                        'text-[11px]',
-                        previewCount >= RECURRENCE_HARD_CAP
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-muted-foreground'
-                      )}>
-                        {t(
-                          previewCount >= RECURRENCE_HARD_CAP
-                            ? 'activityForm.recurrencePreviewCapped'
-                            : 'activityForm.recurrencePreview',
-                          { count: previewCount },
-                        )}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Completion (only in_progress) */}
-              {status === 'in_progress' && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-medium text-muted-foreground">{t('activityForm.progressLabel')}</label>
-                    <input type="number" min={0} max={100} value={completionPct}
-                      onChange={e => setCompletionPct(Math.max(0, Math.min(100, Number(e.target.value))))}
-                      className="w-16 text-center rounded-lg border border-input bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
-                    />
-                  </div>
-                  <input type="range" min={0} max={100} value={completionPct}
-                    onChange={e => setCompletionPct(Number(e.target.value))}
-                    className="w-full accent-primary"
-                  />
-                </div>
-              )}
-
-              {/* Evidence hidden — feature preserved in DB/API but not exposed in UI */}
-
-              {/* Goal — temporarily hidden together with the Metas nav item.
-                  goalId state still flows through to the payload (empty string),
-                  so re-enabling is just removing the `false &&` guard below. */}
-              {false && !isReminder && goals.length > 0 && (
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                    <Target className="w-3 h-3" /> {t('activityForm.linkGoal')}
-                  </label>
-                  <select value={goalId} onChange={e => setGoalId(e.target.value)}
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">{t('activityForm.noGoal')}</option>
-                    {goals.map(g => <option key={g.id} value={g.id}>{g.emoji} {g.title}</option>)}
-                  </select>
-                </div>
-              )}
-
-              {/* ── Visibility toggle ── */}
-              <div className="border-t border-border/50 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsPublic(!isPublic)}
-                  className={cn(
-                    'w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors',
-                    isPublic
-                      ? 'border-primary/40 bg-primary/5 text-primary'
-                      : 'border-border bg-muted/30 text-muted-foreground'
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{isPublic ? '👁' : '🔒'}</span>
-                    <div className="text-left">
-                      <p className="text-sm font-medium">{isPublic ? t('activityForm.visible') : t('activityForm.private')}</p>
-                      <p className="text-[11px] opacity-70">
-                        {isPublic ? t('activityForm.visibleHelp') : t('activityForm.privateHelp')}
-                      </p>
-                    </div>
-                  </div>
-                  <div className={cn('w-9 h-5 rounded-full transition-colors relative shrink-0', isPublic ? 'bg-primary' : 'bg-muted-foreground/30')}>
-                    <div className={cn('absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform', isPublic ? 'translate-x-4' : 'translate-x-0.5')} />
-                  </div>
-                </button>
-              </div>
-
-              {/* ── Invite people ── */}
-              <div className="border-t border-border/50 pt-4">
-                <div className="mb-2">
-                  <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                    <UserPlus className="w-3 h-3" /> {t('activityForm.invitePeople')}
-                  </span>
-                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                    {t('activityForm.inviteHelp')}
-                  </p>
-                </div>
-
-                {sharedUserIds !== null && sharedUserIds.length === 0 ? (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-xl px-3 py-2.5">
-                    {t('activityForm.noContactsHint')}{' '}
+                  {startTime && (
                     <button
                       type="button"
-                      className="font-bold underline hover:opacity-70 transition-opacity"
-                      onClick={() => { onClose(); router.push('/dashboard/people') }}
-                    >{t('people.title')}</button>.
-                  </p>
-                ) : (
-                  <input type="text" value={inviteSearch} onChange={e => setInviteSearch(e.target.value)}
-                    placeholder={t('activityForm.contactsSearch')}
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  />
-                )}
-                {inviteResults.length > 0 && (
-                  <div className="mt-1 border border-border rounded-xl overflow-hidden">
-                    {inviteResults.map(u => (
-                      <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 border-b border-border last:border-b-0">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                          style={{ backgroundColor: u.color }}>
-                          {u.full_name?.[0] || u.email[0]}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{u.full_name || u.username || u.email}</p>
-                          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                        </div>
-                        <button type="button"
-                          onClick={() => handleAddPending(u)}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                        >
-                          <UserPlus className="w-3 h-3" />
-                          {t('activityForm.invite')}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      onClick={() => { setStartTime(''); setEndTime(''); setEndTimeError(false) }}
+                      className="text-xs text-muted-foreground hover:text-destructive underline"
+                    >
+                      {t('common.clear')}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </ScheduleRow>
 
-                {/* Pending invitees (pre-save, create mode) */}
-                {pendingInvitees.length > 0 && (
-                  <div className="mt-2 space-y-1.5">
-                    {pendingInvitees.map(u => (
-                      <div key={u.id} className="flex items-center gap-3 py-1.5">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                          style={{ backgroundColor: u.color }}>
-                          {u.full_name?.[0] || u.email[0]}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{u.full_name || u.email}</p>
-                          <p className="text-xs text-amber-600 dark:text-amber-400">{t('activityForm.pendingInvite')}</p>
-                        </div>
-                        <button type="button" onClick={() => setPendingInvitees(prev => prev.filter(x => x.id !== u.id))}
-                          className="w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {/* Reminder */}
+          <ScheduleRow
+            icon={<Bell className="w-4 h-4 text-muted-foreground" />}
+            label={t('activityForm.dateTimeRow.reminder')}
+            value={remindersChipValue}
+            open={isRowOpen('reminder')}
+            forceOpen={!!forceOpenRows}
+            onClick={() => toggleRow('reminder')}
+          >
+            <div className="pt-2 space-y-2">
+              <p className="text-[11px] text-muted-foreground">
+                {t('activityForm.remindersHelp')}
+              </p>
 
-                {/* Existing invitations (edit mode) */}
-                {invitations.length > 0 && (
-                  <div className="mt-2 space-y-1.5">
-                    {invitations.map(inv => {
-                      const person = inv.invitee
-                      return (
-                        <div key={inv.id} className="flex items-center gap-3 py-1.5">
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                            style={{ backgroundColor: person?.color || '#6366f1' }}>
-                            {person?.avatar_url
-                              ? <img src={person.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                              : (person?.full_name?.[0] || person?.email?.[0] || '?')}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{person?.full_name || person?.email}</p>
-                            <p className={cn('text-xs font-medium', INV_STATUS_COLOR[inv.status])}>
-                              {t(`invitationStatus.${inv.status as 'pending' | 'accepted' | 'declined'}`)}
-                            </p>
-                          </div>
-                          {inv.status === 'pending' && (
-                            <button type="button" onClick={() => handleCancelInvitation(inv.id)}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title={t('activityForm.cancelInvitation')}>
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+              {reminderOffsets.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">
+                  {t('activityForm.chip.noReminders')}
+                </p>
+              )}
+
+              {reminderOffsets.map((offset, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <CustomSelect
+                      value={String(offset)}
+                      onChange={(v) => updateReminderOffset(idx, Number(v))}
+                      options={REMINDER_PRESETS.map(p => ({
+                        value: String(p),
+                        label: formatReminderOffset(p),
+                      }))}
+                    />
+                  </div>
+                  <button type="button"
+                    onClick={() => removeReminderOffset(idx)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    aria-label={t('common.remove')}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+
+              {reminderOffsets.length < REMINDER_HARD_CAP && (
+                <button type="button"
+                  onClick={addReminderOffset}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-1.5 text-xs font-medium transition-colors w-full justify-center',
+                    !entitlement.isPro && reminderOffsets.length >= FREE_REMINDER_LIMIT
+                      ? 'border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/5'
+                      : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
+                  )}
+                >
+                  <span>+ {t('activityForm.addReminder')}</span>
+                  {!entitlement.isPro && reminderOffsets.length >= FREE_REMINDER_LIMIT && (
+                    <Crown className="w-3 h-3 text-indigo-500" />
+                  )}
+                </button>
+              )}
+            </div>
+          </ScheduleRow>
+
+          {/* Repeat */}
+          <ScheduleRow
+            icon={<RepeatIcon className="w-4 h-4 text-muted-foreground" />}
+            label={t('activityForm.dateTimeRow.repeat')}
+            value={recurrenceChipValue}
+            open={isRowOpen('repeat')}
+            forceOpen={!!forceOpenRows}
+            onClick={() => toggleRow('repeat')}
+          >
+            <div className="pt-2 space-y-3">
+              <CustomSelect
+                value={recurrenceType}
+                onChange={(v) => {
+                  const next = v as RecurrenceType
+                  if (!entitlement.isPro && PRO_RECURRENCE.includes(next)) {
+                    openPaywall('advanced_recurrence')
+                    return
+                  }
+                  setRecurrenceType(next)
+                }}
+                ariaLabel={t('activityForm.repeatFreq')}
+                options={(() => {
+                  const base = [
+                    { value: 'none',    label: t('activityForm.recurrence.none')    },
+                    { value: 'hourly',  label: t('activityForm.recurrence.hourly')  },
+                    { value: 'daily',   label: t('activityForm.recurrence.daily')   },
+                    { value: 'weekly',  label: t('activityForm.recurrence.weekly')  },
+                    { value: 'monthly', label: t('activityForm.recurrence.monthly') },
+                    { value: 'yearly',  label: t('activityForm.recurrence.yearly')  },
+                    { value: 'custom',  label: t('activityForm.recurrence.custom'),  pro: true },
+                  ] as const
+                  const opts: Array<{ value: RecurrenceType; label: string; pro?: boolean }> = [...base]
+                  if (recurrenceType === 'weekdays') {
+                    opts.splice(opts.length - 1, 0, {
+                      value: 'weekdays',
+                      label: t('activityForm.recurrence.weekdays'),
+                      pro: true,
+                    })
+                  }
+                  return isReminder
+                    ? opts.filter(o => ['none','hourly','daily','weekly','monthly','yearly'].includes(o.value))
+                    : opts
+                })()}
+              />
+
+              {recurrenceType === 'hourly' && !startTime && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {t('activityForm.hourlyNeedsStartTime')}
+                </p>
+              )}
+
+              {recurrenceType === 'custom' && (
+                <div className="space-y-2">
+                  <div className="flex gap-1 rounded-lg bg-muted/40 p-1 text-xs">
+                    <button type="button" onClick={() => setCustomMode('interval')}
+                      className={cn('flex-1 rounded-md py-1.5 font-medium transition-colors',
+                        customMode === 'interval' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                    >{t('activityForm.recurrenceCustom.modeInterval')}</button>
+                    <button type="button" onClick={() => setCustomMode('days')}
+                      className={cn('flex-1 rounded-md py-1.5 font-medium transition-colors',
+                        customMode === 'days' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                    >{t('activityForm.recurrenceCustom.modeDays')}</button>
+                  </div>
+
+                  {customMode === 'interval' ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground shrink-0">{t('activityForm.recurrenceCustom.every')}</span>
+                      <input type="number" min={1} max={999} value={customInterval}
+                        onChange={e => setCustomInterval(Math.max(1, Math.min(999, Number(e.target.value) || 1)))}
+                        className="w-16 text-center rounded-lg border border-input bg-background px-2 py-1.5 outline-none focus:ring-2 focus:ring-ring tabular-nums"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <CustomSelect
+                          value={customFrequency}
+                          onChange={(v) => setCustomFrequency(v as RecurrenceFrequency)}
+                          options={[
+                            { value: 'hour',  label: t('activityForm.recurrenceCustom.freqHour')  },
+                            { value: 'day',   label: t('activityForm.recurrenceCustom.freqDay')   },
+                            { value: 'week',  label: t('activityForm.recurrenceCustom.freqWeek')  },
+                            { value: 'month', label: t('activityForm.recurrenceCustom.freqMonth') },
+                            { value: 'year',  label: t('activityForm.recurrenceCustom.freqYear')  },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1.5 flex-wrap">
+                      {DAY_LABELS.map((label, i) => (
+                        <button key={i} type="button"
+                          onClick={() => setDaysOfWeek(prev => prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i])}
+                          className={cn('w-8 h-8 rounded-full text-xs font-medium border transition-all',
+                            daysOfWeek.includes(i) ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40'
                           )}
-                          {inv.status === 'accepted' && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
-                          {inv.status === 'declined' && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
-                        </div>
-                      )
-                    })}
+                        >{label}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {recurrenceType !== 'none' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">{t('activityForm.recurrenceLimit.label')}</span>
+                    <div className="flex gap-1 rounded-lg bg-muted/40 p-1 text-xs">
+                      <button type="button" onClick={() => setLimitMode('count')}
+                        className={cn('rounded-md px-2.5 py-1 font-medium transition-colors',
+                          limitMode === 'count' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                      >{t('activityForm.recurrenceLimit.count')}</button>
+                      <button type="button"
+                        onClick={() => {
+                          if (!entitlement.isPro) {
+                            openPaywall('advanced_recurrence')
+                            return
+                          }
+                          setLimitMode('end_date')
+                        }}
+                        className={cn('flex items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-colors',
+                          limitMode === 'end_date' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                      >
+                        <span>{t('activityForm.recurrenceLimit.endDate')}</span>
+                        {!entitlement.isPro && <Crown className="w-3 h-3 text-indigo-500" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {limitMode === 'count' ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-xs text-muted-foreground">{t('activityForm.timesCount')}</label>
+                      <input type="number" min={1} max={maxRepeats} value={recurrenceCount}
+                        onChange={e => setRecurrenceCount(Math.max(1, Math.min(maxRepeats, Number(e.target.value) || 1)))}
+                        className="w-20 text-center rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring tabular-nums"
+                      />
+                    </div>
+                  ) : (
+                    <input type="date" value={endDate} min={selectedDate}
+                      onChange={e => setEndDate(e.target.value)}
+                      className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  )}
+
+                  {previewCount > 1 && (
+                    <p className={cn(
+                      'text-[11px]',
+                      previewCount >= RECURRENCE_HARD_CAP
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-muted-foreground'
+                    )}>
+                      {t(
+                        previewCount >= RECURRENCE_HARD_CAP
+                          ? 'activityForm.recurrencePreviewCapped'
+                          : 'activityForm.recurrencePreview',
+                        { count: previewCount },
+                      )}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </ScheduleRow>
+        </div>
+      </div>
+    )
+  }
+
+  function renderVisibilityContent() {
+    return (
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setIsPublic(false)}
+          className={cn(
+            'flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors',
+            !isPublic ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border hover:border-foreground/30',
+          )}
+        >
+          <Lock className="w-4 h-4" />
+          {t('activityForm.private')}
+        </button>
+        <button type="button" onClick={() => setIsPublic(true)}
+          className={cn(
+            'flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors',
+            isPublic ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border hover:border-foreground/30',
+          )}
+        >
+          <Eye className="w-4 h-4" />
+          {t('activityForm.visible')}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+
+      <div className="relative bg-card border-border sm:border shadow-2xl w-full sm:max-w-2xl max-h-[92vh] flex flex-col animate-scale-in rounded-t-2xl sm:rounded-2xl">
+        {/* Mobile bottom-sheet drag handle */}
+        <div className="sm:hidden flex justify-center pt-2 pb-1 shrink-0">
+          <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+        </div>
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          aria-label={t('common.close')}
+          className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center rounded-lg bg-card/90 hover:bg-muted text-muted-foreground transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto">
+
+          {/* HEADER — emoji + title (always visible) */}
+          <div className="px-5 pt-5 pb-3">
+            <div className={cn(
+              'relative flex items-center gap-2 rounded-xl border pl-2 pr-2 py-2 transition-colors',
+              titleTouched && !title.trim()
+                ? 'border-destructive ring-1 ring-destructive/40'
+                : 'border-input focus-within:ring-2 focus-within:ring-ring'
+            )}>
+              <div className="relative shrink-0">
+                <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-xl hover:bg-muted/80 transition-colors"
+                  title={t('activityForm.changeEmoji')}
+                >
+                  {emoji || CATEGORY_CONFIG[category].emoji}
+                </button>
+                {showEmojiPicker && (
+                  <div className="absolute top-12 left-0 z-20 bg-popover border border-border rounded-xl p-2 shadow-lg grid grid-cols-8 gap-1 w-52">
+                    {EMOJIS.map(e => (
+                      <button key={e} type="button"
+                        onClick={ev => { ev.stopPropagation(); setEmoji(e); setShowEmojiPicker(false) }}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-base transition-colors"
+                      >{e}</button>
+                    ))}
+                    <button type="button"
+                      onClick={ev => { ev.stopPropagation(); setEmoji(''); setShowEmojiPicker(false) }}
+                      className="col-span-2 text-[10px] text-muted-foreground hover:text-foreground px-1 py-0.5 rounded hover:bg-muted transition-colors"
+                    >{t('activityForm.removeEmoji')}</button>
                   </div>
                 )}
               </div>
+              <input ref={titleRef} type="text" value={title} onChange={e => setTitle(e.target.value)}
+                onBlur={() => { setTitleTouched(true); setTimeout(() => setShowSuggestions(false), 150) }}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                placeholder={t('activityForm.titlePlaceholder')} required autoFocus
+                className="flex-1 text-base font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground/60 min-w-0"
+              />
+              <div className="relative shrink-0">
+                <button type="button" onClick={() => setShowTitleEmoji(p => !p)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title={t('activityForm.insertEmoji')}
+                >
+                  <Smile className="w-4 h-4" />
+                </button>
+                {showTitleEmoji && (
+                  <div className="absolute top-10 right-0 z-20 bg-popover border border-border rounded-xl p-2 shadow-lg grid grid-cols-8 gap-1 w-52">
+                    {EMOJIS.map(e => (
+                      <button key={e} type="button"
+                        onClick={ev => { ev.stopPropagation(); insertTitleEmoji(e) }}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-base transition-colors"
+                      >{e}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-8 z-20 mt-1 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
+                  {suggestions.map((s, i) => (
+                    <button key={`${s}-${i}`} type="button"
+                      onMouseDown={() => { setTitle(s); setShowSuggestions(false) }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors truncate"
+                    >{s}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {titleTouched && !title.trim() && (
+              <p className="text-xs text-destructive mt-1.5">{t('activityForm.titleRequired')}</p>
+            )}
+          </div>
 
-            </>
-          )}
+          {/* MOBILE CHIP RAIL — opens bottom-sheets */}
+          <div className="sm:hidden px-5 pb-3">
+            <div className="flex flex-wrap gap-2">
+              <ChipBtn icon={<Tag className="w-3.5 h-3.5" />}
+                label={t('activityForm.section.type')}
+                value={categoryLabel(category, locale)}
+                onClick={() => setOpenSheet('type')}
+              />
+              <ChipBtn icon={<CalendarIcon className="w-3.5 h-3.5" />}
+                label={dateChipValue}
+                value={scheduleChipSummary !== dateChipValue ? scheduleChipSummary.replace(`${dateChipValue} · `, '') : ''}
+                onClick={() => setOpenSheet('schedule')}
+              />
+              {!isReminder && (
+                <ChipBtn icon={<Users className="w-3.5 h-3.5" />}
+                  label={t('activityForm.section.invitees')}
+                  value={inviteesChipValue}
+                  onClick={() => setOpenSheet('invitees')}
+                />
+              )}
+              <ChipBtn icon={isPublic ? <Eye className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                label={t('activityForm.section.visibility')}
+                value={isPublic ? t('activityForm.visible') : t('activityForm.private')}
+                onClick={() => setIsPublic(p => !p)}
+              />
+            </div>
+          </div>
+
+          {/* DESKTOP — always-open sections */}
+          <div className="hidden sm:block px-5 pb-3 space-y-4">
+            <DesktopSection icon={<Tag className="w-4 h-4" />} title={t('activityForm.section.type')}>
+              {renderTypeContent()}
+            </DesktopSection>
+
+            <DesktopSection icon={<CalendarIcon className="w-4 h-4" />} title={t('activityForm.section.dateTime')}>
+              {renderScheduleContent({ forceOpenRows: true })}
+            </DesktopSection>
+
+            {!isReminder && (
+              <DesktopSection icon={<Users className="w-4 h-4" />} title={t('activityForm.section.invitees')}>
+                {renderInviteesContent()}
+              </DesktopSection>
+            )}
+
+            <DesktopSection icon={isPublic ? <Eye className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+              title={t('activityForm.section.visibility')}>
+              {renderVisibilityContent()}
+            </DesktopSection>
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex flex-col gap-2 px-5 py-3 border-t border-border">
+        {/* FOOTER — status + actions */}
+        <div className="flex flex-col gap-2 px-5 py-3 border-t border-border shrink-0">
           {saveError && (
             <p className="text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">{saveError}</p>
           )}
+
+          {!isReminder && isEditing && (
+            <div>
+              <div className="grid grid-cols-5 gap-1.5">
+                {(Object.keys(STATUS_CONFIG) as ActivityStatus[]).map(s => (
+                  <button key={s} type="button" onClick={() => setStatus(s)}
+                    className={cn('py-1.5 px-1 rounded-lg border text-[11px] font-medium transition-all text-center',
+                      status === s
+                        ? cn('border-transparent', STATUS_CONFIG[s].bgColor, STATUS_CONFIG[s].textColor)
+                        : 'border-border text-muted-foreground hover:border-primary/40'
+                    )}
+                  >{statusLabel(s, locale)}</button>
+                ))}
+              </div>
+              {status === 'in_progress' && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input type="range" min={0} max={100} value={completionPct}
+                    onChange={e => setCompletionPct(Number(e.target.value))}
+                    className="flex-1 accent-primary"
+                  />
+                  <span className="text-xs tabular-nums w-10 text-right">{completionPct}%</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-end gap-2">
             <button type="button" onClick={onClose}
               className="px-4 py-2 text-sm font-medium rounded-xl border border-border hover:bg-muted transition-colors">
@@ -924,6 +1122,272 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
           </div>
         </div>
       </div>
+
+      {/* MOBILE SHEETS — rendered above the main modal */}
+      <BottomSheet
+        open={openSheet === 'type'}
+        title={t('activityForm.section.type')}
+        onClose={() => setOpenSheet(null)}
+      >
+        {renderTypeContent()}
+      </BottomSheet>
+
+      <BottomSheet
+        open={openSheet === 'schedule'}
+        title={t('activityForm.section.dateTime')}
+        onClose={() => { setOpenSheet(null); setOpenScheduleRow(null) }}
+      >
+        {renderScheduleContent()}
+      </BottomSheet>
+
+      <BottomSheet
+        open={openSheet === 'invitees'}
+        title={t('activityForm.section.invitees')}
+        onClose={() => setOpenSheet(null)}
+      >
+        {renderInviteesContent()}
+      </BottomSheet>
+    </div>
+  )
+}
+
+// ─── ChipBtn — pill in the mobile rail ────────────────────────────────────────
+interface ChipBtnProps {
+  icon?: React.ReactNode
+  label: string
+  value?: string
+  onClick: () => void
+}
+
+function ChipBtn({ icon, label, value, onClick }: ChipBtnProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs border transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'border-border bg-card hover:border-foreground/30',
+      )}
+    >
+      {icon && <span className="text-muted-foreground shrink-0">{icon}</span>}
+      <span className="font-medium text-foreground">{label}</span>
+      {value && <span className="text-muted-foreground truncate max-w-[160px]">{value}</span>}
+    </button>
+  )
+}
+
+// ─── DesktopSection — always-open card on >= sm ──────────────────────────────
+function DesktopSection({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+        <span className="text-foreground/70">{icon}</span>
+        {title}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+// ─── BottomSheet — fullscreen-overlay sheet, slides up from bottom on mobile ─
+// Rendered above the main modal (z-[60]) and dismisses on backdrop click.
+function BottomSheet({
+  open, title, onClose, children,
+}: {
+  open: boolean
+  title: string
+  onClose: () => void
+  children: React.ReactNode
+}) {
+  const { t } = useI18n()
+  // Mount/unmount via `open` so the slide-in animation re-fires every time.
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4">
+      <div
+        className="absolute inset-0 bg-background/70 backdrop-blur-sm animate-in fade-in-0 duration-150"
+        onClick={onClose}
+      />
+      <div className={cn(
+        'relative bg-card border-border sm:border shadow-2xl w-full sm:max-w-md max-h-[88vh] flex flex-col rounded-t-2xl sm:rounded-2xl',
+        'animate-in duration-200',
+        'slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:zoom-in-95 sm:fade-in-0',
+      )}>
+        {/* Drag handle (mobile only) */}
+        <div className="sm:hidden flex justify-center pt-2 pb-1 shrink-0">
+          <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+        </div>
+
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
+          <h3 className="text-sm font-semibold">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common.close')}
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {children}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-4 py-2 border-t border-border shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors"
+          >
+            {t('common.ok')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── MonthGrid — inline calendar for the Schedule sheet ──────────────────────
+function MonthGrid({
+  selectedDate, onSelect, locale,
+}: {
+  selectedDate: string
+  onSelect: (iso: string) => void
+  locale: 'es' | 'en'
+}) {
+  const [viewMonth, setViewMonth] = useState<Date>(() => {
+    try { return parseISO(selectedDate) } catch { return new Date() }
+  })
+  const dayLabels = weekdayShort(locale)
+  const days = eachDayOfInterval({
+    start: startOfWeek(startOfMonth(viewMonth), { weekStartsOn: 0 }),
+    end:   endOfWeek(endOfMonth(viewMonth),   { weekStartsOn: 0 }),
+  })
+
+  return (
+    <div className="select-none">
+      <div className="flex items-center justify-center gap-4 mb-2">
+        <button type="button" onClick={() => setViewMonth(m => subMonths(m, 1))}
+          className="w-8 h-8 rounded-lg hover:bg-muted text-muted-foreground transition-colors flex items-center justify-center">
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <div className="text-sm font-semibold tabular-nums min-w-[120px] text-center">
+          {format(viewMonth, 'MMMM yyyy', { locale: dateFnsLocale(locale) }).toUpperCase()}
+        </div>
+        <button type="button" onClick={() => setViewMonth(m => addMonths(m, 1))}
+          className="w-8 h-8 rounded-lg hover:bg-muted text-muted-foreground transition-colors flex items-center justify-center">
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 mb-1">
+        {dayLabels.map((d, i) => (
+          <div key={i} className="text-center text-[10px] font-medium text-muted-foreground uppercase">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-0.5">
+        {days.map(day => {
+          const iso = format(day, 'yyyy-MM-dd')
+          const isSel = iso === selectedDate
+          const inMonth = isSameMonth(day, viewMonth)
+          const isTd = isToday(day)
+          return (
+            <button key={iso} type="button" onClick={() => onSelect(iso)}
+              className={cn(
+                'h-9 rounded-lg text-sm flex items-center justify-center transition-colors',
+                isSel
+                  ? 'bg-primary text-primary-foreground font-semibold'
+                  : isTd
+                    ? 'text-primary font-semibold hover:bg-muted'
+                    : inMonth
+                      ? 'text-foreground hover:bg-muted'
+                      : 'text-muted-foreground/40 hover:bg-muted',
+              )}
+            >
+              {format(day, 'd')}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── QuickPicks — Today / Tomorrow / +3 days / This Sunday ───────────────────
+function QuickPicks({
+  selectedDate, onPick, t,
+}: {
+  selectedDate: string
+  onPick: (iso: string) => void
+  t: (key: string, params?: Record<string, any>) => string
+}) {
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd')
+  const inThreeDays = format(addDays(new Date(), 3), 'yyyy-MM-dd')
+  const sunday = format(nextSunday(new Date()), 'yyyy-MM-dd')
+
+  const items: Array<{ value: string; label: string }> = [
+    { value: today,        label: t('activityForm.quickPick.today') },
+    { value: tomorrow,     label: t('activityForm.quickPick.tomorrow') },
+    { value: inThreeDays,  label: t('activityForm.quickPick.threeDaysLater') },
+    { value: sunday,       label: t('activityForm.quickPick.thisWeekend') },
+  ]
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map(it => (
+        <button key={it.label} type="button" onClick={() => onPick(it.value)}
+          className={cn(
+            'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+            selectedDate === it.value
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'bg-muted/40 border-border text-foreground hover:border-foreground/30',
+          )}
+        >
+          {it.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── ScheduleRow — row inside the Schedule sheet that expands on click ───────
+// On desktop the parent passes forceOpen=true so the chevron is hidden and the
+// row sits permanently expanded.
+function ScheduleRow({
+  icon, label, value, open, forceOpen, onClick, children,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  open: boolean
+  forceOpen?: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="border-b border-border last:border-b-0 py-1">
+      <button
+        type="button"
+        onClick={forceOpen ? undefined : onClick}
+        disabled={forceOpen}
+        className={cn(
+          'w-full flex items-center gap-3 px-1 py-2 rounded-lg transition-colors text-left',
+          !forceOpen && 'hover:bg-muted',
+        )}
+      >
+        <span className="shrink-0">{icon}</span>
+        <span className="text-sm font-medium flex-1 truncate">{label}</span>
+        {!open && (
+          <span className="text-xs text-muted-foreground truncate max-w-[60%]">{value}</span>
+        )}
+      </button>
+      {open && <div className="px-1 pb-1">{children}</div>}
     </div>
   )
 }

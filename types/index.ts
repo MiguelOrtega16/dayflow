@@ -115,6 +115,10 @@ export interface Activity {
   end_time: string | null
   recurrence_type: RecurrenceType
   recurrence_config: RecurrenceConfig | null
+  // Minutes-before-start_time. null/empty means "use the legacy default":
+  // 0 for category='reminder', 30 for everything else. Free tier capped at 1
+  // entry by RLS; Pro can have many (hard cap 10 by check constraint).
+  reminder_offsets: number[] | null
   parent_activity_id: string | null
   invited_from_activity_id?: string | null
   evidence_image_url?: string | null

@@ -253,6 +253,42 @@ do $$ begin
     check (completion_percentage >= 0 and completion_percentage <= 100);
 exception when duplicate_object then null; end $$;
 
+-- Multi-reminder: each integer is "minutes before start_time". A null/empty
+-- array means "use the legacy default" (0 for reminders, 30 for everything
+-- else) — see cron in app/api/cron/activity-30min-reminders.
+alter table public.activities add column if not exists reminder_offsets integer[];
+
+-- Hard cap on how many offsets a single activity can have. Stops abuse and
+-- matches the UI's "+ Add reminder" affordance limits.
+do $$ begin
+  alter table public.activities add constraint activities_reminder_offsets_len_check
+    check (reminder_offsets is null or array_length(reminder_offsets, 1) <= 10);
+exception when duplicate_object then null; end $$;
+
+-- Per-offset range validation lives in a trigger because CHECK constraints
+-- cannot contain subqueries (Postgres limitation). Cap each entry at 7 days
+-- (10080 min) so the cron's lookahead window stays bounded.
+create or replace function public.validate_reminder_offsets()
+returns trigger as $$
+declare
+  o integer;
+begin
+  if NEW.reminder_offsets is null then return NEW; end if;
+  foreach o in array NEW.reminder_offsets loop
+    if o < 0 or o > 10080 then
+      raise exception 'Reminder offset out of range (0-10080 minutes): %', o
+        using errcode = '23514';
+    end if;
+  end loop;
+  return NEW;
+end;
+$$ language plpgsql;
+
+drop trigger if exists validate_reminder_offsets_trigger on public.activities;
+create trigger validate_reminder_offsets_trigger
+  before insert or update on public.activities
+  for each row execute procedure public.validate_reminder_offsets();
+
 -- Self-referential FK for invited activities
 alter table public.activities
   drop constraint if exists activities_invited_from_activity_id_fkey;
@@ -306,6 +342,14 @@ create policy "Users can insert own activities"
       -- vs NEW in `with check`, and we want to grandfather any existing Pro
       -- recurrence so users can still edit other fields after downgrading.
       recurrence_type in ('none', 'hourly', 'daily', 'weekly', 'monthly', 'yearly')
+      or public.is_pro(auth.uid())
+    )
+    and (
+      -- Multi-reminder gate: free tier max 1 offset per activity. Pro is
+      -- unlimited (up to the hard cap of 10 enforced by the check constraint).
+      reminder_offsets is null
+      or array_length(reminder_offsets, 1) is null
+      or array_length(reminder_offsets, 1) <= 1
       or public.is_pro(auth.uid())
     )
   );
