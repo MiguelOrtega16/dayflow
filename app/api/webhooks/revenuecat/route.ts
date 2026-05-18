@@ -32,11 +32,17 @@ const RC_STORE_MAP: Record<string, BillingPlatform> = {
 
 function verifyRcAuth(header: string | null, secret: string): boolean {
   if (!header) return false
-  const expected = `Bearer ${secret}`
-  const a = Buffer.from(header)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
+  // RevenueCat sends whatever you put in the "Authorization header value" field
+  // verbatim, so both common conventions show up in the wild: with or without a
+  // "Bearer " prefix. Accept either — security is unchanged since the secret
+  // still has to match exactly.
+  const candidates = [secret, `Bearer ${secret}`]
+  const headerBuf = Buffer.from(header)
+  return candidates.some((expected) => {
+    const expectedBuf = Buffer.from(expected)
+    if (expectedBuf.length !== headerBuf.length) return false
+    return timingSafeEqual(headerBuf, expectedBuf)
+  })
 }
 
 export async function POST(request: Request) {
