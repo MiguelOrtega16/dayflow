@@ -31,6 +31,15 @@ alter table public.profiles add column if not exists fcm_token text;
 alter table public.profiles add column if not exists timezone text;
 alter table public.profiles add column if not exists web_push_subscription jsonb;
 
+-- User-level preferences blob. Shape (all fields optional, treat null as default):
+--   {
+--     "reminder_type": "notification" | "alarm",   -- routes FCM channel
+--     "ringtone":      "system" | "gentle" | ...    -- selected ringtone preset
+--   }
+-- Stored as jsonb so adding future settings doesn't require a migration; the
+-- client and cron each read just the keys they understand.
+alter table public.profiles add column if not exists preferences jsonb not null default '{}'::jsonb;
+
 alter table public.profiles enable row level security;
 
 drop policy if exists "Profiles are viewable by authenticated users" on public.profiles;

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Crown, ChevronRight, LayoutPanelTop, Bell } from 'lucide-react'
+import { Crown, ChevronRight, LayoutPanelTop, Bell, LogOut } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { USER_COLORS, FREE_USER_COLORS, isProColor, getInitials } from '@/lib/utils'
@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [isNative, setIsNative] = useState(false)
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false)
   const router = useRouter()
   const supabase = createClient()
   const { entitlement } = useEntitlement(profile?.id ?? null)
@@ -200,24 +201,53 @@ export default function SettingsPage() {
           />
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            {saving ? t('settings.saving') : saved ? t('settings.saved') : t('settings.save')}
-          </button>
-        </div>
+        {/* Primary Save button — full-width, padded to feel like the canonical
+            commit-changes action for the whole form above. */}
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full px-4 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+        >
+          {saving ? t('settings.saving') : saved ? t('settings.saved') : t('settings.save')}
+        </button>
       </form>
 
-      <div className="mt-8 pt-6 border-t border-border">
-        <button
-          onClick={handleSignOut}
-          className="text-sm text-destructive hover:underline font-medium"
-        >
-          {t('settings.signOut')}
-        </button>
+      {/* Account section — sign-out lives here in its own clearly-labeled
+          card with destructive styling + inline confirmation, so it's hard
+          to fire accidentally. */}
+      <div className="mt-8 bg-card border border-border rounded-2xl p-5 space-y-3">
+        <h2 className="text-sm font-semibold">{t('settings.accountSection')}</h2>
+
+        {confirmingSignOut ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 space-y-2.5">
+            <p className="text-sm text-foreground">{t('settings.signOutConfirm')}</p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmingSignOut(false)}
+                className="flex-1 px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="flex-1 px-3 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-semibold hover:bg-destructive/90 transition-colors"
+              >
+                {t('settings.signOutConfirmYes')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmingSignOut(true)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-destructive/30 text-destructive hover:bg-destructive/5 transition-colors"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span className="flex-1 text-left text-sm font-medium">{t('settings.signOut')}</span>
+          </button>
+        )}
       </div>
     </div>
   )

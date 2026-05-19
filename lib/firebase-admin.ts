@@ -42,11 +42,22 @@ export async function sendWebPush(
   }
 }
 
+interface SendFCMOptions {
+  /** Android notification channel id. If set, FCM routes the notification
+   *  through this channel — used to escalate alarm-type reminders to a
+   *  higher-importance channel with stronger vibration. */
+  androidChannelId?: string
+  /** Optional notification sound for iOS. Android sound is governed by the
+   *  channel; setting it here is a no-op on Android. */
+  apnsSound?: string
+}
+
 export async function sendFCM(
   token: string,
   title: string,
   body: string,
   extraData?: Record<string, string>,
+  options?: SendFCMOptions,
 ) {
   const messaging = await getFirebaseMessaging()
   if (!messaging) return
@@ -55,8 +66,11 @@ export async function sendFCM(
       token,
       notification: { title, body },
       data: { url: '/dashboard', ...extraData },
-      android: { priority: 'high' },
-      apns:    { payload: { aps: { sound: 'default', badge: 1 } } },
+      android: {
+        priority: 'high',
+        ...(options?.androidChannelId ? { notification: { channelId: options.androidChannelId } } : {}),
+      },
+      apns: { payload: { aps: { sound: options?.apnsSound ?? 'default', badge: 1 } } },
     })
   } catch (err: any) {
     console.error('[FCM] send error:', err?.message ?? err)

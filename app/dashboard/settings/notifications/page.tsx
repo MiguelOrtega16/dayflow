@@ -2,24 +2,19 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ChevronRight, Crown, Mic, Music } from 'lucide-react'
+import { ArrowLeft, Info, Crown, Mic, Music } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { cn } from '@/lib/utils'
+import {
+  getUserPreferences, updateUserPreferences,
+  type ReminderType, type Ringtone,
+} from '@/lib/user-preferences'
 
-// Persisted in localStorage. Per-device on purpose: the ringtone you want on
-// your phone may differ from what you'd want on a tablet, and the actual
-// audio piping (when we wire it) is device-local anyway.
-const LS_REMINDER_TYPE = 'dayflow:reminderType'
-const LS_RINGTONE      = 'dayflow:ringtone'
-
-type ReminderType = 'notification' | 'alarm'
-
-const RINGTONE_KEYS = ['system', 'gentle', 'chime', 'digital', 'marimba', 'bell'] as const
-type Ringtone = typeof RINGTONE_KEYS[number]
+const RINGTONE_KEYS: readonly Ringtone[] = ['system', 'gentle', 'chime', 'digital', 'marimba', 'bell']
 
 export default function NotificationsSettingsPage() {
   const { t } = useI18n()
@@ -39,23 +34,40 @@ export default function NotificationsSettingsPage() {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
   }, [])
 
-  // Read persisted prefs once.
+  // Load persisted prefs from the user's profile (the cron reads from this
+  // same column to route Alarm-type pushes to the high-importance channel).
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const rt = localStorage.getItem(LS_REMINDER_TYPE) as ReminderType | null
-    const rg = localStorage.getItem(LS_RINGTONE) as Ringtone | null
-    if (rt === 'notification' || rt === 'alarm') setReminderType(rt)
-    if (rg && (RINGTONE_KEYS as readonly string[]).includes(rg)) setRingtone(rg as Ringtone)
-  }, [])
+    if (!userId) return
+    getUserPreferences(userId)
+      .then(prefs => {
+        setReminderType(prefs.reminder_type)
+        setRingtone(prefs.ringtone)
+      })
+      .catch(err => console.error('[notif-settings] load prefs failed', err))
+  }, [userId])
 
-  const updateReminderType = (next: ReminderType) => {
-    setReminderType(next)
-    localStorage.setItem(LS_REMINDER_TYPE, next)
+  const persistReminderType = async (next: ReminderType) => {
+    if (!userId) return
+    const previous = reminderType
+    setReminderType(next)  // optimistic
+    try {
+      await updateUserPreferences(userId, { reminder_type: next })
+    } catch (err) {
+      console.error('[notif-settings] save reminder_type failed', err)
+      setReminderType(previous)  // rollback
+    }
   }
 
-  const updateRingtone = (next: Ringtone) => {
-    setRingtone(next)
-    localStorage.setItem(LS_RINGTONE, next)
+  const persistRingtone = async (next: Ringtone) => {
+    if (!userId) return
+    const previous = ringtone
+    setRingtone(next)  // optimistic
+    try {
+      await updateUserPreferences(userId, { ringtone: next })
+    } catch (err) {
+      console.error('[notif-settings] save ringtone failed', err)
+      setRingtone(previous)  // rollback
+    }
   }
 
   const handleRecordCustom = () => {
@@ -89,7 +101,9 @@ export default function NotificationsSettingsPage() {
 
       <div className="p-4 space-y-4 max-w-lg mx-auto w-full">
         {/* Troubleshoot row — same on mobile + desktop, page renders different
-            content based on platform. */}
+            content based on platform. Right-aligned info icon (instead of the
+            usual chevron) signals "tap to learn more" rather than "more
+            settings inside". */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <button
             type="button"
@@ -100,7 +114,7 @@ export default function NotificationsSettingsPage() {
               <span className="block text-sm font-medium">{t('notifSettings.troubleshoot.rowLabel')}</span>
               <span className="block text-xs text-muted-foreground truncate">{t('notifSettings.troubleshoot.rowSub')}</span>
             </span>
-            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            <Info className="w-4 h-4 text-muted-foreground shrink-0" />
           </button>
         </div>
 
@@ -118,7 +132,7 @@ export default function NotificationsSettingsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => updateReminderType('notification')}
+                  onClick={() => persistReminderType('notification')}
                   className={cn(
                     'rounded-xl border px-3 py-2.5 text-sm text-left transition-colors',
                     reminderType === 'notification'
@@ -130,7 +144,7 @@ export default function NotificationsSettingsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => updateReminderType('alarm')}
+                  onClick={() => persistReminderType('alarm')}
                   className={cn(
                     'rounded-xl border px-3 py-2.5 text-sm text-left transition-colors relative',
                     reminderType === 'alarm'
@@ -138,10 +152,7 @@ export default function NotificationsSettingsPage() {
                       : 'border-border hover:border-foreground/30',
                   )}
                 >
-                  <span className="block">{t('notifSettings.taskReminder.typeAlarm')}</span>
-                  <span className="block text-[10px] text-muted-foreground font-normal mt-0.5">
-                    {t('notifSettings.taskReminder.alarmComingSoon')}
-                  </span>
+                  {t('notifSettings.taskReminder.typeAlarm')}
                 </button>
               </div>
             </div>
@@ -158,7 +169,7 @@ export default function NotificationsSettingsPage() {
                     <button
                       key={r}
                       type="button"
-                      onClick={() => updateRingtone(r)}
+                      onClick={() => persistRingtone(r)}
                       className={cn(
                         'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm text-left transition-colors',
                         sel

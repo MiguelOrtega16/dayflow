@@ -55,12 +55,46 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return new Uint8Array(Array.from(raw, c => c.charCodeAt(0)))
 }
 
+/**
+ * Declare both reminder channels on Android. Channels are global per-app and
+ * created once — subsequent createChannel calls with the same id are no-ops.
+ * The FCM server picks between the two via android.notification.channel_id
+ * based on the user's preferences.reminder_type.
+ */
+async function ensureReminderChannels() {
+  if (!Capacitor.isNativePlatform()) return
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications')
+    await LocalNotifications.createChannel({
+      id:          'activity-reminders',
+      name:        'Recordatorios de actividades',
+      description: 'Notificaciones estándar para tus recordatorios',
+      importance:  4,  // IMPORTANCE_HIGH
+      sound:       'default',
+      vibration:   true,
+    })
+    await LocalNotifications.createChannel({
+      id:          'activity-alarms',
+      name:        'Alarmas de actividades',
+      description: 'Alertas insistentes para recordatorios marcados como alarma',
+      importance:  5,  // IMPORTANCE_MAX
+      sound:       'default',
+      vibration:   true,
+      lights:      true,
+    })
+  } catch (err) {
+    console.error('[Push] channel init error:', err)
+  }
+}
+
 async function initNativePush(userId: string) {
   // Only runs inside the native Android/iOS app — no-op in browser
   if (!Capacitor.isNativePlatform()) return
 
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications')
+
+    await ensureReminderChannels()
 
     const permission = await PushNotifications.requestPermissions()
     if (permission.receive !== 'granted') return

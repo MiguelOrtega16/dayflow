@@ -372,6 +372,9 @@ export const messages = {
       saving: 'Guardando...',
       saved: '✓ ¡Guardado!',
       signOut: 'Cerrar sesión',
+      accountSection: 'Cuenta',
+      signOutConfirm: '¿Seguro que quieres cerrar sesión?',
+      signOutConfirmYes: 'Sí, cerrar sesión',
       personalizeSection: 'Personalizar',
       widgetRow: {
         label: 'Widget',
@@ -1132,6 +1135,9 @@ export const messages = {
       saving: 'Saving...',
       saved: '✓ Saved!',
       signOut: 'Sign out',
+      accountSection: 'Account',
+      signOutConfirm: 'Are you sure you want to sign out?',
+      signOutConfirmYes: 'Yes, sign out',
       personalizeSection: 'Customize',
       widgetRow: {
         label: 'Widget',

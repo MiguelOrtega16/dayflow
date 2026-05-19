@@ -178,15 +178,20 @@ export async function GET(request: Request) {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, fcm_token, web_push_subscription')
+    .select('id, fcm_token, web_push_subscription, preferences')
     .in('id', Array.from(allRecipients))
 
   type WebPushSub = { endpoint: string; keys: { p256dh: string; auth: string } }
   const tokenMap: Record<string, string> = {}
   const webPushMap: Record<string, WebPushSub> = {}
+  // Reminder type per user (notification | alarm). Defaults to 'notification'
+  // for any user whose preferences row is missing or doesn't set it.
+  const reminderTypeMap: Record<string, 'notification' | 'alarm'> = {}
   for (const p of profiles ?? []) {
     if (p.fcm_token)             tokenMap[p.id]   = p.fcm_token
     if (p.web_push_subscription) webPushMap[p.id] = p.web_push_subscription as WebPushSub
+    const prefs = (p.preferences ?? {}) as Record<string, unknown>
+    reminderTypeMap[p.id] = prefs.reminder_type === 'alarm' ? 'alarm' : 'notification'
   }
 
   let sent = 0
@@ -216,7 +221,12 @@ export async function GET(request: Request) {
     await Promise.all(recipients.map(async uid => {
       const token  = tokenMap[uid]
       const webSub = webPushMap[uid]
-      if (token)  { await sendFCM(token, pushTitle, body, data); sent++ }
+      // Route alarm-type reminders through the high-importance Android
+      // channel ('activity-alarms') which the native side declares with
+      // IMPORTANCE_HIGH + insistent vibration. Web push has no channels.
+      const isAlarm = reminderTypeMap[uid] === 'alarm'
+      const fcmOptions = isAlarm ? { androidChannelId: 'activity-alarms' } : undefined
+      if (token)  { await sendFCM(token, pushTitle, body, data, fcmOptions); sent++ }
       if (webSub) { await sendWebPush(webSub, pushTitle, body, data); if (!token) sent++ }
     }))
 
