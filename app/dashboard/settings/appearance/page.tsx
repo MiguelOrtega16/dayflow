@@ -21,7 +21,7 @@ export default function AppearanceSettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [color, setColor] = useState('#6366f1')
   const [savingColor, setSavingColor] = useState(false)
-  const { entitlement } = useEntitlement(profile?.id ?? null)
+  const { entitlement, loading: entitlementLoading } = useEntitlement(profile?.id ?? null)
   const { open: openPaywall } = usePaywall()
   const { palette, setPalette } = useTheme()
 
@@ -145,7 +145,7 @@ export default function AppearanceSettingsPage() {
             <div className="flex flex-wrap gap-2">
               {USER_COLORS.map(c => {
                 const isPro  = isProColor(c)
-                const locked = isPro && !!profile && !entitlement.loading && !entitlement.isPro
+                const locked = isPro && !!profile && !entitlementLoading && !entitlement.isPro
                 return (
                   <button
                     key={c}
@@ -173,7 +173,7 @@ export default function AppearanceSettingsPage() {
             <label className="block text-xs font-medium text-muted-foreground mb-2">{t('settings.themeLabel')}</label>
             <div className="grid grid-cols-3 gap-2">
               {THEMES.map(p => {
-                const locked   = !p.free && !!profile && !entitlement.loading && !entitlement.isPro
+                const locked   = !p.free && !!profile && !entitlementLoading && !entitlement.isPro
                 const selected = palette === p.id
                 return (
                   <button
