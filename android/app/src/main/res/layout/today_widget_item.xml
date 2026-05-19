@@ -9,17 +9,18 @@
     android:paddingTop="12dp"
     android:paddingBottom="12dp">
 
-    <!-- Circle indicator: ○ when pending, ● when done. Drawn as text so the
-         RemoteViews renderer doesn't need to inflate a vector drawable.
-         Sized for a comfortable tap target (~48dp+ including row padding). -->
-    <TextView
+    <!-- Status indicator: thin-stroke circle when pending, filled circle with
+         check when done. Uses vector drawables instead of Unicode glyphs so the
+         visible shape actually fills its bounds (text glyphs only cover ~60% of
+         the text box and look undersized for the available row space). Matches
+         the lucide Circle/CheckCircle2 used in the day-detail panel. -->
+    <ImageView
         android:id="@+id/item_circle"
         android:layout_width="40dp"
         android:layout_height="40dp"
-        android:gravity="center"
-        android:text="○"
-        android:textSize="30sp"
-        android:textColor="#888888"
+        android:padding="2dp"
+        android:src="@drawable/ic_widget_circle"
+        android:scaleType="fitCenter"
         android:contentDescription="Marcar como completado" />
 
     <TextView

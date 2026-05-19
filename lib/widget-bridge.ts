@@ -14,14 +14,20 @@ export interface WidgetConfig {
   opacity: number   // 0–100
 }
 
+/**
+ * Which widget provider is being targeted. Defaults to 'today' for backwards
+ * compatibility with calls that don't pass a kind explicitly.
+ */
+export type WidgetKind = 'today' | 'streak' | 'nextup'
+
 interface WidgetBridgePlugin {
   writeSnapshot(opts: { json: string }): Promise<void>
   writeAuth(opts: WidgetAuthPayload): Promise<void>
   clearAuth(): Promise<void>
   writeConfig(opts: { widgetId: number; color: string; opacity: number }): Promise<void>
   readConfig(opts: { widgetId: number }): Promise<WidgetConfig>
-  listWidgetIds(): Promise<{ ids: number[] }>
-  requestPin(): Promise<{ supported: boolean; requested: boolean }>
+  listWidgetIds(opts?: { widget?: WidgetKind }): Promise<{ ids: number[] }>
+  requestPin(opts?: { widget?: WidgetKind }): Promise<{ supported: boolean; requested: boolean }>
 }
 
 // Capacitor's registerPlugin returns a proxy that throws on web. We wrap each
@@ -52,13 +58,13 @@ export const WidgetBridge = {
       ? native.readConfig({ widgetId })
       : Promise.resolve({ color: '#7C6FE3', opacity: 95 }),
 
-  listWidgetIds: (): Promise<number[]> =>
+  listWidgetIds: (widget: WidgetKind = 'today'): Promise<number[]> =>
     isWidgetSupported()
-      ? native.listWidgetIds().then(r => r.ids)
+      ? native.listWidgetIds({ widget }).then(r => r.ids)
       : Promise.resolve([]),
 
-  requestPin: () =>
+  requestPin: (widget: WidgetKind = 'today') =>
     isWidgetSupported()
-      ? native.requestPin()
+      ? native.requestPin({ widget })
       : Promise.resolve({ supported: false, requested: false }),
 }

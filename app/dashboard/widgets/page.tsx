@@ -2,41 +2,66 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Plus, Settings, RefreshCcw } from 'lucide-react'
-import { WidgetBridge, isWidgetSupported } from '@/lib/widget-bridge'
+import { ArrowLeft, Plus, Settings, RefreshCcw, Crown, Lock } from 'lucide-react'
+import { WidgetBridge, isWidgetSupported, type WidgetKind } from '@/lib/widget-bridge'
 import { useI18n } from '@/lib/i18n'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
+import { usePaywall } from '@/components/paywall/paywall-provider'
+import { createClient } from '@/lib/supabase/client'
+
+interface WidgetCardConfig {
+  kind:           WidgetKind
+  pro:            boolean
+  name:           string
+  size:           string
+  bullets:        string[]
+  Preview:        React.ComponentType
+}
 
 export default function WidgetsPage() {
   const { t } = useI18n()
   const router = useRouter()
-  const [installedIds, setInstalledIds] = useState<number[]>([])
-  const [pinning, setPinning] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const { entitlement } = useEntitlement(userId)
+  const { open: openPaywall } = usePaywall()
+  const [installedByKind, setInstalledByKind] = useState<Record<WidgetKind, number[]>>({ today: [], streak: [], nextup: [] })
+  const [pinningKind, setPinningKind] = useState<WidgetKind | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ title: string; body: string } | null>(null)
   const supported = isWidgetSupported()
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
+  }, [])
 
   const toast = ({ title, description }: { title: string; description?: string }) =>
     setStatusMsg({ title, body: description ?? '' })
 
   const refreshIds = async () => {
-    const ids = await WidgetBridge.listWidgetIds()
-    setInstalledIds(ids)
+    const [today, streak, nextup] = await Promise.all([
+      WidgetBridge.listWidgetIds('today'),
+      WidgetBridge.listWidgetIds('streak'),
+      WidgetBridge.listWidgetIds('nextup'),
+    ])
+    setInstalledByKind({ today, streak, nextup })
   }
 
   useEffect(() => { refreshIds() }, [])
 
-  const handleAdd = async () => {
+  const handleAdd = async (cfg: WidgetCardConfig) => {
+    if (cfg.pro && !entitlement.isPro) {
+      openPaywall('locked_widget')
+      return
+    }
     if (!supported) {
       toast({ title: t('widgets.mobileOnlyTitle'), description: t('widgets.mobileOnlyBody') })
       return
     }
-    setPinning(true)
+    setPinningKind(cfg.kind)
     try {
-      const res = await WidgetBridge.requestPin()
+      const res = await WidgetBridge.requestPin(cfg.kind)
       if (!res.supported) {
-        toast({
-          title: t('widgets.addLauncherTitle'),
-          description: t('widgets.addLauncherBody'),
-        })
+        toast({ title: t('widgets.addLauncherTitle'), description: t('widgets.addLauncherBody') })
       } else if (!res.requested) {
         toast({ title: t('widgets.cantStartTitle'), description: t('widgets.cantStartBody') })
       } else {
@@ -44,7 +69,7 @@ export default function WidgetsPage() {
         setTimeout(refreshIds, 1500)
       }
     } finally {
-      setPinning(false)
+      setPinningKind(null)
     }
   }
 
@@ -55,8 +80,42 @@ export default function WidgetsPage() {
     t('widgets.bullets.refresh'),
   ]
 
+  const cards: WidgetCardConfig[] = [
+    {
+      kind: 'today',
+      pro: false,
+      name: t('widgets.todayName'),
+      size: `${t('widgets.sizeLabel')} 4 × 3`,
+      bullets: widgetBullets,
+      Preview: TodayPreview,
+    },
+    {
+      kind: 'streak',
+      pro: true,
+      name: t('widgets.streakName'),
+      size: `${t('widgets.sizeLabel')} 2 × 2`,
+      bullets: [t('widgets.streakSubtitle')],
+      Preview: StreakPreview,
+    },
+    {
+      kind: 'nextup',
+      pro: true,
+      name: t('widgets.nextupName'),
+      size: `${t('widgets.sizeLabel')} 4 × 1`,
+      bullets: [t('widgets.nextupSubtitle')],
+      Preview: NextUpPreview,
+    },
+  ]
+
   const bannerText = t('widgets.banner', { add: t('widgets.bannerAddBold') })
   const bannerParts = bannerText.split(t('widgets.bannerAddBold'))
+
+  // Flat list of all installed widget ids (across kinds) for the "Active" section.
+  const activeEntries: Array<{ id: number; kind: WidgetKind }> = [
+    ...installedByKind.today.map(id => ({ id, kind: 'today' as const })),
+    ...installedByKind.streak.map(id => ({ id, kind: 'streak' as const })),
+    ...installedByKind.nextup.map(id => ({ id, kind: 'nextup' as const })),
+  ]
 
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-background">
@@ -88,53 +147,90 @@ export default function WidgetsPage() {
       )}
 
       <div className="p-3 space-y-3">
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold">{t('widgets.todayName')}</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">{t('widgets.sizeLabel')} 4 × 3</p>
+        {cards.map(cfg => {
+          const locked = cfg.pro && !entitlement.isPro
+          return (
+            <div key={cfg.kind} className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-base font-semibold">{cfg.name}</h2>
+                    {cfg.pro && <Crown className="w-4 h-4 text-indigo-500 shrink-0" />}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{cfg.size}</p>
+                </div>
+                <button
+                  onClick={() => handleAdd(cfg)}
+                  disabled={pinningKind === cfg.kind}
+                  className={`shrink-0 px-4 py-1.5 rounded-full border-2 text-sm font-bold tracking-wider transition-colors disabled:opacity-50 ${
+                    locked
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500 hover:text-white'
+                      : 'border-primary text-primary hover:bg-primary hover:text-primary-foreground'
+                  }`}
+                >
+                  {pinningKind === cfg.kind
+                    ? '...'
+                    : locked
+                      ? <span className="flex items-center gap-1.5"><Lock className="w-3 h-3" /> PRO</span>
+                      : t('widgets.addBtn')}
+                </button>
+              </div>
+
+              <div className={locked ? 'relative opacity-70' : 'relative'}>
+                <cfg.Preview />
+                {locked && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-background/60 backdrop-blur-[1px]">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 text-xs font-bold">
+                      <Crown className="w-3.5 h-3.5" /> {t('widgets.proLockedTitle')}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <ul className="mt-3 space-y-1.5">
+                {cfg.bullets.map(b => (
+                  <li key={b} className="text-xs text-muted-foreground flex items-start gap-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <button
-              onClick={handleAdd}
-              disabled={pinning}
-              className="shrink-0 px-4 py-1.5 rounded-full border-2 border-primary text-primary text-sm font-bold tracking-wider hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50"
-            >
-              {pinning ? '...' : t('widgets.addBtn')}
-            </button>
-          </div>
-
-          <WidgetPreview />
-
-          <ul className="mt-3 space-y-1.5">
-            {widgetBullets.map(b => (
-              <li key={b} className="text-xs text-muted-foreground flex items-start gap-2">
-                <span className="text-primary mt-0.5">•</span>
-                <span>{b}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+          )
+        })}
       </div>
 
-      {installedIds.length > 0 && (
+      {activeEntries.length > 0 && (
         <div className="px-3 pb-6">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1 mb-2">
             {t('widgets.activeHeading')}
           </h3>
           <div className="rounded-xl border border-border bg-card divide-y divide-border">
-            {installedIds.map(id => (
-              <button
-                key={id}
-                onClick={() => router.push(`/dashboard/widget/${id}`)}
-                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors"
-              >
-                <div>
-                  <p className="text-sm font-medium">{t('widgets.widgetN', { id })}</p>
-                  <p className="text-xs text-muted-foreground">{t('widgets.customizeShort')}</p>
-                </div>
-                <Settings className="w-4 h-4 text-muted-foreground" />
-              </button>
-            ))}
+            {activeEntries.map(({ id, kind }) => {
+              // Only the Today widget has a customize page right now.
+              const canCustomize = kind === 'today'
+              const kindLabel = kind === 'streak'
+                ? t('widgets.streakName')
+                : kind === 'nextup'
+                  ? t('widgets.nextupName')
+                  : t('widgets.todayName')
+              return (
+                <button
+                  key={`${kind}-${id}`}
+                  onClick={() => canCustomize && router.push(`/dashboard/widget/${id}`)}
+                  disabled={!canCustomize}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors disabled:cursor-default"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{kindLabel}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {canCustomize ? t('widgets.customizeShort') : t('widgets.widgetN', { id })}
+                    </p>
+                  </div>
+                  {canCustomize && <Settings className="w-4 h-4 text-muted-foreground" />}
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -148,7 +244,8 @@ export default function WidgetsPage() {
   )
 }
 
-function WidgetPreview() {
+// ─── Today widget preview ────────────────────────────────────────────────────
+function TodayPreview() {
   const { t } = useI18n()
   return (
     <div className="rounded-2xl overflow-hidden border border-border/60 bg-background shadow-sm">
@@ -179,6 +276,30 @@ function PreviewRow({ label, time, done }: { label: string; time: string; done?:
       <div className={`w-3.5 h-3.5 rounded-full border ${done ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40'}`} />
       <span className={`flex-1 truncate ${done ? 'line-through text-muted-foreground' : ''}`}>{label}</span>
       <span className="text-[10px] text-muted-foreground">{time}</span>
+    </div>
+  )
+}
+
+// ─── Streak widget preview ──────────────────────────────────────────────────
+function StreakPreview() {
+  const { t } = useI18n()
+  return (
+    <div className="rounded-2xl overflow-hidden border border-border/60 bg-primary text-primary-foreground shadow-sm aspect-square max-w-[160px] mx-auto flex flex-col items-center justify-center px-4 py-6">
+      <div className="text-5xl font-bold leading-none">5</div>
+      <div className="text-[10px] font-bold tracking-widest mt-1">{t('widgets.previewLabels.streakDays')}</div>
+      <div className="text-xs opacity-80 mt-3">{t('widgets.previewLabels.todayShort', { done: 3, total: 7 })}</div>
+    </div>
+  )
+}
+
+// ─── NextUp widget preview ──────────────────────────────────────────────────
+function NextUpPreview() {
+  const { t } = useI18n()
+  return (
+    <div className="rounded-2xl overflow-hidden border border-border/60 bg-primary text-primary-foreground shadow-sm px-4 py-3">
+      <div className="text-[10px] font-bold tracking-widest opacity-80">{t('widgets.previewLabels.nextupKicker')}</div>
+      <div className="text-base font-bold mt-1 truncate">📅 {t('widgets.previewLabels.nextupSample')}</div>
+      <div className="text-xs opacity-80 mt-0.5">{t('widgets.previewLabels.nextupCountdown')}</div>
     </div>
   )
 }

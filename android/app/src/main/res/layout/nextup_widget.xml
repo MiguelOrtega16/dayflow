@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NextUp widget: 4x1 strip showing the soonest upcoming activity and a
+  countdown ("in 32 min", "in 2 h", "mañana 9:00"). Same render rules as
+  Today/Streak (no ImageView, no theme attrs, no vector drawables).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/nextup_bg"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="#7C6FE3">
+
+    <TextView
+        android:id="@+id/nextup_when"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="PRÓXIMA"
+        android:textColor="#FFFFFFCC"
+        android:textSize="10sp"
+        android:letterSpacing="0.1"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/nextup_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Sin actividades próximas"
+        android:textColor="#FFFFFF"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/nextup_countdown"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text=""
+        android:textColor="#FFFFFFCC"
+        android:textSize="13sp"
+        android:singleLine="true"
+        android:ellipsize="end" />
+</LinearLayout>

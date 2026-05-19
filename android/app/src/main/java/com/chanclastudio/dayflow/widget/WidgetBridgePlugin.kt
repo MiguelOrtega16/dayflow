@@ -34,7 +34,10 @@ class WidgetBridgePlugin : Plugin() {
             call.reject("Missing json"); return
         }
         WidgetStore.writeSnapshot(context, json)
+        // All three widget types pull from the same snapshot — re-render each.
         TodayWidgetProvider.renderAll(context)
+        StreakWidgetProvider.renderAll(context)
+        NextUpWidgetProvider.renderAll(context)
         call.resolve()
     }
 
@@ -96,10 +99,20 @@ class WidgetBridgePlugin : Plugin() {
         call.resolve(result)
     }
 
+    /** Resolves a "kind" string ("today" / "streak" / "nextup") to its provider
+     *  class. Defaults to Today for backwards compatibility with older callers
+     *  that omit the parameter. */
+    private fun providerFor(kind: String?): Class<*> = when (kind) {
+        "streak" -> StreakWidgetProvider::class.java
+        "nextup" -> NextUpWidgetProvider::class.java
+        else     -> TodayWidgetProvider::class.java
+    }
+
     @PluginMethod
     fun listWidgetIds(call: PluginCall) {
+        val kind = call.getString("widget")
         val mgr = AppWidgetManager.getInstance(context)
-        val cmp = ComponentName(context, TodayWidgetProvider::class.java)
+        val cmp = ComponentName(context, providerFor(kind))
         val ids = mgr.getAppWidgetIds(cmp)
         val result = com.getcapacitor.JSObject().apply {
             val arr = JSArray()
@@ -112,10 +125,12 @@ class WidgetBridgePlugin : Plugin() {
     /**
      * Programmatic widget pinning (Android 8+). Falls back to "open the
      * launcher's widget tray" instructions on older devices or launchers
-     * that don't support pinning.
+     * that don't support pinning. The optional `widget` arg selects which
+     * provider to pin ("today" / "streak" / "nextup").
      */
     @PluginMethod
     fun requestPin(call: PluginCall) {
+        val kind = call.getString("widget")
         val result = com.getcapacitor.JSObject()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             result.put("supported", false)
@@ -128,7 +143,7 @@ class WidgetBridgePlugin : Plugin() {
             result.put("requested", false)
             call.resolve(result); return
         }
-        val cmp = ComponentName(context, TodayWidgetProvider::class.java)
+        val cmp = ComponentName(context, providerFor(kind))
         val successCallback = PendingIntent.getBroadcast(
             context, 0,
             Intent(context, WidgetActionReceiver::class.java).apply {

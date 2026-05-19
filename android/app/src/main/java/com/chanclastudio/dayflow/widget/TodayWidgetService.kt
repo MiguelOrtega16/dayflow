@@ -113,15 +113,13 @@ class TodayWidgetFactory(private val ctx: Context) : RemoteViewsService.RemoteVi
 
                 setTextViewText(R.id.item_time, row.time ?: "")
 
-                // Circle: filled green ⬤ when done, hollow grey ○ otherwise.
-                // U+2B24 (⬤ BLACK LARGE CIRCLE) is used instead of U+25CF (●) so
-                // the filled and hollow states render at matching visual sizes —
-                // ● has no stroke and renders ~30% smaller than ○ at the same
-                // text size, which made completed tasks look like tiny dots.
-                setTextViewText(R.id.item_circle, if (row.done) "⬤" else "○")
-                setTextColor(
+                // Status circle: ic_widget_circle (thin grey outline) when
+                // pending, ic_widget_circle_done (filled green + white check)
+                // when completed. Vector drawables instead of glyphs so the
+                // shape fills the full ImageView bounds.
+                setImageViewResource(
                     R.id.item_circle,
-                    if (row.done) Color.parseColor("#22C55E") else Color.parseColor("#888888"),
+                    if (row.done) R.drawable.ic_widget_circle_done else R.drawable.ic_widget_circle,
                 )
 
                 // Fill in the row's pending-intent template (defined in the provider)

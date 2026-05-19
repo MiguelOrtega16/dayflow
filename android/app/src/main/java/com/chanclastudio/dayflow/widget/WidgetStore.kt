@@ -51,6 +51,38 @@ object WidgetStore {
         return snap.optJSONArray("activities") ?: JSONArray()
     }
 
+    data class Stats(val streakDays: Int, val todayDone: Int, val todayTotal: Int)
+
+    /** Returns the precomputed stats block (streak + today completion).
+     *  Defaults to zeros if no snapshot has been written yet. */
+    fun readStats(ctx: Context): Stats {
+        val s = readSnapshot(ctx)?.optJSONObject("stats") ?: return Stats(0, 0, 0)
+        return Stats(
+            streakDays = s.optInt("streak_days", 0),
+            todayDone  = s.optInt("today_done", 0),
+            todayTotal = s.optInt("today_total", 0),
+        )
+    }
+
+    data class NextActivity(
+        val id:        String,
+        val title:     String,
+        val emoji:     String?,
+        val date:      String,     // yyyy-MM-dd
+        val startTime: String,     // HH:mm[:ss]
+    )
+
+    /** Returns the soonest upcoming activity from the snapshot, or null. */
+    fun readNextActivity(ctx: Context): NextActivity? {
+        val n = readSnapshot(ctx)?.optJSONObject("next") ?: return null
+        val id    = n.optString("id").takeIf { it.isNotBlank() } ?: return null
+        val title = n.optString("title")
+        val date  = n.optString("date").takeIf { it.isNotBlank() } ?: return null
+        val time  = n.optString("start_time").takeIf { it.isNotBlank() } ?: return null
+        val emoji = n.optString("emoji").takeIf { it.isNotBlank() && it != "null" }
+        return NextActivity(id, title, emoji, date, time)
+    }
+
     fun snapshotAge(ctx: Context): Long {
         val ts = prefs(ctx).getLong(K_SNAPSHOT_AT, 0L)
         if (ts == 0L) return Long.MAX_VALUE

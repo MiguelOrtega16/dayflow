@@ -37,12 +37,27 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- ── Home-screen widget ── -->
+        <!-- ── Home-screen widgets ── -->
         <receiver android:name=".widget.TodayWidgetProvider" android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/today_widget_info" />
+        </receiver>
+
+        <receiver android:name=".widget.StreakWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/streak_widget_info" />
+        </receiver>
+
+        <receiver android:name=".widget.NextUpWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.chanclastudio.dayflow.NEXTUP_TICK" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/nextup_widget_info" />
         </receiver>
 
         <receiver android:name=".widget.WidgetActionReceiver" android:exported="false">
