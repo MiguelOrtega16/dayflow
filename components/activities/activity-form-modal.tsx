@@ -603,8 +603,10 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
   // Renders the Schedule sub-modal body — calendar, quick picks, then three
   // collapsible rows for Time / Reminder / Repeat. Reused on desktop with
-  // `forceOpenRows` so every section is permanently visible.
-  function renderScheduleContent({ forceOpenRows }: { forceOpenRows?: boolean } = {}) {
+  // `forceOpenRows` so every section is permanently visible, and on desktop
+  // when creating with `hideCalendar` so the picker is suppressed (the parent
+  // view's selected day is authoritative).
+  function renderScheduleContent({ forceOpenRows, hideCalendar }: { forceOpenRows?: boolean; hideCalendar?: boolean } = {}) {
     const isRowOpen = (row: NonNullable<ScheduleRowKey>) =>
       forceOpenRows ? true : openScheduleRow === row
     const toggleRow = (row: NonNullable<ScheduleRowKey>) =>
@@ -612,19 +614,29 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
     return (
       <div className="space-y-3">
-        <MonthGrid
-          selectedDate={selectedDate}
-          onSelect={d => setSelectedDate(d)}
-          locale={locale}
-        />
+        {hideCalendar ? (
+          <div className="text-xs text-muted-foreground">
+            {(() => {
+              try { return format(parseISO(selectedDate), 'EEEE, d MMMM yyyy', { locale: dateFnsLocale(locale) }) }
+              catch { return selectedDate }
+            })()}
+          </div>
+        ) : (
+          <>
+            <MonthGrid
+              selectedDate={selectedDate}
+              onSelect={d => setSelectedDate(d)}
+              locale={locale}
+            />
+            <QuickPicks
+              selectedDate={selectedDate}
+              onPick={d => setSelectedDate(d)}
+              t={t}
+            />
+          </>
+        )}
 
-        <QuickPicks
-          selectedDate={selectedDate}
-          onPick={d => setSelectedDate(d)}
-          t={t}
-        />
-
-        <div className="border-t border-border pt-2 space-y-1">
+        <div className={cn(hideCalendar ? 'space-y-1' : 'border-t border-border pt-2 space-y-1')}>
           {/* Time */}
           <ScheduleRow
             icon={<Clock className="w-4 h-4 text-muted-foreground" />}
@@ -1053,7 +1065,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
             </DesktopSection>
 
             <DesktopSection icon={<CalendarIcon className="w-4 h-4" />} title={t('activityForm.section.dateTime')}>
-              {renderScheduleContent({ forceOpenRows: true })}
+              {renderScheduleContent({ forceOpenRows: true, hideCalendar: !isEditing })}
             </DesktopSection>
 
             {!isReminder && (
