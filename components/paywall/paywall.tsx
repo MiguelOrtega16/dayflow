@@ -20,6 +20,7 @@ export type PaywallTrigger =
   | 'evidence_limit'
   | 'attachments'
   | 'stats_export'
+  | 'custom_ringtone'
   | 'generic'
 
 const FEATURE_KEYS = ['sharing', 'power', 'widgetsThemes', 'attachExport', 'noAds'] as const

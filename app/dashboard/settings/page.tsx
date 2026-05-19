@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Crown } from 'lucide-react'
+import { Crown, ChevronRight, LayoutPanelTop, Bell } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { USER_COLORS, FREE_USER_COLORS, isProColor, getInitials } from '@/lib/utils'
 import { useI18n, LOCALE_NAMES, LOCALES, type Locale } from '@/lib/i18n'
@@ -19,10 +20,13 @@ export default function SettingsPage() {
   const [color, setColor] = useState('#6366f1')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [isNative, setIsNative] = useState(false)
   const router = useRouter()
   const supabase = createClient()
   const { entitlement } = useEntitlement(profile?.id ?? null)
   const { open: openPaywall } = usePaywall()
+
+  useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
 
   const handleColorClick = (c: string) => {
     if (isProColor(c) && !entitlement.isPro) {
@@ -172,6 +176,30 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Customize section — navigation rows to sub-pages. Widget is
+            native-only since the widget config only does anything inside
+            the Android app. */}
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <h2 className="text-sm font-semibold px-5 pt-5 pb-3">{t('settings.personalizeSection')}</h2>
+
+          {isNative && (
+            <SettingsNavRow
+              icon={<LayoutPanelTop className="w-5 h-5 text-primary" />}
+              title={t('settings.widgetRow.label')}
+              sub={t('settings.widgetRow.sub')}
+              onClick={() => router.push('/dashboard/widgets')}
+            />
+          )}
+
+          <SettingsNavRow
+            icon={<Bell className="w-5 h-5 text-primary" />}
+            title={t('settings.notificationsRow.label')}
+            sub={t('settings.notificationsRow.sub')}
+            onClick={() => router.push('/dashboard/settings/notifications')}
+            isLast
+          />
+        </div>
+
         <div className="flex items-center gap-3">
           <button
             type="submit"
@@ -192,5 +220,33 @@ export default function SettingsPage() {
         </button>
       </div>
     </div>
+  )
+}
+
+// ─── SettingsNavRow — list-row link to a sub-settings page ──────────────────
+function SettingsNavRow({
+  icon, title, sub, onClick, isLast,
+}: {
+  icon: React.ReactNode
+  title: string
+  sub: string
+  onClick: () => void
+  isLast?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-muted/40 transition-colors ${
+        isLast ? '' : 'border-b border-border'
+      }`}
+    >
+      <span className="shrink-0">{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-medium">{title}</span>
+        <span className="block text-xs text-muted-foreground truncate">{sub}</span>
+      </span>
+      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+    </button>
   )
 }
