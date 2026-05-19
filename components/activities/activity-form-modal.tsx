@@ -170,6 +170,22 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
       : (activity?.category === 'reminder' ? [0] : [30])
   )
 
+  // Reminders are read-only when editing a non-recurring activity that's
+  // already in the past — they can't fire anymore so changing them just
+  // confuses users. Recurring activities keep editable reminders since
+  // changes apply to future occurrences.
+  const isPastNonRecurring = isEditing && recurrenceType === 'none' && (() => {
+    if (!selectedDate) return false
+    if (startTime) {
+      // Treat the date/time as local. Falls past once the start moment is in the past.
+      return new Date(`${selectedDate}T${startTime}:00`).getTime() < Date.now()
+    }
+    // No specific start_time: past once the date is strictly before today.
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+    return new Date(`${selectedDate}T00:00:00`).getTime() < startOfToday.getTime()
+  })()
+
   // Mobile sheet — one open at a time. Each chip opens a focused bottom sheet
   // instead of a positioned popover (popovers misbehave under the modal's
   // transform-animated container in some browsers).
@@ -707,6 +723,12 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 {t('activityForm.remindersHelp')}
               </p>
 
+              {isPastNonRecurring && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-lg px-3 py-2">
+                  {t('activityForm.pastReminderNotice')}
+                </p>
+              )}
+
               {reminderOffsets.length === 0 && (
                 <p className="text-xs text-muted-foreground italic">
                   {t('activityForm.chip.noReminders')}
@@ -714,7 +736,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               )}
 
               {reminderOffsets.map((offset, idx) => (
-                <div key={idx} className="flex items-center gap-2">
+                <div key={idx} className={cn('flex items-center gap-2', isPastNonRecurring && 'opacity-60 pointer-events-none')}>
                   <div className="flex-1 min-w-0">
                     <CustomSelect
                       value={String(offset)}
@@ -727,7 +749,8 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                   </div>
                   <button type="button"
                     onClick={() => removeReminderOffset(idx)}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    disabled={isPastNonRecurring}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
                     aria-label={t('common.remove')}
                   >
                     <X className="w-4 h-4" />
@@ -735,7 +758,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 </div>
               ))}
 
-              {reminderOffsets.length < REMINDER_HARD_CAP && (
+              {!isPastNonRecurring && reminderOffsets.length < REMINDER_HARD_CAP && (
                 <button type="button"
                   onClick={addReminderOffset}
                   className={cn(
@@ -921,25 +944,33 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
 
   function renderVisibilityContent() {
     return (
-      <div className="flex gap-2">
-        <button type="button" onClick={() => setIsPublic(false)}
-          className={cn(
-            'flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors',
-            !isPublic ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border hover:border-foreground/30',
-          )}
-        >
-          <Lock className="w-4 h-4" />
-          {t('activityForm.private')}
-        </button>
-        <button type="button" onClick={() => setIsPublic(true)}
-          className={cn(
-            'flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors',
-            isPublic ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border hover:border-foreground/30',
-          )}
-        >
-          <Eye className="w-4 h-4" />
-          {t('activityForm.visible')}
-        </button>
+      <div className="space-y-2">
+        {/* Description swaps based on the current selection so the user
+            sees what "Private" / "Visible" actually means without having
+            to hover or open a tooltip. */}
+        <p className="text-[11px] text-muted-foreground">
+          {isPublic ? t('activityForm.visibleHelp') : t('activityForm.privateHelp')}
+        </p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setIsPublic(false)}
+            className={cn(
+              'flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors',
+              !isPublic ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border hover:border-foreground/30',
+            )}
+          >
+            <Lock className="w-4 h-4" />
+            {t('activityForm.private')}
+          </button>
+          <button type="button" onClick={() => setIsPublic(true)}
+            className={cn(
+              'flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors',
+              isPublic ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border hover:border-foreground/30',
+            )}
+          >
+            <Eye className="w-4 h-4" />
+            {t('activityForm.visible')}
+          </button>
+        </div>
       </div>
     )
   }
@@ -1089,8 +1120,14 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
             <p className="text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">{saveError}</p>
           )}
 
+          {/* Status pills — desktop only. On mobile the status is changed
+              via the 3-dot menu on the activity card or by cycling through
+              the status icon at the left of the card; rendering the pills
+              here too just adds clutter on a small viewport. The
+              in-progress completion slider stays here for desktop only too
+              since it's part of the same status control. */}
           {!isReminder && isEditing && (
-            <div>
+            <div className="hidden sm:block">
               <div className="grid grid-cols-5 gap-1.5">
                 {(Object.keys(STATUS_CONFIG) as ActivityStatus[]).map(s => (
                   <button key={s} type="button" onClick={() => setStatus(s)}
