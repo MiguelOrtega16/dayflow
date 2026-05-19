@@ -5,6 +5,7 @@ import { AppSidebar } from './app-sidebar'
 import { MobileBottomNav } from './mobile-bottom-nav'
 import { cn } from '@/lib/utils'
 import { initPushNotifications } from '@/lib/push-notifications'
+import { initVersionCheck } from '@/lib/version-check'
 import { initRevenueCat } from '@/lib/billing/revenuecat'
 import { PaywallProvider } from '@/components/paywall/paywall-provider'
 import { startWidgetAuthSync } from '@/lib/widget-sync'
@@ -27,6 +28,11 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
   useEffect(() => {
     if (profile?.id) initRevenueCat(profile.id)
   }, [profile?.id])
+
+  // Check Play Store for a newer APK once per dashboard mount. Forced (immediate)
+  // when installed versionCode < NEXT_PUBLIC_MIN_SUPPORTED_ANDROID_VERSION_CODE,
+  // otherwise a soft flexible update. Web / iOS are no-ops.
+  useEffect(() => { initVersionCheck() }, [])
 
   // Mirror the Supabase session into native storage so the home-screen widget
   // can refresh / toggle-done on its own. Hoisted to the dashboard shell so
