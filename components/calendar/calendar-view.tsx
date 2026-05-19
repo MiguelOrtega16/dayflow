@@ -18,6 +18,7 @@ import { CalendarHeader } from './calendar-header'
 import { UserFilterBar } from './user-filter-bar'
 import { ActivityFormModal } from '../activities/activity-form-modal'
 import { useI18n, weekdayShort, dateFnsLocale } from '@/lib/i18n'
+import { useDateTimePrefs } from '@/lib/datetime-prefs'
 import { scheduleActivityReminders } from '@/lib/activity-reminders'
 import { syncWidgetSnapshot } from '@/lib/widget-sync'
 import { CompactMonthGrid } from './compact-month-grid'
@@ -32,6 +33,11 @@ interface CalendarViewProps {
 
 export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps) {
   const { t, locale } = useI18n()
+  // The user's preference, resolved against the i18n locale ('system' →
+  // Mon for ES, Sun for EN). Drives both the week-grid layout and the
+  // weekday-header order.
+  const { resolveWeekStart } = useDateTimePrefs()
+  const weekStartsOn = resolveWeekStart()
   // Use client-side new Date() so the initial day reflects the user's local timezone,
   // not the server's UTC date (which can differ by a day near midnight).
   const [currentDate, setCurrentDate]   = useState(() => new Date())
@@ -127,8 +133,8 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
   const getDateRange = useCallback(() => {
     if (mode === 'month') {
-      const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 })
-      const end   = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 0 })
+      const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn })
+      const end   = endOfWeek(endOfMonth(currentDate), { weekStartsOn })
       return { start: format(start, 'yyyy-MM-dd'), end: format(end, 'yyyy-MM-dd') }
     } else if (mode === 'day') {
       const s = format(selectedDate, 'yyyy-MM-dd')
@@ -139,8 +145,8 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
         end:   format(addDays(selectedDate, 1), 'yyyy-MM-dd'),
       }
     } else {
-      const start = startOfWeek(currentDate, { weekStartsOn: 0 })
-      const end   = endOfWeek(currentDate, { weekStartsOn: 0 })
+      const start = startOfWeek(currentDate, { weekStartsOn })
+      const end   = endOfWeek(currentDate, { weekStartsOn })
       return { start: format(start, 'yyyy-MM-dd'), end: format(end, 'yyyy-MM-dd') }
     }
   }, [currentDate, mode, isMobileWeek, selectedDate])
@@ -253,24 +259,24 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
   const getDaysForView = (): Date[] => {
     if (mode === 'month') {
-      const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 })
-      const end   = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 0 })
+      const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn })
+      const end   = endOfWeek(endOfMonth(currentDate), { weekStartsOn })
       return eachDayOfInterval({ start, end })
     } else if (mode === 'day') {
       return [selectedDate]
     } else if (isMobileWeek) {
       return [subDays(selectedDate, 1), selectedDate, addDays(selectedDate, 1)]
     } else {
-      const start = startOfWeek(currentDate, { weekStartsOn: 0 })
-      const end   = endOfWeek(currentDate, { weekStartsOn: 0 })
+      const start = startOfWeek(currentDate, { weekStartsOn })
+      const end   = endOfWeek(currentDate, { weekStartsOn })
       return eachDayOfInterval({ start, end })
     }
   }
 
   // Days for the compact week strip (always 7)
   const weekStripDays = eachDayOfInterval({
-    start: startOfWeek(isMobileWeek ? selectedDate : currentDate, { weekStartsOn: 0 }),
-    end:   endOfWeek(isMobileWeek ? selectedDate : currentDate, { weekStartsOn: 0 }),
+    start: startOfWeek(isMobileWeek ? selectedDate : currentDate, { weekStartsOn }),
+    end:   endOfWeek(isMobileWeek ? selectedDate : currentDate, { weekStartsOn }),
   })
 
   const getActivitiesForDate = (date: Date) => {
@@ -295,10 +301,14 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
   const days = getDaysForView()
 
-  // Week day headers — 7 fixed labels for month/desktop week, dynamic 3 for mobile week
+  // Week day headers — 7 fixed labels for month/desktop week, dynamic 3 for
+  // mobile week. The static list is Sun→Sat; rotate it so it matches the
+  // user's first-day preference.
+  const baseWeekday = weekdayShort(locale)
+  const rotatedWeekday = [...baseWeekday.slice(weekStartsOn), ...baseWeekday.slice(0, weekStartsOn)]
   const weekDayHeaders: string[] = isMobileWeek
     ? days.map(d => format(d, 'EEE', { locale: dateFnsLocale(locale) }))
-    : weekdayShort(locale)
+    : rotatedWeekday
 
   // Pre-compute Colombian holidays for the visible year range
   const holidays = useMemo(() => {
@@ -429,8 +439,8 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           height: (() => {
             if (mode !== 'month') return '25dvh'
             const rows = eachDayOfInterval({
-              start: startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 }),
-              end:   endOfWeek(endOfMonth(currentDate),   { weekStartsOn: 0 }),
+              start: startOfWeek(startOfMonth(currentDate), { weekStartsOn }),
+              end:   endOfWeek(endOfMonth(currentDate),   { weekStartsOn }),
             }).length / 7
             return rows >= 6 ? '28dvh' : rows >= 5 ? '25dvh' : '22dvh'
           })(),

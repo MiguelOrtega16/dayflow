@@ -10,6 +10,7 @@ import { initRevenueCat } from '@/lib/billing/revenuecat'
 import { PaywallProvider } from '@/components/paywall/paywall-provider'
 import { startWidgetAuthSync } from '@/lib/widget-sync'
 import { BackButtonProvider } from '@/lib/back-button'
+import { DateTimePrefsProvider } from '@/lib/datetime-prefs'
 import { TopProgressBar } from './top-progress-bar'
 import type { Profile } from '@/types'
 
@@ -50,6 +51,7 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
   return (
     <BackButtonProvider>
     <PaywallProvider>
+    <DateTimePrefsProvider>
     <div className="flex h-screen bg-background overflow-hidden">
 
       {/* Top progress bar — fixed, shows on every route change. Gives users
@@ -84,6 +86,7 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
         <MobileBottomNav userId={profile?.id} onMenuClick={() => setSidebarOpen(true)} />
       </div>
     </div>
+    </DateTimePrefsProvider>
     </PaywallProvider>
     </BackButtonProvider>
   )

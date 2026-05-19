@@ -10,7 +10,7 @@ import {
 import {
   X, Clock, Smile, UserPlus, CheckCircle2, XCircle, Crown,
   Calendar as CalendarIcon, ChevronLeft, ChevronRight,
-  Bell, Repeat as RepeatIcon, Tag, Users, Eye, Lock, LayoutTemplate,
+  Bell, Repeat as RepeatIcon, Tag, Users, Eye, Lock, ClipboardList,
 } from 'lucide-react'
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG, statusLabel, categoryLabel } from '@/lib/utils'
 import { useI18n, weekdayNarrow, weekdayShort, dateFnsLocale } from '@/lib/i18n'
@@ -1066,15 +1066,17 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               <p className="text-xs text-destructive mt-1.5">{t('activityForm.titleRequired')}</p>
             )}
 
-            {/* Templates entry — only when creating, since editing an existing
-                activity from a template would clobber the user's changes. */}
+            {/* Desktop templates entry — small inline link under the title.
+                Mobile gets a full chip in the chip rail below. Only shown
+                when creating; editing from a template would clobber the
+                user's in-progress changes. */}
             {!isEditing && (
               <button
                 type="button"
                 onClick={() => { onClose(); router.push('/dashboard/templates') }}
-                className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                className="mt-2 hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
               >
-                <LayoutTemplate className="w-3.5 h-3.5" />
+                <ClipboardList className="w-3.5 h-3.5" />
                 {t('templatesPage.modal.browseChip')}
               </button>
             )}
@@ -1083,6 +1085,13 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
           {/* MOBILE CHIP RAIL — opens bottom-sheets */}
           <div className="sm:hidden px-5 pb-3">
             <div className="flex flex-wrap gap-2">
+              {!isEditing && (
+                <ChipBtn icon={<ClipboardList className="w-3.5 h-3.5" />}
+                  label={t('templatesPage.title')}
+                  highlighted
+                  onClick={() => { onClose(); router.push('/dashboard/templates') }}
+                />
+              )}
               <ChipBtn icon={<Tag className="w-3.5 h-3.5" />}
                 label={t('activityForm.section.type')}
                 value={categoryLabel(category, locale)}
@@ -1221,20 +1230,32 @@ interface ChipBtnProps {
   label: string
   value?: string
   onClick: () => void
+  /** Emphasised primary-color styling. Reserved for chips that route
+   *  away from the modal (e.g. Templates) so they stand out as a separate
+   *  affordance from the in-place editors (Type / Date / etc.). */
+  highlighted?: boolean
 }
 
-function ChipBtn({ icon, label, value, onClick }: ChipBtnProps) {
+function ChipBtn({ icon, label, value, onClick, highlighted }: ChipBtnProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
         'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs border transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        'border-border bg-card hover:border-foreground/30',
+        highlighted
+          ? 'border-primary bg-primary/10 hover:bg-primary/15'
+          : 'border-border bg-card hover:border-foreground/30',
       )}
     >
-      {icon && <span className="text-muted-foreground shrink-0">{icon}</span>}
-      <span className="font-medium text-foreground">{label}</span>
+      {icon && (
+        <span className={cn('shrink-0', highlighted ? 'text-primary' : 'text-muted-foreground')}>
+          {icon}
+        </span>
+      )}
+      <span className={cn('font-medium', highlighted ? 'text-primary' : 'text-foreground')}>
+        {label}
+      </span>
       {value && <span className="text-muted-foreground truncate max-w-[160px]">{value}</span>}
     </button>
   )

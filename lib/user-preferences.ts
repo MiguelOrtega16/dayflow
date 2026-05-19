@@ -13,6 +13,13 @@ import { THEMES, DEFAULT_THEME_ID } from '@/lib/themes'
 
 export type ReminderType   = 'notification' | 'alarm'
 export type SnoozeMinutes  = 5 | 15 | 30
+/** 'system' = follow the i18n locale's convention. Numeric matches date-fns'
+ *  weekStartsOn (0=Sun, 1=Mon). */
+export type FirstDayOfWeek = 'system' | 0 | 1
+/** 12 = 12-hour with AM/PM, 24 = 24-hour. */
+export type TimeFormat = '12h' | '24h'
+/** dmy = 19/05/2026, mdy = 5/19/2026, ymd = 2026-05-19. 'system' uses the i18n locale. */
+export type DateFormat = 'system' | 'dmy' | 'mdy' | 'ymd'
 
 /**
  * Morning / evening reminder slot:
@@ -37,6 +44,12 @@ export interface UserPreferences {
   evening_review:       DailySlot
   /** Accent palette id from lib/themes.ts. Non-default ids are Pro-only. */
   theme:                string
+  /** Which day calendar grids and weekday rails start on. */
+  first_day_of_week:    FirstDayOfWeek
+  /** Used by formatTime + activity card displays. 12h by default. */
+  time_format:          TimeFormat
+  /** Display format for short dates. 'system' picks based on i18n locale. */
+  date_format:          DateFormat
 }
 
 const DEFAULTS: UserPreferences = {
@@ -47,6 +60,23 @@ const DEFAULTS: UserPreferences = {
   morning_reminder:     'default',
   evening_review:       'default',
   theme:                DEFAULT_THEME_ID,
+  first_day_of_week:    'system',
+  time_format:          '12h',
+  date_format:          'system',
+}
+
+function normalizeFirstDay(v: unknown): FirstDayOfWeek {
+  if (v === 0 || v === 1) return v
+  return 'system'
+}
+
+function normalizeTimeFormat(v: unknown): TimeFormat {
+  return v === '24h' ? '24h' : '12h'
+}
+
+function normalizeDateFormat(v: unknown): DateFormat {
+  if (v === 'dmy' || v === 'mdy' || v === 'ymd') return v
+  return 'system'
 }
 
 function normalizeTheme(v: unknown): string {
@@ -82,6 +112,9 @@ export function normalizePreferences(raw: unknown): UserPreferences {
     morning_reminder:     normalizeDailySlot(r.morning_reminder),
     evening_review:       normalizeDailySlot(r.evening_review),
     theme:                normalizeTheme(r.theme),
+    first_day_of_week:    normalizeFirstDay(r.first_day_of_week),
+    time_format:          normalizeTimeFormat(r.time_format),
+    date_format:          normalizeDateFormat(r.date_format),
   }
 }
 

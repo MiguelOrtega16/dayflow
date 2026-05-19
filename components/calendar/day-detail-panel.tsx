@@ -3,7 +3,8 @@
 import { format, isToday } from 'date-fns'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2, ChevronDown, Loader2 } from 'lucide-react'
-import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime, getInitials, formatRelativeTime, statusLabel, categoryLabel, priorityLabel } from '@/lib/utils'
+import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, getInitials, formatRelativeTime, statusLabel, categoryLabel, priorityLabel } from '@/lib/utils'
+import { useDateTimePrefs } from '@/lib/datetime-prefs'
 import { updateActivityStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile, ActivityComment } from '@/types'
 import { useState, useCallback, useEffect, useRef } from 'react'
@@ -60,6 +61,7 @@ export function DayDetailPanel({
   date, activities, currentUserId, currentUserColor,
   allUsers, onAddActivity, onEditActivity, onActivityUpdated, loading = false,
 }: DayDetailPanelProps) {
+  const { formatTime } = useDateTimePrefs()
   const [openCommentId, setOpenCommentId] = useState<string | null>(null)
   const [commentsMap, setCommentsMap] = useState<Record<string, ActivityComment[]>>({})
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})

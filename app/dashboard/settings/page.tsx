@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette } from 'lucide-react'
+import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette, Clock } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { getInitials } from '@/lib/utils'
@@ -152,6 +152,13 @@ export default function SettingsPage() {
             title={t('settings.notificationsRow.label')}
             sub={t('settings.notificationsRow.sub')}
             onClick={() => router.push('/dashboard/settings/notifications')}
+          />
+
+          <SettingsNavRow
+            icon={<Clock className="w-5 h-5 text-primary" />}
+            title={t('settings.dateTimeRow.label')}
+            sub={t('settings.dateTimeRow.sub')}
+            onClick={() => router.push('/dashboard/settings/datetime')}
           />
 
           {/* Language row — inline select, no chevron, no sub-page. */}

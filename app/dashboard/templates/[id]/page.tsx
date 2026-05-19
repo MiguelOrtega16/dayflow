@@ -220,11 +220,16 @@ export default function TemplateDetailPage() {
                 key={idx}
                 className="inline-flex items-center gap-1 rounded-xl border border-border bg-card pl-3 pr-1 h-11"
               >
+                {/* Native time input — the rendered width has to fit
+                    "12:00 AM" (the 12-hour locale form) plus the
+                    browser-drawn spinner; the 7ch we had was clipping the
+                    AM/PM to "A" / "P" on both PC and mobile. min-w gives
+                    a floor; flex-1-friendly inputs can still grow. */}
                 <input
                   type="time"
                   value={time}
                   onChange={e => updateTime(idx, e.target.value)}
-                  className="bg-transparent text-sm outline-none tabular-nums w-[7ch]"
+                  className="bg-transparent text-sm outline-none tabular-nums min-w-[7.5rem]"
                 />
                 <button
                   type="button"

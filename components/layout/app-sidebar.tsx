@@ -13,7 +13,7 @@ import type { Profile } from '@/types'
 import {
   ListChecks, Users, Settings,
   LogOut, Sun, Moon, ChevronLeft, ChevronRight,
-  BarChart2, CalendarDays, LayoutPanelTop, LayoutTemplate,
+  BarChart2, CalendarDays, LayoutPanelTop, ClipboardList,
 } from 'lucide-react'
 
 const NAV_KEYS = [
@@ -21,7 +21,9 @@ const NAV_KEYS = [
   { href: '/dashboard/overview',  icon: ListChecks,      key: 'tasks'    },
   // Metas/Goals temporarily hidden — page + API still exist, just removed from nav.
   // { href: '/dashboard/goals',    icon: Target,          key: 'goals'    },
-  { href: '/dashboard/templates', icon: LayoutTemplate,  key: 'templates' },
+  // ClipboardList reads as "list of preset tasks" — better fit for a templates
+  // catalog than the generic LayoutTemplate (which suggested page layouts).
+  { href: '/dashboard/templates', icon: ClipboardList,   key: 'templates' },
   { href: '/dashboard/stats',     icon: BarChart2,       key: 'stats'    },
   { href: '/dashboard/people',    icon: Users,           key: 'people'   },
 ] as const

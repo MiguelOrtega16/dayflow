@@ -6,6 +6,7 @@ import {
 } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { useI18n, weekdayNarrow } from '@/lib/i18n'
+import { useDateTimePrefs } from '@/lib/datetime-prefs'
 import type { Activity } from '@/types'
 
 interface CompactMonthGridProps {
@@ -24,10 +25,13 @@ export function CompactMonthGrid({
   allUsers, activeUserIds, onDateSelect,
 }: CompactMonthGridProps) {
   const { locale } = useI18n()
-  const DAY_LABELS = weekdayNarrow(locale)
+  const { resolveWeekStart } = useDateTimePrefs()
+  const weekStartsOn = resolveWeekStart()
+  const baseLabels = weekdayNarrow(locale)
+  const DAY_LABELS = [...baseLabels.slice(weekStartsOn), ...baseLabels.slice(0, weekStartsOn)]
   const days = propDays ?? eachDayOfInterval({
-    start: startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 }),
-    end:   endOfWeek(endOfMonth(currentDate),   { weekStartsOn: 0 }),
+    start: startOfWeek(startOfMonth(currentDate), { weekStartsOn }),
+    end:   endOfWeek(endOfMonth(currentDate),   { weekStartsOn }),
   })
 
   const getColors = (date: Date) => {
