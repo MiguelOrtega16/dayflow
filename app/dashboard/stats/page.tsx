@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { format, subDays } from 'date-fns'
-import { cn, STATUS_CONFIG, CATEGORY_CONFIG, getInitials } from '@/lib/utils'
+import { cn, STATUS_CONFIG, CATEGORY_CONFIG, statusLabel, categoryLabel, getInitials } from '@/lib/utils'
 import type { Activity, ActivityStatus, ActivityCategory, Profile } from '@/types'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useI18n, useFormatDate } from '@/lib/i18n'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
+import { usePaywall } from '@/components/paywall/paywall-provider'
+import { activitiesToCsv, downloadCsv } from '@/lib/csv-export'
 import {
-  ClipboardList, CheckCircle2, Gauge, Flame, Users,
+  ClipboardList, CheckCircle2, Gauge, Flame, Users, Download, Crown,
 } from 'lucide-react'
 
 const STATUS_HEX: Record<ActivityStatus, string> = {
@@ -27,12 +30,16 @@ interface Collaborator {
 }
 
 export default function StatsPage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [ownActivities, setOwnActivities]         = useState<Activity[]>([])
   const [invitedActivities, setInvitedActivities] = useState<Activity[]>([])
   const [loading, setLoading]                     = useState(true)
   const [range, setRange]                         = useState<'week' | 'month' | '3months'>('month')
+  const [userId, setUserId]                       = useState<string | null>(null)
+  const [exporting, setExporting]                 = useState(false)
   const supabase = createClient()
+  const { entitlement } = useEntitlement(userId)
+  const { open: openPaywall } = usePaywall()
 
   useEffect(() => { loadStats() // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range])
@@ -41,6 +48,7 @@ export default function StatsPage() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    setUserId(user.id)
 
     const today = new Date()
     const endDate = format(today, 'yyyy-MM-dd')
@@ -144,6 +152,59 @@ export default function StatsPage() {
 
   const rangeLabel = (r: typeof range) => t(`stats.ranges.${r}`)
 
+  // ── CSV export ─────────────────────────────────────────────────────────────
+  // Pro-only: free users tap and get the paywall (stats_export trigger).
+  // Generates client-side from the activities already loaded for the current
+  // range, so the export reflects exactly what's on screen.
+  const allActivitiesForRange = useMemo(() => {
+    const seen = new Set<string>()
+    const out: Activity[] = []
+    for (const a of [...ownActivities, ...invitedActivities]) {
+      if (seen.has(a.id)) continue
+      seen.add(a.id)
+      out.push(a)
+    }
+    return out.sort((a, b) => a.date.localeCompare(b.date))
+  }, [ownActivities, invitedActivities])
+
+  const handleExport = async () => {
+    if (!entitlement.isPro) {
+      openPaywall('stats_export')
+      return
+    }
+    if (allActivitiesForRange.length === 0) return
+    setExporting(true)
+    try {
+      const categoryLabels = (Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
+        .reduce((acc, c) => { acc[c] = categoryLabel(c, locale); return acc }, {} as Record<ActivityCategory, string>)
+      const statusLabels = (Object.keys(STATUS_CONFIG) as ActivityStatus[])
+        .reduce((acc, s) => { acc[s] = statusLabel(s, locale); return acc }, {} as Record<ActivityStatus, string>)
+      const csv = activitiesToCsv(allActivitiesForRange, {
+        date:        t('stats.export.columns.date'),
+        title:       t('stats.export.columns.title'),
+        description: t('stats.export.columns.description'),
+        category:    t('stats.export.columns.category'),
+        status:      t('stats.export.columns.status'),
+        priority:    t('stats.export.columns.priority'),
+        startTime:   t('stats.export.columns.startTime'),
+        endTime:     t('stats.export.columns.endTime'),
+        completion:  t('stats.export.columns.completion'),
+        tags:        t('stats.export.columns.tags'),
+        goal:        t('stats.export.columns.goal'),
+        reminders:   t('stats.export.columns.reminders'),
+        recurrence:  t('stats.export.columns.recurrence'),
+        isShared:    t('stats.export.columns.isShared'),
+        createdAt:   t('stats.export.columns.createdAt'),
+        categoryLabels,
+        statusLabels,
+      })
+      const filename = `${t('stats.export.filename', { range })}.csv`
+      downloadCsv(csv, filename)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 max-w-7xl mx-auto space-y-4 animate-pulse">
@@ -168,16 +229,34 @@ export default function StatsPage() {
           </div>
           <p className="text-sm text-muted-foreground">{t('stats.subtitle')}</p>
         </div>
-        <div className="flex items-center bg-muted rounded-xl p-1 w-full sm:w-auto sm:shrink-0">
-          {(['week', 'month', '3months'] as const).map(r => (
-            <button key={r} onClick={() => setRange(r)}
-              className={cn(
-                'flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap text-center',
-                range === r ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              )}>
-              {rangeLabel(r)}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:shrink-0 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center bg-muted rounded-xl p-1 flex-1 sm:flex-initial">
+            {(['week', 'month', '3months'] as const).map(r => (
+              <button key={r} onClick={() => setRange(r)}
+                className={cn(
+                  'flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap text-center',
+                  range === r ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}>
+                {rangeLabel(r)}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={exporting || allActivitiesForRange.length === 0}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium border transition-colors shrink-0',
+              entitlement.isPro
+                ? 'border-border text-foreground hover:bg-muted'
+                : 'border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/5',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+            )}
+            title={allActivitiesForRange.length === 0 ? t('stats.export.empty') : undefined}
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>{exporting ? t('stats.export.exporting') : t('stats.export.button')}</span>
+            {!entitlement.isPro && <Crown className="w-3.5 h-3.5 text-indigo-500" />}
+          </button>
         </div>
       </div>
 
