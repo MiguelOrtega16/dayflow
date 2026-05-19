@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Android 12+ (API 31) override for the launch theme. Adds the system-only
-  windowSplashScreenBrandingImage attribute, which places a "DayFlow"
-  wordmark at the bottom of the splash screen during the system splash
-  transition. This attribute isn't backported by androidx.core:core-splashscreen,
-  so it must live in a v31-qualified resource file and use the android: namespace.
+  Android 12+ (API 31) override for the launch theme. Just shows the
+  Material You system splash: solid background + centered launcher icon.
+  We deliberately do NOT set windowSplashScreenBrandingImage — Android
+  glues that asset to the bottom edge of the screen with no way to
+  control its position, which produced an ugly "icon up here, DayFlow
+  way down there" gap. The Capacitor splash (drawable/splash.png) takes
+  over within ~500ms with the icon + wordmark close together, so the
+  brand identity still shows up immediately after the system handoff.
 -->
 <resources>
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
-        <item name="android:windowSplashScreenBrandingImage">@drawable/splash_branding</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
         <item name="android:windowBackground">@drawable/splash</item>
     </style>
