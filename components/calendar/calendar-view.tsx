@@ -153,7 +153,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
       const data = await getActivitiesForRange(start, end, activeUserIds, currentUser?.id)
       setActivities(data)
       scheduleActivityReminders(data)
-      if (currentUser?.id) syncWidgetSnapshot(data, currentUser.id)
+      if (currentUser?.id) syncWidgetSnapshot(currentUser.id)
     } catch (err) {
       console.error('Failed to fetch activities:', err)
     } finally {

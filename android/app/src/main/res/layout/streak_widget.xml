@@ -1,21 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Streak widget: 2x2 compact tile showing the current streak count and
-  today's done/total. Same Samsung-One-UI-safe constraints as the Today
-  widget (no ImageView, no theme attrs, no shape drawables).
+  Streak widget: 2x1 horizontal strip showing the current streak count
+  (with a flame glyph) and today's done/total. Same Samsung-One-UI-safe
+  constraints as the Today widget (no ImageView, no theme attrs, no
+  shape drawables).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/streak_bg"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="12dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp"
     android:background="#7C6FE3">
 
-    <!-- Number + flame on one line. The flame is a plain Unicode glyph (no
-         ImageView) so the layout stays consistent with the rest of the
-         widget render constraints (see today_widget.xml header comment). -->
+    <!-- Number + flame on the left -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -28,7 +30,7 @@
             android:layout_height="wrap_content"
             android:text="0"
             android:textColor="#FFFFFF"
-            android:textSize="44sp"
+            android:textSize="32sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif-medium"
             android:includeFontPadding="false" />
@@ -36,29 +38,41 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="4dp"
             android:text="🔥"
-            android:textSize="28sp"
+            android:textSize="22sp"
             android:includeFontPadding="false" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/streak_label"
-        android:layout_width="wrap_content"
+    <!-- Label stack on the right -->
+    <LinearLayout
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text="DÍAS DE RACHA"
-        android:textColor="#FFFFFF"
-        android:textSize="10sp"
-        android:letterSpacing="0.1"
-        android:textStyle="bold" />
+        android:layout_weight="1"
+        android:layout_marginStart="10dp"
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/streak_today"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:text="0/0 hoy"
-        android:textColor="#FFFFFFCC"
-        android:textSize="12sp" />
+        <TextView
+            android:id="@+id/streak_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="DÍAS DE RACHA"
+            android:textColor="#FFFFFF"
+            android:textSize="9sp"
+            android:letterSpacing="0.1"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/streak_today"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="0/0 hoy"
+            android:textColor="#FFFFFFCC"
+            android:textSize="11sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
 </LinearLayout>

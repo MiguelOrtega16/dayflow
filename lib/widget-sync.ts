@@ -1,35 +1,56 @@
 import { format, addDays, subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import { WidgetBridge, isWidgetSupported } from '@/lib/widget-bridge'
-import type { Activity } from '@/types'
 
 /**
- * Push the current set of activities the widget should display into native
- * SharedPreferences. Called after every fetch in calendar-view.tsx — cheap
- * no-op on web/iOS.
+ * Push the current widget data into native SharedPreferences.
+ *
+ * Self-contained: queries Supabase directly for the date window the widgets
+ * need (today − 60 days for streak math, today → today + 30 for the
+ * activity list + NextUp). This way the snapshot doesn't go stale just
+ * because the calendar view is currently looking at a different month —
+ * a problem we hit with the previous "pass me whatever activities you
+ * happen to have in memory" signature.
  *
  * Payload shape (all consumed by Kotlin via WidgetStore):
  *   {
- *     activities: [...],   // today + 30 days forward (Today widget)
- *     stats:      {        // computed from past 60 days (Streak widget)
+ *     activities: [...],   // today + 30 days forward
+ *     stats:      {
  *       streak_days: number,
  *       today_done: number,
  *       today_total: number,
  *     },
- *     next: {              // soonest upcoming activity (NextUp widget)
+ *     next: {              // soonest upcoming activity
  *       id, title, emoji, date, start_time
  *     } | null,
  *   }
  */
-export async function syncWidgetSnapshot(activities: Activity[], currentUserId: string) {
+export async function syncWidgetSnapshot(currentUserId: string) {
   if (!isWidgetSupported()) return
-  const today = format(new Date(), 'yyyy-MM-dd')
-  const until = format(addDays(new Date(), 30), 'yyyy-MM-dd')
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const untilStr = format(addDays(new Date(), 30), 'yyyy-MM-dd')
+  const sinceStr = format(subDays(new Date(), 60), 'yyyy-MM-dd')
 
-  const own = activities.filter(a => a.user_id === currentUserId)
+  const supabase = createClient()
+  // One query covering the full window the widgets care about. Cheaper than
+  // two round-trips and keeps the snapshot consistent across both new
+  // widgets and the existing Today list.
+  const { data, error } = await supabase
+    .from('activities')
+    .select('id, title, emoji, date, start_time, status, user_id')
+    .eq('user_id', currentUserId)
+    .gte('date', sinceStr)
+    .lte('date', untilStr)
 
-  const slim = own
-    .filter(a => a.date >= today && a.date <= until)
+  if (error) {
+    console.warn('[widget-sync] fetch failed:', error)
+    return
+  }
+  const rows = data ?? []
+
+  // ── Today + 30 days forward for the Today widget list ────────────────────
+  const slim = rows
+    .filter(a => a.date >= todayStr)
     .map(a => ({
       id:         a.id,
       title:      a.title,
@@ -41,13 +62,12 @@ export async function syncWidgetSnapshot(activities: Activity[], currentUserId: 
 
   // ── Next-upcoming activity ────────────────────────────────────────────────
   // Earliest pending activity from today onward that has a start_time.
-  // Within the same day we sort by start_time; across days the date sort wins.
+  // Today's items whose start_time has already passed are excluded.
   const now = new Date()
-  const next = own
-    .filter(a => a.status !== 'done' && a.start_time && a.date >= today)
+  const next = rows
+    .filter(a => a.status !== 'done' && a.start_time && a.date >= todayStr)
     .filter(a => {
-      // Exclude today's items whose start_time has already passed
-      if (a.date !== today) return true
+      if (a.date !== todayStr) return true
       const [h, m] = (a.start_time as string).split(':').map(Number)
       const at = new Date()
       at.setHours(h, m, 0, 0)
@@ -66,41 +86,20 @@ export async function syncWidgetSnapshot(activities: Activity[], currentUserId: 
     start_time: next.start_time,
   } : null
 
-  // ── Stats (streak + today completion) ─────────────────────────────────────
-  // Requires past activities, which the in-memory list may not include. Fetch
-  // a 60-day window directly. Failures here shouldn't block the snapshot.
-  let stats = { streak_days: 0, today_done: 0, today_total: 0 }
-  try {
-    const since = format(subDays(new Date(), 60), 'yyyy-MM-dd')
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('activities')
-      .select('date, status')
-      .eq('user_id', currentUserId)
-      .gte('date', since)
-
-    const past = data ?? []
-    const doneByDate = new Set(past.filter(a => a.status === 'done').map(a => a.date))
-
-    // Streak: consecutive days back from today with at least one done.
-    // Today is allowed to be empty (you haven't finished anything yet today)
-    // — in that case we look back starting at yesterday.
-    let streak = 0
-    let walking = new Date()
-    if (!doneByDate.has(format(walking, 'yyyy-MM-dd'))) walking = subDays(walking, 1)
-    while (streak <= 365 && doneByDate.has(format(walking, 'yyyy-MM-dd'))) {
-      streak++
-      walking = subDays(walking, 1)
-    }
-
-    const todayItems = past.filter(a => a.date === today)
-    stats = {
-      streak_days: streak,
-      today_done:  todayItems.filter(a => a.status === 'done').length,
-      today_total: todayItems.length,
-    }
-  } catch (e) {
-    console.warn('[widget-sync] stats fetch failed:', e)
+  // ── Stats (streak + today completion) ────────────────────────────────────
+  const doneByDate = new Set(rows.filter(a => a.status === 'done').map(a => a.date))
+  let streak = 0
+  let walking = new Date()
+  if (!doneByDate.has(format(walking, 'yyyy-MM-dd'))) walking = subDays(walking, 1)
+  while (streak <= 365 && doneByDate.has(format(walking, 'yyyy-MM-dd'))) {
+    streak++
+    walking = subDays(walking, 1)
+  }
+  const todayItems = rows.filter(a => a.date === todayStr)
+  const stats = {
+    streak_days: streak,
+    today_done:  todayItems.filter(a => a.status === 'done').length,
+    today_total: todayItems.length,
   }
 
   await WidgetBridge.writeSnapshot(JSON.stringify({
@@ -113,8 +112,6 @@ export async function syncWidgetSnapshot(activities: Activity[], currentUserId: 
 /**
  * Mirror the current Supabase session into native storage so the widget can
  * call REST directly (refresh + toggle-done) without going through the app.
- *
- * Call once on dashboard mount and whenever the auth state changes.
  */
 export async function syncWidgetAuth() {
   if (!isWidgetSupported()) return
@@ -134,10 +131,6 @@ export async function syncWidgetAuth() {
   })
 }
 
-/**
- * One-shot setup: sync auth now and subscribe to future auth-state changes
- * so the widget always has a fresh token cached. Returns an unsubscribe fn.
- */
 export function startWidgetAuthSync(): () => void {
   if (!isWidgetSupported()) return () => {}
   syncWidgetAuth()

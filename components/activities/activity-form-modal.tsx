@@ -24,6 +24,7 @@ import {
 import { CustomSelect } from '@/components/ui/custom-select'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
+import { syncWidgetSnapshot } from '@/lib/widget-sync'
 import type {
   Activity, ActivityStatus, ActivityCategory, RecurrenceType, RecurrenceFrequency,
   Profile, Goal, ActivityInvitation,
@@ -382,6 +383,11 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
           )
         }
       }
+
+      // Refresh the home-screen widget snapshot. Calendar-view also re-syncs
+      // after its refetch, but the modal can be opened from pages that don't
+      // (overview, tasks list, etc.) — so we call it here too, fire-and-forget.
+      syncWidgetSnapshot(currentUser.id).catch(() => {})
 
       onSaved()
     } catch (err: any) {
@@ -1043,13 +1049,11 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 value={scheduleChipSummary !== dateChipValue ? scheduleChipSummary.replace(`${dateChipValue} · `, '') : ''}
                 onClick={() => setOpenSheet('schedule')}
               />
-              {!isReminder && (
-                <ChipBtn icon={<Users className="w-3.5 h-3.5" />}
-                  label={t('activityForm.section.invitees')}
-                  value={inviteesChipValue}
-                  onClick={() => setOpenSheet('invitees')}
-                />
-              )}
+              <ChipBtn icon={<Users className="w-3.5 h-3.5" />}
+                label={t('activityForm.section.invitees')}
+                value={inviteesChipValue}
+                onClick={() => setOpenSheet('invitees')}
+              />
               <ChipBtn icon={isPublic ? <Eye className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
                 label={t('activityForm.section.visibility')}
                 value={isPublic ? t('activityForm.visible') : t('activityForm.private')}
@@ -1068,11 +1072,9 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
               {renderScheduleContent({ forceOpenRows: true, hideCalendar: !isEditing })}
             </DesktopSection>
 
-            {!isReminder && (
-              <DesktopSection icon={<Users className="w-4 h-4" />} title={t('activityForm.section.invitees')}>
-                {renderInviteesContent()}
-              </DesktopSection>
-            )}
+            <DesktopSection icon={<Users className="w-4 h-4" />} title={t('activityForm.section.invitees')}>
+              {renderInviteesContent()}
+            </DesktopSection>
 
             <DesktopSection icon={isPublic ? <Eye className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
               title={t('activityForm.section.visibility')}>
@@ -1212,6 +1214,28 @@ function BottomSheet({
   children: React.ReactNode
 }) {
   const { t } = useI18n()
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // Keep the focused input visible when the soft keyboard opens. Capacitor's
+  // WebView + windowSoftInputMode=adjustResize gives us a smaller viewport,
+  // but inputs that landed in the bottom half of the sheet still need to be
+  // scrolled into view explicitly — the browser's auto-scroll doesn't fire
+  // reliably inside a flex-overflow-y container.
+  useEffect(() => {
+    if (!open) return
+    const node = contentRef.current
+    if (!node) return
+    const onFocusIn = (e: FocusEvent) => {
+      const t = e.target as HTMLElement | null
+      if (!t || !t.matches('input, textarea, select')) return
+      // 150ms lets the keyboard begin animating in so scrollIntoView lands
+      // against the *resized* viewport rather than the pre-resize one.
+      setTimeout(() => t.scrollIntoView({ block: 'center', behavior: 'smooth' }), 150)
+    }
+    node.addEventListener('focusin', onFocusIn)
+    return () => node.removeEventListener('focusin', onFocusIn)
+  }, [open])
+
   // Mount/unmount via `open` so the slide-in animation re-fires every time.
   if (!open) return null
 
@@ -1243,7 +1267,7 @@ function BottomSheet({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div ref={contentRef} className="flex-1 overflow-y-auto px-4 py-3">
           {children}
         </div>
 

@@ -93,7 +93,7 @@ export default function WidgetsPage() {
       kind: 'streak',
       pro: true,
       name: t('widgets.streakName'),
-      size: `${t('widgets.sizeLabel')} 2 × 2`,
+      size: `${t('widgets.sizeLabel')} 2 × 1`,
       bullets: [t('widgets.streakSubtitle')],
       Preview: StreakPreview,
     },
@@ -279,13 +279,15 @@ function PreviewRow({ label, time, done }: { label: string; time: string; done?:
 function StreakPreview() {
   const { t } = useI18n()
   return (
-    <div className="rounded-2xl overflow-hidden border border-border/60 bg-primary text-primary-foreground shadow-sm aspect-square max-w-[160px] mx-auto flex flex-col items-center justify-center px-4 py-6">
-      <div className="flex items-center gap-1.5">
-        <div className="text-5xl font-bold leading-none">5</div>
-        <span className="text-3xl leading-none">🔥</span>
+    <div className="rounded-2xl overflow-hidden border border-border/60 bg-primary text-primary-foreground shadow-sm flex items-center gap-3 px-4 py-3 max-w-[280px] mx-auto">
+      <div className="flex items-center gap-1 shrink-0">
+        <div className="text-3xl font-bold leading-none">5</div>
+        <span className="text-xl leading-none">🔥</span>
       </div>
-      <div className="text-[10px] font-bold tracking-widest mt-1">{t('widgets.previewLabels.streakDays')}</div>
-      <div className="text-xs opacity-80 mt-3">{t('widgets.previewLabels.todayShort', { done: 3, total: 7 })}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[9px] font-bold tracking-widest truncate">{t('widgets.previewLabels.streakDays')}</div>
+        <div className="text-xs opacity-80 mt-0.5 truncate">{t('widgets.previewLabels.todayShort', { done: 3, total: 7 })}</div>
+      </div>
     </div>
   )
 }
