@@ -5,7 +5,7 @@ import type { BillingProductId } from '@/types'
 export const ANCHOR_PRICE_USD: Record<BillingProductId, string> = {
   pro_monthly: '$1.99',
   pro_annual: '$12.99',
-  pro_lifetime: '$27.99',
+  pro_lifetime: '$20.00',
 }
 
 // Play Console product IDs (set these to the exact SKUs you create on Play Console).
