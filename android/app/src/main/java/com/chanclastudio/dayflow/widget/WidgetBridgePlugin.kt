@@ -85,7 +85,12 @@ class WidgetBridgePlugin : Plugin() {
         val color    = call.getString("color")  ?: "#7C6FE3"
         val opacity  = call.getInt("opacity")   ?: 95
         WidgetStore.writeConfig(context, widgetId, color, opacity)
+        // We don't know which provider owns this id, so re-render all three.
+        // Each one's renderAll iterates its own getAppWidgetIds set, so the
+        // updated widget gets refreshed and the others are cheap no-ops.
         TodayWidgetProvider.renderAll(context)
+        StreakWidgetProvider.renderAll(context)
+        NextUpWidgetProvider.renderAll(context)
         call.resolve()
     }
 

@@ -235,6 +235,22 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     window.history.replaceState(null, '', next.pathname + next.search)
   }, [])
 
+  // ?date=YYYY-MM-DD from the NextUp widget tap: jump to that date without
+  // opening the create modal (the user is navigating to view, not author).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const raw    = params.get('date')
+    if (!raw) return
+    const target = new Date(raw + 'T12:00:00')
+    if (isNaN(target.getTime())) return
+    setCurrentDate(target)
+    setSelectedDate(target)
+    const next = new URL(window.location.href)
+    next.searchParams.delete('date')
+    window.history.replaceState(null, '', next.pathname + next.search)
+  }, [])
+
   const getDaysForView = (): Date[] => {
     if (mode === 'month') {
       const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 })

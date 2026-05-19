@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.util.Log
 import android.widget.RemoteViews
 import com.chanclastudio.dayflow.MainActivity
@@ -30,6 +31,10 @@ class StreakWidgetProvider : AppWidgetProvider() {
         ctx: Context, mgr: AppWidgetManager, id: Int, newOptions: android.os.Bundle?
     ) { renderWidget(ctx, mgr, id) }
 
+    override fun onDeleted(ctx: Context, ids: IntArray) {
+        ids.forEach { WidgetStore.clearConfig(ctx, it) }
+    }
+
     companion object {
         fun renderAll(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx)
@@ -39,6 +44,14 @@ class StreakWidgetProvider : AppWidgetProvider() {
 
         private fun renderWidget(ctx: Context, mgr: AppWidgetManager, widgetId: Int) {
             val views = RemoteViews(ctx.packageName, R.layout.streak_widget)
+
+            // ── Apply per-widget config (background tint + opacity) ──
+            val colorHex   = WidgetStore.readColor(ctx, widgetId)
+            val opacityPct = WidgetStore.readOpacity(ctx, widgetId)
+            val baseColor  = parseHex(colorHex, fallback = 0xFF7C6FE3.toInt())
+            val alpha      = (opacityPct.coerceIn(20, 100) * 255 / 100)
+            val bgColor    = (alpha shl 24) or (baseColor and 0x00FFFFFF)
+            views.setInt(R.id.streak_bg, "setBackgroundColor", bgColor)
 
             val stats = WidgetStore.readStats(ctx)
             views.setTextViewText(R.id.streak_count, stats.streakDays.toString())
@@ -61,5 +74,9 @@ class StreakWidgetProvider : AppWidgetProvider() {
 
             mgr.updateAppWidget(widgetId, views)
         }
+
+        private fun parseHex(hex: String?, fallback: Int): Int = try {
+            if (hex.isNullOrBlank()) fallback else Color.parseColor(hex)
+        } catch (_: Throwable) { fallback }
     }
 }

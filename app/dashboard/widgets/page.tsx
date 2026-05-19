@@ -207,8 +207,6 @@ export default function WidgetsPage() {
           </h3>
           <div className="rounded-xl border border-border bg-card divide-y divide-border">
             {activeEntries.map(({ id, kind }) => {
-              // Only the Today widget has a customize page right now.
-              const canCustomize = kind === 'today'
               const kindLabel = kind === 'streak'
                 ? t('widgets.streakName')
                 : kind === 'nextup'
@@ -217,17 +215,14 @@ export default function WidgetsPage() {
               return (
                 <button
                   key={`${kind}-${id}`}
-                  onClick={() => canCustomize && router.push(`/dashboard/widget/${id}`)}
-                  disabled={!canCustomize}
-                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors disabled:cursor-default"
+                  onClick={() => router.push(`/dashboard/widget/${id}`)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors"
                 >
                   <div>
                     <p className="text-sm font-medium">{kindLabel}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {canCustomize ? t('widgets.customizeShort') : t('widgets.widgetN', { id })}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t('widgets.customizeShort')}</p>
                   </div>
-                  {canCustomize && <Settings className="w-4 h-4 text-muted-foreground" />}
+                  <Settings className="w-4 h-4 text-muted-foreground" />
                 </button>
               )
             })}
@@ -285,7 +280,10 @@ function StreakPreview() {
   const { t } = useI18n()
   return (
     <div className="rounded-2xl overflow-hidden border border-border/60 bg-primary text-primary-foreground shadow-sm aspect-square max-w-[160px] mx-auto flex flex-col items-center justify-center px-4 py-6">
-      <div className="text-5xl font-bold leading-none">5</div>
+      <div className="flex items-center gap-1.5">
+        <div className="text-5xl font-bold leading-none">5</div>
+        <span className="text-3xl leading-none">🔥</span>
+      </div>
       <div className="text-[10px] font-bold tracking-widest mt-1">{t('widgets.previewLabels.streakDays')}</div>
       <div className="text-xs opacity-80 mt-3">{t('widgets.previewLabels.todayShort', { done: 3, total: 7 })}</div>
     </div>

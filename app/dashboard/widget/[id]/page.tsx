@@ -43,7 +43,9 @@ export default function WidgetConfigPage() {
     try {
       await WidgetBridge.writeConfig(widgetId, { color, opacity })
       setSaved(true)
-      setTimeout(() => setSaved(false), 1800)
+      // Let the user see the "Saved" confirmation briefly, then return to
+      // the widgets list — they're done with this screen.
+      setTimeout(() => router.push('/dashboard/widgets'), 900)
     } finally {
       setSaving(false)
     }

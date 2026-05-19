@@ -138,6 +138,7 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
         {/* Settings */}
         <Link
           href="/dashboard/settings"
+          onClick={() => onNavClick?.()}
           className={cn(
             'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
             collapsed && 'justify-center px-0'

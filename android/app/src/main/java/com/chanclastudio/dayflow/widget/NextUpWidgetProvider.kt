@@ -7,6 +7,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.util.Log
 import android.widget.RemoteViews
 import com.chanclastudio.dayflow.MainActivity
@@ -38,6 +39,7 @@ class NextUpWidgetProvider : AppWidgetProvider() {
     ) { renderWidget(ctx, mgr, id) }
 
     override fun onDeleted(ctx: Context, ids: IntArray) {
+        ids.forEach { WidgetStore.clearConfig(ctx, it) }
         // If no NextUp widgets remain, stop the per-minute tick.
         val mgr = AppWidgetManager.getInstance(ctx)
         val cmp = ComponentName(ctx, NextUpWidgetProvider::class.java)
@@ -89,6 +91,15 @@ class NextUpWidgetProvider : AppWidgetProvider() {
 
         private fun renderWidget(ctx: Context, mgr: AppWidgetManager, widgetId: Int) {
             val views = RemoteViews(ctx.packageName, R.layout.nextup_widget)
+
+            // ── Apply per-widget config (background tint + opacity) ──
+            val colorHex   = WidgetStore.readColor(ctx, widgetId)
+            val opacityPct = WidgetStore.readOpacity(ctx, widgetId)
+            val baseColor  = parseHex(colorHex, fallback = 0xFF7C6FE3.toInt())
+            val alpha      = (opacityPct.coerceIn(20, 100) * 255 / 100)
+            val bgColor    = (alpha shl 24) or (baseColor and 0x00FFFFFF)
+            views.setInt(R.id.nextup_bg, "setBackgroundColor", bgColor)
+
             val next = WidgetStore.readNextActivity(ctx)
 
             if (next == null) {
@@ -103,11 +114,13 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(R.id.nextup_countdown, countdown)
             }
 
-            // Tap → open the app on today's dashboard
+            // Tap → open the app on the day the activity is scheduled. If
+            // there is no next activity, fall back to today's dashboard.
+            val gotoPath = if (next != null) "/dashboard?date=${next.date}" else "/dashboard"
             val openIntent = Intent(ctx, MainActivity::class.java).apply {
                 action = Intent.ACTION_VIEW
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                putExtra("dayflow:gotoPath", "/dashboard")
+                putExtra("dayflow:gotoPath", gotoPath)
             }
             views.setOnClickPendingIntent(
                 R.id.nextup_bg,
@@ -156,6 +169,10 @@ class NextUpWidgetProvider : AppWidgetProvider() {
                 Pair("PRÓXIMA", "")
             }
         }
+
+        private fun parseHex(hex: String?, fallback: Int): Int = try {
+            if (hex.isNullOrBlank()) fallback else Color.parseColor(hex)
+        } catch (_: Throwable) { fallback }
 
         private fun formatCountdown(deltaMs: Long, target: Date): String {
             if (deltaMs <= 0) return "Iniciando…"
