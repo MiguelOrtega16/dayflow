@@ -98,7 +98,7 @@ export async function GET(request: Request) {
 
   const { data: activities, error } = await supabase
     .from('activities')
-    .select('id, title, emoji, user_id, start_time, date, category, reminder_offsets')
+    .select('id, title, emoji, user_id, start_time, date, category, reminder_offsets, reminder_phrase')
     .in('date', dates)
     .not('start_time', 'is', null)
 
@@ -123,6 +123,9 @@ export async function GET(request: Request) {
     date: string
     offset: number
     minutesUntilStart: number
+    /** Per-activity custom body (from templates or manual edit). When set,
+     *  replaces the random motivational quote. */
+    reminderPhrase: string | null
   }
   const fires: Fire[] = []
 
@@ -147,6 +150,7 @@ export async function GET(request: Request) {
           date: act.date,
           offset,
           minutesUntilStart,
+          reminderPhrase: (act as { reminder_phrase?: string | null }).reminder_phrase ?? null,
         })
       }
     }
@@ -212,7 +216,10 @@ export async function GET(request: Request) {
     } else {
       pushTitle = `${isReminderCategory ? '🔔' : '⏰'} ${formatOffsetEs(fire.offset)}: ${label}`
     }
-    const body = randomMotivation()
+    // Custom phrase (from templates / per-activity override) wins; otherwise
+    // pick a random motivational message so the notification still feels
+    // alive.
+    const body = fire.reminderPhrase?.trim() ? fire.reminderPhrase : randomMotivation()
     const data = {
       type: isReminderCategory ? 'activity_reminder' : 'activity_30min_reminder',
       date: fire.date,

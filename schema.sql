@@ -309,6 +309,12 @@ alter table public.activities
 alter table public.activities add column if not exists invited_from_activity_id uuid;
 alter table public.activities add column if not exists evidence_image_url text;
 
+-- Per-activity reminder body shown in the push notification. When set, the
+-- FCM cron uses this in place of the random motivational quote. Lets users
+-- pick a meaningful phrase (e.g. "Time to drink water!") when creating an
+-- activity from a template — and stays editable per-activity afterwards.
+alter table public.activities add column if not exists reminder_phrase text;
+
 create index if not exists activities_user_id_idx   on public.activities(user_id);
 create index if not exists activities_date_idx       on public.activities(date);
 create index if not exists activities_user_date_idx  on public.activities(user_id, date);

@@ -10,7 +10,7 @@ import {
 import {
   X, Clock, Smile, UserPlus, CheckCircle2, XCircle, Crown,
   Calendar as CalendarIcon, ChevronLeft, ChevronRight,
-  Bell, Repeat as RepeatIcon, Tag, Users, Eye, Lock,
+  Bell, Repeat as RepeatIcon, Tag, Users, Eye, Lock, LayoutTemplate,
 } from 'lucide-react'
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG, statusLabel, categoryLabel } from '@/lib/utils'
 import { useI18n, weekdayNarrow, weekdayShort, dateFnsLocale } from '@/lib/i18n'
@@ -1064,6 +1064,19 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
             </div>
             {titleTouched && !title.trim() && (
               <p className="text-xs text-destructive mt-1.5">{t('activityForm.titleRequired')}</p>
+            )}
+
+            {/* Templates entry — only when creating, since editing an existing
+                activity from a template would clobber the user's changes. */}
+            {!isEditing && (
+              <button
+                type="button"
+                onClick={() => { onClose(); router.push('/dashboard/templates') }}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+              >
+                <LayoutTemplate className="w-3.5 h-3.5" />
+                {t('templatesPage.modal.browseChip')}
+              </button>
             )}
           </div>
 

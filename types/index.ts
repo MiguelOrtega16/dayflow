@@ -119,6 +119,9 @@ export interface Activity {
   // 0 for category='reminder', 30 for everything else. Free tier capped at 1
   // entry by RLS; Pro can have many (hard cap 10 by check constraint).
   reminder_offsets: number[] | null
+  /** When set, overrides the random motivational quote used as FCM body.
+   *  Pre-filled by activity templates; user-editable. */
+  reminder_phrase?: string | null
   parent_activity_id: string | null
   invited_from_activity_id?: string | null
   evidence_image_url?: string | null

@@ -13,16 +13,17 @@ import type { Profile } from '@/types'
 import {
   ListChecks, Users, Settings,
   LogOut, Sun, Moon, ChevronLeft, ChevronRight,
-  BarChart2, CalendarDays, LayoutPanelTop
+  BarChart2, CalendarDays, LayoutPanelTop, LayoutTemplate,
 } from 'lucide-react'
 
 const NAV_KEYS = [
-  { href: '/dashboard',          icon: CalendarDays,    key: 'calendar' },
-  { href: '/dashboard/overview', icon: ListChecks,      key: 'tasks'    },
+  { href: '/dashboard',           icon: CalendarDays,    key: 'calendar' },
+  { href: '/dashboard/overview',  icon: ListChecks,      key: 'tasks'    },
   // Metas/Goals temporarily hidden — page + API still exist, just removed from nav.
   // { href: '/dashboard/goals',    icon: Target,          key: 'goals'    },
-  { href: '/dashboard/stats',    icon: BarChart2,       key: 'stats'    },
-  { href: '/dashboard/people',   icon: Users,           key: 'people'   },
+  { href: '/dashboard/templates', icon: LayoutTemplate,  key: 'templates' },
+  { href: '/dashboard/stats',     icon: BarChart2,       key: 'stats'    },
+  { href: '/dashboard/people',    icon: Users,           key: 'people'   },
 ] as const
 
 // Native-only items (hidden on web; only appear inside the Capacitor Android app)
