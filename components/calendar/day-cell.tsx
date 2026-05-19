@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { Plus, X } from 'lucide-react'
-import { cn, STATUS_CONFIG, getInitials, formatTime, statusLabel } from '@/lib/utils'
+import { cn, STATUS_CONFIG, getInitials, statusLabel } from '@/lib/utils'
+import { useDateTimePrefs } from '@/lib/datetime-prefs'
 import { deleteActivity, updateActivityStatus } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile } from '@/types'
 import { useI18n, useFormatDate } from '@/lib/i18n'
@@ -310,6 +311,7 @@ function ActivityPill({
   onContextMenu: (e: React.MouseEvent, a: Activity) => void
 }) {
   const { locale, t } = useI18n()
+  const { formatTime } = useDateTimePrefs()
   const statusCfg   = STATUS_CONFIG[activity.status]
   const userProfile = allUsers.find(u => u.profile.id === activity.user_id)?.profile
   const userColor   = userProfile?.color || '#6366f1'

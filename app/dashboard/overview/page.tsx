@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { format, subDays, parseISO } from 'date-fns'
 import { getActivitiesForRange, updateActivityStatus } from '@/lib/api'
-import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime } from '@/lib/utils'
+import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG } from '@/lib/utils'
+import { useDateTimePrefs } from '@/lib/datetime-prefs'
 import type { Activity, ActivityStatus, ActivityCategory, Profile } from '@/types'
 import {
   CheckCircle2, Circle, Play, Ban, SkipForward, Loader2,
@@ -563,6 +564,7 @@ function ActivityCard({
 }) {
   const { t } = useI18n()
   const fmt = useFormatDate()
+  const { formatTime } = useDateTimePrefs()
   const cfg = STATUS_CONFIG[status]
   const catCfg = CATEGORY_CONFIG[activity.category]
   const Icon = STATUS_ICONS[status]
