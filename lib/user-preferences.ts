@@ -4,20 +4,56 @@
  * The column is created with default '{}' so every existing user has an
  * empty object — never null. Each getter falls back to a documented default,
  * so a profile that hasn't opened the new settings yet still behaves
- * sensibly (notification type, system ringtone).
+ * sensibly.
  */
 
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type ReminderType = 'notification' | 'alarm'
+export type ReminderType   = 'notification' | 'alarm'
+export type SnoozeMinutes  = 5 | 15 | 30
+
+/**
+ * Morning / evening reminder slot:
+ *   'default' = fire at the system default hour (7 for morning, 20 for evening)
+ *   'off'     = don't fire for this user
+ *   number    = fire at this hour in the user's local timezone (0..23)
+ *               Custom hours are a Pro feature on the client.
+ */
+export type DailySlot = 'default' | 'off' | number
 
 export interface UserPreferences {
-  reminder_type: ReminderType
+  reminder_type:        ReminderType
+  /** Show task reminder notifications on the device lock screen. */
+  screenlock_reminders: boolean
+  /** Whether the snooze action is offered on task reminders. */
+  snooze_enabled:       boolean
+  /** How long a snooze defers the reminder. */
+  snooze_minutes:       SnoozeMinutes
+  /** Morning planning push (default 7 AM local). */
+  morning_reminder:     DailySlot
+  /** Evening review push (default 8 PM local). */
+  evening_review:       DailySlot
 }
 
 const DEFAULTS: UserPreferences = {
-  reminder_type: 'notification',
+  reminder_type:        'notification',
+  screenlock_reminders: false,
+  snooze_enabled:       true,
+  snooze_minutes:       15,
+  morning_reminder:     'default',
+  evening_review:       'default',
+}
+
+function normalizeDailySlot(v: unknown): DailySlot {
+  if (v === 'off') return 'off'
+  if (typeof v === 'number' && v >= 0 && v <= 23) return Math.floor(v)
+  return 'default'
+}
+
+function normalizeSnoozeMinutes(v: unknown): SnoozeMinutes {
+  if (v === 5 || v === 15 || v === 30) return v
+  return DEFAULTS.snooze_minutes
 }
 
 /** Coerce a raw jsonb value (any shape) into a typed UserPreferences.
@@ -30,7 +66,12 @@ export function normalizePreferences(raw: unknown): UserPreferences {
   const r = raw as Record<string, unknown>
   const rt = r.reminder_type
   return {
-    reminder_type: (rt === 'notification' || rt === 'alarm') ? rt : DEFAULTS.reminder_type,
+    reminder_type:        (rt === 'notification' || rt === 'alarm') ? rt : DEFAULTS.reminder_type,
+    screenlock_reminders: typeof r.screenlock_reminders === 'boolean' ? r.screenlock_reminders : DEFAULTS.screenlock_reminders,
+    snooze_enabled:       typeof r.snooze_enabled       === 'boolean' ? r.snooze_enabled       : DEFAULTS.snooze_enabled,
+    snooze_minutes:       normalizeSnoozeMinutes(r.snooze_minutes),
+    morning_reminder:     normalizeDailySlot(r.morning_reminder),
+    evening_review:       normalizeDailySlot(r.evening_review),
   }
 }
 

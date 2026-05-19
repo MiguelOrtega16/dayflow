@@ -6,6 +6,12 @@
     <string name="custom_url_scheme">com.chanclastudio.dayflow</string>
     <string name="widget_label">DayFlow — Hoy</string>
     <string name="widget_description">Mira tus tareas de hoy y márcalas como completadas desde la pantalla de inicio.</string>
+    <!-- Default notification channel id. Used by FCM when a push arrives
+         with a channel_id that doesn't exist on this device (e.g. activity-
+         alarms before the app has ever opened the dashboard). Falling back
+         to activity-reminders (HIGH importance) is much better than Android's
+         generic "Miscellaneous" channel (DEFAULT importance, quiet vibrate). -->
+    <string name="default_notification_channel_id">activity-reminders</string>
     <string name="streak_widget_label">DayFlow — Racha</string>
     <string name="streak_widget_description">Tu racha actual y el progreso de hoy a la vista.</string>
     <string name="nextup_widget_label">DayFlow — Próxima</string>

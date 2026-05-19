@@ -184,14 +184,16 @@ export async function GET(request: Request) {
   type WebPushSub = { endpoint: string; keys: { p256dh: string; auth: string } }
   const tokenMap: Record<string, string> = {}
   const webPushMap: Record<string, WebPushSub> = {}
-  // Reminder type per user (notification | alarm). Defaults to 'notification'
-  // for any user whose preferences row is missing or doesn't set it.
+  // Per-user FCM routing pulled from the preferences jsonb. Defaults match
+  // the new-user state in lib/user-preferences.ts.
   const reminderTypeMap: Record<string, 'notification' | 'alarm'> = {}
+  const screenlockMap:   Record<string, boolean> = {}
   for (const p of profiles ?? []) {
     if (p.fcm_token)             tokenMap[p.id]   = p.fcm_token
     if (p.web_push_subscription) webPushMap[p.id] = p.web_push_subscription as WebPushSub
     const prefs = (p.preferences ?? {}) as Record<string, unknown>
     reminderTypeMap[p.id] = prefs.reminder_type === 'alarm' ? 'alarm' : 'notification'
+    screenlockMap[p.id]   = prefs.screenlock_reminders === true
   }
 
   let sent = 0
@@ -225,7 +227,22 @@ export async function GET(request: Request) {
       // channel ('activity-alarms') which the native side declares with
       // IMPORTANCE_HIGH + insistent vibration. Web push has no channels.
       const isAlarm = reminderTypeMap[uid] === 'alarm'
-      const fcmOptions = isAlarm ? { androidChannelId: 'activity-alarms' } : undefined
+      // Lock-screen visibility: 'public' shows full title+body on the lock
+      // screen, 'private' hides content until unlock. The Android default
+      // varies by channel; we set it explicitly per push so the user's
+      // preference always wins.
+      // For alarm-type, we also opt into the pre-Android-8 alarm payload
+      // (notificationPriority/defaultVibrateTimings/defaultSound) so the
+      // urgency still comes through on older devices and as defense-in-
+      // depth if the activity-alarms channel never made it onto the device.
+      const fcmOptions = {
+        // v2 = the channel with the long triple-pulse vibration pattern set
+        // up natively in SystemSettingsPlugin.createAlarmChannel. v1
+        // ('activity-alarms') is deleted on app init so this won't fall
+        // through to it.
+        ...(isAlarm ? { androidChannelId: 'activity-alarms-v2' as const, alarm: true } : {}),
+        androidVisibility: (screenlockMap[uid] ? 'public' : 'private') as 'public' | 'private',
+      }
       if (token)  { await sendFCM(token, pushTitle, body, data, fcmOptions); sent++ }
       if (webSub) { await sendWebPush(webSub, pushTitle, body, data); if (!token) sent++ }
     }))

@@ -47,9 +47,19 @@ interface SendFCMOptions {
    *  through this channel — used to escalate alarm-type reminders to a
    *  higher-importance channel with stronger vibration. */
   androidChannelId?: string
+  /** Lock-screen visibility on Android. 'public' shows the full content
+   *  (title + body) on the lock screen; 'private' shows it only after
+   *  unlock; 'secret' hides it entirely. Defaults to the channel default
+   *  when omitted. */
+  androidVisibility?: 'private' | 'public' | 'secret'
   /** Optional notification sound for iOS. Android sound is governed by the
    *  channel; setting it here is a no-op on Android. */
   apnsSound?: string
+  /** Treat as a high-urgency alarm (Android 7- only honors this; Android
+   *  8+ the channel importance wins). On Android 7- we also set
+   *  defaultVibrateTimings + defaultSound so the user feels the urgency
+   *  even when their device has no notification channels. */
+  alarm?: boolean
 }
 
 export async function sendFCM(
@@ -62,13 +72,29 @@ export async function sendFCM(
   const messaging = await getFirebaseMessaging()
   if (!messaging) return
   try {
+    // Build android.notification only if at least one Android-specific
+    // option was provided, so the FCM v1 schema validator doesn't complain
+    // about an empty object.
+    const androidNotification: Record<string, unknown> = {}
+    if (options?.androidChannelId)  androidNotification.channelId  = options.androidChannelId
+    if (options?.androidVisibility) androidNotification.visibility = options.androidVisibility
+    if (options?.alarm) {
+      // notificationPriority is used only on Android 7-; Android 8+ uses
+      // channel importance. defaultVibrateTimings + defaultSound similarly
+      // are channel-overridden on 8+ but help on pre-8.
+      androidNotification.notificationPriority = 'PRIORITY_MAX'
+      androidNotification.defaultVibrateTimings = true
+      androidNotification.defaultSound = true
+    }
+    const hasAndroidNotif = Object.keys(androidNotification).length > 0
+
     await messaging.send({
       token,
       notification: { title, body },
       data: { url: '/dashboard', ...extraData },
       android: {
         priority: 'high',
-        ...(options?.androidChannelId ? { notification: { channelId: options.androidChannelId } } : {}),
+        ...(hasAndroidNotif ? { notification: androidNotification } : {}),
       },
       apns: { payload: { aps: { sound: options?.apnsSound ?? 'default', badge: 1 } } },
     })

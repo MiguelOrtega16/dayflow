@@ -53,20 +53,31 @@ export async function GET(request: Request) {
   // Fetch all users that have at least one push channel
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, fcm_token, web_push_subscription, timezone')
+    .select('id, fcm_token, web_push_subscription, timezone, preferences')
 
   if (!profiles?.length) return NextResponse.json({ sent: 0 })
 
-  // Bucket each user by their local hour
+  // Bucket each user by their local hour. Per-user prefs override the
+  // defaults (7 AM morning, 8 PM evening); 'off' drops the user from the
+  // bucket; a numeric value picks a custom hour.
   const morningUsers: typeof profiles = []
   const eveningUsers: typeof profiles = []
+
+  const slotHour = (slot: unknown, defaultHour: number): number | null => {
+    if (slot === 'off') return null
+    if (typeof slot === 'number' && slot >= 0 && slot <= 23) return Math.floor(slot)
+    return defaultHour
+  }
 
   for (const p of profiles) {
     if (!p.fcm_token && !p.web_push_subscription) continue
     const tz = (p as any).timezone || appTz
     const hour = localHour(now, tz)
-    if (hour === 7)  morningUsers.push(p)
-    if (hour === 20) eveningUsers.push(p)
+    const prefs = ((p as any).preferences ?? {}) as Record<string, unknown>
+    const morningHour = slotHour(prefs.morning_reminder, 7)
+    const eveningHour = slotHour(prefs.evening_review,   20)
+    if (morningHour !== null && hour === morningHour) morningUsers.push(p)
+    if (eveningHour !== null && hour === eveningHour) eveningUsers.push(p)
   }
 
   let sent = 0

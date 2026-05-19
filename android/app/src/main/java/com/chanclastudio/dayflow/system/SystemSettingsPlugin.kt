@@ -1,8 +1,11 @@
 package com.chanclastudio.dayflow.system
 
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -147,5 +150,72 @@ class SystemSettingsPlugin : Plugin() {
         } else true
         result.put("enabled", enabled)
         call.resolve(result)
+    }
+
+    /**
+     * Creates the alarm-type notification channel with a distinctive long
+     * vibration pattern. Capacitor's LocalNotifications.createChannel
+     * exposes a `vibration: boolean` toggle but no way to set the actual
+     * pattern, which is why this lives in native code.
+     *
+     * The channel is named/described by the caller (so we don't hardcode
+     * Spanish strings here). Idempotent — calling repeatedly is fine.
+     *
+     * Note: Android channels are immutable after creation. Once the user
+     * has this channel installed with a given pattern, changing the
+     * pattern in code does nothing for that user. Use a versioned id
+     * (e.g. ...-v2) when you actually need to evolve the channel.
+     */
+    @PluginMethod
+    fun createAlarmChannel(call: PluginCall) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            // Pre-Android 8 has no channels — caller falls back to per-
+            // notification settings.
+            call.resolve(); return
+        }
+        val id          = call.getString("id")          ?: run { call.reject("Missing id"); return }
+        val name        = call.getString("name")        ?: id
+        val description = call.getString("description") ?: ""
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        if (nm == null) { call.reject("No NotificationManager"); return }
+
+        try {
+            val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH).apply {
+                this.description = description
+                enableVibration(true)
+                // Triple-pulse + long buzz. Total ~3.4s. Distinct from the
+                // default short single-buzz used by IMPORTANCE_HIGH/MAX
+                // without a custom pattern.
+                vibrationPattern = longArrayOf(0, 700, 250, 700, 250, 700, 250, 1200)
+                enableLights(true)
+                setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+            }
+            nm.createNotificationChannel(channel)
+            call.resolve()
+        } catch (e: Throwable) {
+            call.reject("createAlarmChannel failed: ${e.message}")
+        }
+    }
+
+    /** Deletes a notification channel by id. Safe to call on a channel
+     *  that doesn't exist. */
+    @PluginMethod
+    fun deleteChannel(call: PluginCall) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) { call.resolve(); return }
+        val id = call.getString("id") ?: run { call.reject("Missing id"); return }
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        try {
+            nm?.deleteNotificationChannel(id)
+            call.resolve()
+        } catch (e: Throwable) {
+            call.reject("deleteChannel failed: ${e.message}")
+        }
     }
 }

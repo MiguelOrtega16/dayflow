@@ -13,6 +13,8 @@ interface SystemSettingsPlugin {
   openAutoStartSettings(): Promise<void>
   checkBatteryOptimization(): Promise<{ ignoring: boolean }>
   checkNotificationsEnabled(): Promise<{ enabled: boolean }>
+  createAlarmChannel(opts: { id: string; name: string; description?: string }): Promise<void>
+  deleteChannel(opts: { id: string }): Promise<void>
 }
 
 const native = registerPlugin<SystemSettingsPlugin>('SystemSettings')
@@ -40,4 +42,14 @@ export const SystemSettings = {
     isSystemSettingsSupported()
       ? native.checkNotificationsEnabled()
       : Promise.resolve({ enabled: true }),
+
+  createAlarmChannel: (id: string, name: string, description?: string) =>
+    isSystemSettingsSupported()
+      ? native.createAlarmChannel({ id, name, description })
+      : Promise.resolve(),
+
+  deleteChannel: (id: string) =>
+    isSystemSettingsSupported()
+      ? native.deleteChannel({ id })
+      : Promise.resolve(),
 }

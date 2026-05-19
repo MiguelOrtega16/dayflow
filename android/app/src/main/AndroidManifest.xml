@@ -15,6 +15,16 @@
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/colorPrimary"
         />
+        <!-- Fallback channel for FCM pushes whose channel_id isn't registered
+             on the device. Without this, Android creates a "Miscellaneous"
+             channel at IMPORTANCE_DEFAULT, which made alarm-type reminders
+             look identical to plain notifications when the activity-alarms
+             channel hadn't been created yet. Value matches the id created
+             by ensureReminderChannels in lib/push-notifications.ts. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="activity-reminders"
+        />
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"

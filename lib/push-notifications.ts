@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { initLocalNotificationListeners } from '@/lib/activity-reminders'
+import { SystemSettings } from '@/lib/system-settings'
 
 export async function initPushNotifications(userId: string) {
   // Start local-notification tap listener in parallel (independent of FCM)
@@ -57,33 +58,69 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
 
 /**
  * Declare both reminder channels on Android. Channels are global per-app and
- * created once — subsequent createChannel calls with the same id are no-ops.
+ * created once — subsequent createChannel calls with the same id are no-ops
+ * (importance/sound/vibration are IMMUTABLE on Android once a channel exists,
+ * so changing those values in code does nothing until the app is reinstalled).
+ *
  * The FCM server picks between the two via android.notification.channel_id
- * based on the user's preferences.reminder_type.
+ * based on the user's preferences.reminder_type. If a channel id is sent that
+ * doesn't exist on the device, FCM silently falls back to the manifest-
+ * declared default channel — which is why we also wire up
+ * `default_notification_channel_id` in AndroidManifest pointing to
+ * activity-reminders, so worst-case the notification still goes through a
+ * HIGH-importance channel instead of Android's generic "Miscellaneous".
+ *
+ * Each createChannel runs in its own try/catch so a single failure doesn't
+ * block the other channel.
  */
 async function ensureReminderChannels() {
   if (!Capacitor.isNativePlatform()) return
+  let LocalNotifications: typeof import('@capacitor/local-notifications').LocalNotifications
   try {
-    const { LocalNotifications } = await import('@capacitor/local-notifications')
-    await LocalNotifications.createChannel({
-      id:          'activity-reminders',
-      name:        'Recordatorios de actividades',
-      description: 'Notificaciones estándar para tus recordatorios',
-      importance:  4,  // IMPORTANCE_HIGH
-      sound:       'default',
-      vibration:   true,
-    })
-    await LocalNotifications.createChannel({
-      id:          'activity-alarms',
-      name:        'Alarmas de actividades',
-      description: 'Alertas insistentes para recordatorios marcados como alarma',
-      importance:  5,  // IMPORTANCE_MAX
-      sound:       'default',
-      vibration:   true,
-      lights:      true,
-    })
+    LocalNotifications = (await import('@capacitor/local-notifications')).LocalNotifications
   } catch (err) {
-    console.error('[Push] channel init error:', err)
+    console.error('[Push] channel init: failed to import LocalNotifications', err)
+    return
+  }
+
+  const tryCreate = async (cfg: Parameters<typeof LocalNotifications.createChannel>[0]) => {
+    try {
+      await LocalNotifications.createChannel(cfg)
+      console.log('[Push] channel ensured:', cfg.id)
+    } catch (err) {
+      console.error('[Push] channel create failed:', cfg.id, err)
+    }
+  }
+
+  await tryCreate({
+    id:          'activity-reminders',
+    name:        'Recordatorios de actividades',
+    description: 'Notificaciones estándar para tus recordatorios',
+    importance:  4,  // IMPORTANCE_HIGH
+    sound:       'default',
+    vibration:   true,
+  })
+
+  // Alarm channel: we use the SystemSettings native plugin instead of
+  // LocalNotifications.createChannel because Capacitor's API doesn't expose
+  // vibrationPattern, and the whole point of the alarm channel is to feel
+  // distinctly different from a regular reminder. Triple-pulse + long buzz.
+  // Versioned id: 'activity-alarms' (v1) shipped with the same default
+  // vibration as activity-reminders, so it was indistinguishable in
+  // practice. We delete the orphaned v1 to keep the user's notification-
+  // settings list clean, then create v2 with the custom pattern.
+  try {
+    await SystemSettings.deleteChannel('activity-alarms')
+  } catch { /* missing channel is fine */ }
+  try {
+    await SystemSettings.createAlarmChannel(
+      'activity-alarms-v2',
+      'Alarmas de actividades',
+      'Alertas con vibración insistente para recordatorios tipo alarma',
+    )
+    console.log('[Push] channel ensured: activity-alarms-v2')
+  } catch (err) {
+    console.error('[Push] alarm channel create failed', err)
   }
 }
 
