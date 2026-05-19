@@ -1,12 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Check, X } from 'lucide-react'
 import { useBackButtonClose } from '@/lib/back-button'
 import { useI18n } from '@/lib/i18n'
 import { ANCHOR_PRICE_USD } from '@/lib/billing/products'
-import { purchaseProduct, restorePurchases } from '@/lib/billing/revenuecat'
+import {
+  getOfferingPrices,
+  isPurchaseCancelled,
+  purchaseProduct,
+  restorePurchases,
+  type OfferingPriceMap,
+} from '@/lib/billing/revenuecat'
 import { cn } from '@/lib/utils'
 import type { BillingProductId } from '@/types'
 
@@ -37,8 +43,45 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
   const [selected, setSelected] = useState<BillingProductId>('pro_annual')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+  const [prices, setPrices] = useState<OfferingPriceMap | null>(null)
   const native = Capacitor.isNativePlatform()
   useBackButtonClose(true, onClose)
+
+  // Pull store-localized prices (and per-plan availability) once on mount.
+  // On native the strings come back in the user's local currency from Play
+  // Store; on web we keep the USD anchor fallback below.
+  useEffect(() => {
+    if (!native) return
+    let cancelled = false
+    getOfferingPrices()
+      .then((map) => {
+        if (cancelled) return
+        if (map) setPrices(map)
+      })
+      .catch((err) => {
+        console.warn('[paywall] failed to load offering prices', err)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [native])
+
+  // If lifetime isn't published in the RC offering on this device, slide the
+  // selection over to annual so the user can still complete a purchase rather
+  // than seeing a "package not found" error on tap.
+  useEffect(() => {
+    if (prices && selected === 'pro_lifetime' && !prices.pro_lifetime.available) {
+      setSelected('pro_annual')
+    }
+  }, [prices, selected])
+
+  function priceFor(id: BillingProductId): string {
+    const fromStore = prices?.[id]?.priceString
+    if (fromStore) return fromStore
+    // Web (or before native prices arrive) — anchor is USD, so label it.
+    return `${ANCHOR_PRICE_USD[id]} USD`
+  }
 
   async function handleBuy() {
     if (!userId) {
@@ -47,6 +90,7 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
     }
     setBusy(true)
     setError(null)
+    setInfo(null)
     try {
       if (native) {
         await purchaseProduct(selected)
@@ -65,7 +109,11 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
         }
       }
     } catch (err) {
-      setError(String(err))
+      if (isPurchaseCancelled(err)) {
+        setInfo(t('billing.paywall.cancelled'))
+      } else {
+        setError(String(err))
+      }
     } finally {
       setBusy(false)
     }
@@ -74,10 +122,15 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
   async function handleRestore() {
     setBusy(true)
     setError(null)
+    setInfo(null)
     try {
       await restorePurchases()
     } catch (err) {
-      setError(String(err))
+      if (isPurchaseCancelled(err)) {
+        setInfo(t('billing.paywall.cancelled'))
+      } else {
+        setError(String(err))
+      }
     } finally {
       setBusy(false)
     }
@@ -129,7 +182,7 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
             selected={selected === 'pro_annual'}
             onSelect={setSelected}
             title={t('billing.paywall.plans.annual')}
-            price={ANCHOR_PRICE_USD.pro_annual}
+            price={priceFor('pro_annual')}
             cadence={t('billing.paywall.plans.perYear')}
             badge={t('billing.paywall.plans.bestValue')}
             sub={t('billing.paywall.plans.trialBadge')}
@@ -139,20 +192,29 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
             selected={selected === 'pro_monthly'}
             onSelect={setSelected}
             title={t('billing.paywall.plans.monthly')}
-            price={ANCHOR_PRICE_USD.pro_monthly}
+            price={priceFor('pro_monthly')}
             cadence={t('billing.paywall.plans.perMonth')}
           />
-          <PlanCard
-            id="pro_lifetime"
-            selected={selected === 'pro_lifetime'}
-            onSelect={setSelected}
-            title={t('billing.paywall.plans.lifetime')}
-            price={ANCHOR_PRICE_USD.pro_lifetime}
-            cadence={t('billing.paywall.plans.oneTime')}
-            sub={t('billing.paywall.plans.lifetimeSub')}
-          />
+          {/* Hide Lifetime on native when RC offering doesn't include it —
+              otherwise the user taps Subscribe and gets a confusing
+              "package not found" error. Web always shows it since Stripe
+              checkout handles the lifetime price independently of RC. */}
+          {(!native || !prices || prices.pro_lifetime.available) && (
+            <PlanCard
+              id="pro_lifetime"
+              selected={selected === 'pro_lifetime'}
+              onSelect={setSelected}
+              title={t('billing.paywall.plans.lifetime')}
+              price={priceFor('pro_lifetime')}
+              cadence={t('billing.paywall.plans.oneTime')}
+              sub={t('billing.paywall.plans.lifetimeSub')}
+            />
+          )}
         </div>
 
+        {info && (
+          <div className="px-6 pb-2 text-sm text-muted-foreground">{info}</div>
+        )}
         {error && (
           <div className="px-6 pb-2 text-sm text-destructive">{error}</div>
         )}

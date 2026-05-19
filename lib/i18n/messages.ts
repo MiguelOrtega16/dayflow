@@ -831,6 +831,7 @@ export const messages = {
         },
         restore: 'Restaurar compras',
         fineprint: 'Los precios locales se muestran al pagar. Cancela cuando quieras.',
+        cancelled: 'Compra cancelada. Puedes intentarlo de nuevo cuando quieras.',
         errors: {
           signIn: 'Inicia sesión primero',
           checkoutFailed: 'Falló el pago',
@@ -1715,6 +1716,7 @@ export const messages = {
         },
         restore: 'Restore purchases',
         fineprint: 'Local prices shown at checkout. Cancel anytime.',
+        cancelled: 'Purchase cancelled. You can try again whenever you like.',
         errors: {
           signIn: 'Please sign in first',
           checkoutFailed: 'Checkout failed',

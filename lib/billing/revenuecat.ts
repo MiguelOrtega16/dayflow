@@ -11,6 +11,12 @@ import { env } from '@/lib/env'
 import type { BillingProductId } from '@/types'
 import { PLAY_PRODUCT_IDS } from './products'
 
+export type OfferingPriceEntry = {
+  priceString: string | null
+  available: boolean
+}
+export type OfferingPriceMap = Record<BillingProductId, OfferingPriceEntry>
+
 let configured = false
 let configuredFor: string | null = null
 
@@ -19,7 +25,7 @@ let configuredFor: string | null = null
 const PACKAGE_IDENTIFIER: Record<BillingProductId, string> = {
   pro_monthly: '$rc_monthly',
   pro_annual: '$rc_annual',
-  pro_lifetime: 'lifetime',
+  pro_lifetime: '$rc_lifetime',
 }
 
 function isNative(): boolean {
@@ -68,9 +74,25 @@ export async function getCurrentOffering(): Promise<PurchasesOffering | null> {
   return result.current ?? null
 }
 
+// Resolve an RC package for one of our internal product IDs. We try the
+// configured RC package identifier first (the conventional shape we set up
+// in offering 'default'), then fall back to matching by the underlying Play
+// Store SKU. The SKU fallback means we still find the right package even if
+// someone in the RC dashboard named the package differently — e.g. used the
+// built-in 'Lifetime' type ($rc_lifetime) instead of our custom 'lifetime'.
 function findPackage(offering: PurchasesOffering, productId: BillingProductId): PurchasesPackage | null {
   const id = PACKAGE_IDENTIFIER[productId]
-  return offering.availablePackages.find((p) => p.identifier === id) ?? null
+  const byIdentifier = offering.availablePackages.find((p) => p.identifier === id)
+  if (byIdentifier) return byIdentifier
+
+  const sku = PLAY_PRODUCT_IDS[productId]
+  if (!sku) return null
+  // Play subscription SKUs come through as `{product_id}:{base_plan_id}` on
+  // the product side too, but the prefix before `:` always matches.
+  return offering.availablePackages.find((p) => {
+    const productSku = p.product.identifier
+    return productSku === sku || productSku.split(':')[0] === sku
+  }) ?? null
 }
 
 // Trigger a native purchase. Resolves when the receipt has been validated by
@@ -93,4 +115,38 @@ export async function purchaseProduct(productId: BillingProductId): Promise<void
 export async function restorePurchases(): Promise<void> {
   if (!isNative()) return
   await Purchases.restorePurchases()
+}
+
+// Returns localized prices + availability for every Pro plan. Used by the
+// paywall to show Play Store-formatted prices in the user's local currency
+// instead of the USD anchor, and to hide plans (e.g. Lifetime) that the RC
+// dashboard hasn't published in the current offering on this device.
+export async function getOfferingPrices(): Promise<OfferingPriceMap | null> {
+  if (!isNative()) return null
+  const offering = await getCurrentOffering()
+  if (!offering) return null
+
+  const result = {} as OfferingPriceMap
+  for (const productId of Object.keys(PACKAGE_IDENTIFIER) as BillingProductId[]) {
+    const pkg = findPackage(offering, productId)
+    result[productId] = {
+      priceString: pkg?.product.priceString ?? null,
+      available: !!pkg,
+    }
+  }
+  return result
+}
+
+// True when the user dismissed the Play Store / App Store purchase sheet
+// without confirming. We treat this as a soft cancel, not a destructive error.
+// RC's PURCHASES_ERROR_CODE enum isn't exported as a runtime value by the
+// Capacitor wrapper, so we match the documented code ("1" → PURCHASE_CANCELLED_ERROR)
+// directly along with the legacy userCancelled boolean and a message fallback.
+export function isPurchaseCancelled(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const anyErr = err as { code?: unknown; userCancelled?: unknown; message?: unknown }
+  if (anyErr.userCancelled === true) return true
+  if (String(anyErr.code) === '1') return true
+  if (typeof anyErr.message === 'string' && /cancell?ed/i.test(anyErr.message)) return true
+  return false
 }
