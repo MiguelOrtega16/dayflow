@@ -28,6 +28,12 @@ export function useEntitlement(userId: string | null | undefined): UseEntitlemen
     const supabase = createClient()
     let mounted = true
 
+    // Reset to "we don't know yet" when the userId changes so that callers
+    // gating UI on `!loading && !isPro` don't briefly render the free-tier
+    // state for the new user while the subscriptions query is still in
+    // flight (which caused Pro lock overlays to flash on the settings page).
+    setLoading(true)
+
     async function load() {
       const { data } = await supabase
         .from('subscriptions')

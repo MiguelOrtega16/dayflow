@@ -657,6 +657,36 @@ create trigger check_profile_color_trigger
   before update on public.profiles
   for each row execute procedure public.check_profile_color();
 
+-- Profile theme gate: free tier limited to the 'default' palette in
+-- lib/themes.ts. Non-default ids in preferences.theme are Pro-only.
+-- Mirrors check_profile_color: insert path is unrestricted, only UPDATEs
+-- that actually change preferences.theme to a non-free value are checked.
+create or replace function public.check_profile_theme()
+returns trigger as $$
+declare
+  new_theme text;
+  old_theme text;
+begin
+  if TG_OP = 'INSERT' then return NEW; end if;
+
+  new_theme := coalesce(NEW.preferences ->> 'theme', 'default');
+  old_theme := coalesce(OLD.preferences ->> 'theme', 'default');
+
+  if new_theme is distinct from old_theme
+     and new_theme <> 'default'
+     and not public.is_pro(NEW.id)
+  then
+    raise exception 'Pro theme requires subscription' using errcode = '42501';
+  end if;
+  return NEW;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists check_profile_theme_trigger on public.profiles;
+create trigger check_profile_theme_trigger
+  before update on public.profiles
+  for each row execute procedure public.check_profile_theme();
+
 -- ============================================================
 -- TRIGGERS — updated_at
 -- ============================================================

@@ -7,6 +7,7 @@ import { WidgetBridge, isWidgetSupported, type WidgetKind } from '@/lib/widget-b
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
+import { useBackButtonRoute } from '@/lib/back-button'
 import { createClient } from '@/lib/supabase/client'
 
 interface WidgetCardConfig {
@@ -28,6 +29,10 @@ export default function WidgetsPage() {
   const [pinningKind, setPinningKind] = useState<WidgetKind | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ title: string; body: string } | null>(null)
   const supported = isWidgetSupported()
+
+  // Hardware back returns to the main settings page instead of the
+  // quit-app confirm.
+  useBackButtonRoute(() => router.push('/dashboard/settings'))
 
   useEffect(() => {
     const supabase = createClient()

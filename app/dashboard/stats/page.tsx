@@ -175,6 +175,21 @@ export default function StatsPage() {
     if (allActivitiesForRange.length === 0) return
     setExporting(true)
     try {
+      // Build the "is shared" set. An activity is considered shared if it
+      // has ANY invitations attached, regardless of status — the user's
+      // intent of sharing is what matters here, not whether the invitee
+      // has accepted yet. Owners would otherwise show 'No' for activities
+      // they shared because their own activity row has no invitation_id.
+      const sharedActivityIds = new Set<string>()
+      const allIds = allActivitiesForRange.map(a => a.id)
+      if (allIds.length > 0) {
+        const { data: invs } = await supabase
+          .from('activity_invitations')
+          .select('activity_id')
+          .in('activity_id', allIds)
+        for (const row of invs ?? []) sharedActivityIds.add(row.activity_id)
+      }
+
       const categoryLabels = (Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
         .reduce((acc, c) => { acc[c] = categoryLabel(c, locale); return acc }, {} as Record<ActivityCategory, string>)
       const statusLabels = (Object.keys(STATUS_CONFIG) as ActivityStatus[])
@@ -185,19 +200,18 @@ export default function StatsPage() {
         description: t('stats.export.columns.description'),
         category:    t('stats.export.columns.category'),
         status:      t('stats.export.columns.status'),
-        priority:    t('stats.export.columns.priority'),
         startTime:   t('stats.export.columns.startTime'),
         endTime:     t('stats.export.columns.endTime'),
         completion:  t('stats.export.columns.completion'),
-        tags:        t('stats.export.columns.tags'),
         goal:        t('stats.export.columns.goal'),
-        reminders:   t('stats.export.columns.reminders'),
         recurrence:  t('stats.export.columns.recurrence'),
         isShared:    t('stats.export.columns.isShared'),
+        yes:         t('common.yes'),
+        no:          t('common.no'),
         createdAt:   t('stats.export.columns.createdAt'),
         categoryLabels,
         statusLabels,
-      })
+      }, sharedActivityIds)
       const filename = `${t('stats.export.filename', { range })}.csv`
       downloadCsv(csv, filename)
     } finally {

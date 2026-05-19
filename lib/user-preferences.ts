@@ -9,6 +9,7 @@
 
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { THEMES, DEFAULT_THEME_ID } from '@/lib/themes'
 
 export type ReminderType   = 'notification' | 'alarm'
 export type SnoozeMinutes  = 5 | 15 | 30
@@ -34,6 +35,8 @@ export interface UserPreferences {
   morning_reminder:     DailySlot
   /** Evening review push (default 8 PM local). */
   evening_review:       DailySlot
+  /** Accent palette id from lib/themes.ts. Non-default ids are Pro-only. */
+  theme:                string
 }
 
 const DEFAULTS: UserPreferences = {
@@ -43,6 +46,12 @@ const DEFAULTS: UserPreferences = {
   snooze_minutes:       15,
   morning_reminder:     'default',
   evening_review:       'default',
+  theme:                DEFAULT_THEME_ID,
+}
+
+function normalizeTheme(v: unknown): string {
+  if (typeof v === 'string' && THEMES.some(t => t.id === v)) return v
+  return DEFAULT_THEME_ID
 }
 
 function normalizeDailySlot(v: unknown): DailySlot {
@@ -72,6 +81,7 @@ export function normalizePreferences(raw: unknown): UserPreferences {
     snooze_minutes:       normalizeSnoozeMinutes(r.snooze_minutes),
     morning_reminder:     normalizeDailySlot(r.morning_reminder),
     evening_review:       normalizeDailySlot(r.evening_review),
+    theme:                normalizeTheme(r.theme),
   }
 }
 

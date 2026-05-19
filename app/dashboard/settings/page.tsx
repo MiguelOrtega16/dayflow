@@ -1,14 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Crown, ChevronRight, LayoutPanelTop, Bell, LogOut } from 'lucide-react'
+import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
-import { USER_COLORS, FREE_USER_COLORS, isProColor, getInitials } from '@/lib/utils'
+import { getInitials } from '@/lib/utils'
 import { useI18n, LOCALE_NAMES, LOCALES, type Locale } from '@/lib/i18n'
 import { CustomSelect } from '@/components/ui/custom-select'
-import { useEntitlement } from '@/lib/billing/use-entitlement'
-import { usePaywall } from '@/components/paywall/paywall-provider'
 import type { Profile } from '@/types'
 import { useRouter } from 'next/navigation'
 
@@ -17,6 +15,8 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
+  // Color is read-only here — managed on the Appearance sub-page now.
+  // We still load it for the avatar preview at the top of this page.
   const [color, setColor] = useState('#6366f1')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -24,18 +24,8 @@ export default function SettingsPage() {
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
   const router = useRouter()
   const supabase = createClient()
-  const { entitlement } = useEntitlement(profile?.id ?? null)
-  const { open: openPaywall } = usePaywall()
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
-
-  const handleColorClick = (c: string) => {
-    if (isProColor(c) && !entitlement.isPro) {
-      openPaywall('locked_theme')
-      return
-    }
-    setColor(c)
-  }
 
   useEffect(() => {
     loadProfile()
@@ -52,6 +42,8 @@ export default function SettingsPage() {
       setUsername(data.username || '')
       setColor(data.color || '#6366f1')
     }
+    // Palette is synced globally by ThemeProvider's auth-state listener —
+    // no need to fetch it here.
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -60,22 +52,15 @@ export default function SettingsPage() {
     setSaving(true)
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: fullName, username: username || null, color })
+      .update({ full_name: fullName, username: username || null })
       .eq('id', profile.id)
     setSaving(false)
-    if (!error) {
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
+    if (error) {
+      console.error('[settings] save failed', error)
       return
     }
-    // The check_profile_color trigger raises 42501 when a free user tries to
-    // pick a Pro color through a bypass route — open the paywall as fallback.
-    const msg = String(error.message || '')
-    if (error.code === '42501' || msg.includes('Pro color')) {
-      openPaywall('locked_theme')
-    } else {
-      console.error('[settings] save failed', error)
-    }
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
   }
 
   const handleSignOut = async () => {
@@ -109,6 +94,9 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Profile info — identity fields only. The color (visual identity)
+            lives under Appearance now since it pairs naturally with the
+            accent theme. */}
         <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
           <h2 className="text-sm font-semibold">{t('settings.profileSection')}</h2>
 
@@ -132,56 +120,23 @@ export default function SettingsPage() {
               className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
-
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('settings.colorLabel')}</label>
-            <div className="flex flex-wrap gap-2">
-              {USER_COLORS.map(c => {
-                const isPro = isProColor(c)
-                const locked = isPro && !entitlement.isPro
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => handleColorClick(c)}
-                    className="relative w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
-                    style={{
-                      backgroundColor: c,
-                      borderColor: color === c ? 'white' : c,
-                      outline: color === c ? `2px solid ${c}` : 'none',
-                      outlineOffset: '2px',
-                    }}
-                  >
-                    {locked && (
-                      <Crown className="absolute -top-1 -right-1 w-3 h-3 text-indigo-500 bg-background rounded-full p-[1px]" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
         </div>
 
-        {/* Language section */}
-        <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
-          <h2 className="text-sm font-semibold">{t('settings.languageSection')}</h2>
-          <p className="text-xs text-muted-foreground">{t('settings.languageHelp')}</p>
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1.5">{t('settings.languageLabel')}</label>
-            <CustomSelect<Locale>
-              value={locale}
-              onChange={(v) => setLocale(v)}
-              options={LOCALES.map(l => ({ value: l, label: LOCALE_NAMES[l] }))}
-              ariaLabel={t('settings.languageLabel')}
-            />
-          </div>
-        </div>
-
-        {/* Customize section — navigation rows to sub-pages. Widget is
-            native-only since the widget config only does anything inside
-            the Android app. */}
+        {/* Customize section — navigation rows to sub-pages plus the
+            language selector (inline since it's a single dropdown, not a
+            full sub-page). Widget is native-only since the widget config
+            only does anything inside the Android app. Appearance is here
+            (not inline above) so users can deep-link to it and the
+            hardware back button has a clear "return to settings" target. */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <h2 className="text-sm font-semibold px-5 pt-5 pb-3">{t('settings.personalizeSection')}</h2>
+
+          <SettingsNavRow
+            icon={<Palette className="w-5 h-5 text-primary" />}
+            title={t('settings.appearanceRow.label')}
+            sub={t('settings.appearanceRow.sub')}
+            onClick={() => router.push('/dashboard/settings/appearance')}
+          />
 
           {isNative && (
             <SettingsNavRow
@@ -197,8 +152,24 @@ export default function SettingsPage() {
             title={t('settings.notificationsRow.label')}
             sub={t('settings.notificationsRow.sub')}
             onClick={() => router.push('/dashboard/settings/notifications')}
-            isLast
           />
+
+          {/* Language row — inline select, no chevron, no sub-page. */}
+          <div className="flex items-center gap-3 px-5 py-3">
+            <span className="shrink-0"><Languages className="w-5 h-5 text-primary" /></span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-medium">{t('settings.languageLabel')}</span>
+              <span className="block text-xs text-muted-foreground truncate">{t('settings.languageHelp')}</span>
+            </span>
+            <div className="shrink-0 w-32">
+              <CustomSelect<Locale>
+                value={locale}
+                onChange={(v) => setLocale(v)}
+                options={LOCALES.map(l => ({ value: l, label: LOCALE_NAMES[l] }))}
+                ariaLabel={t('settings.languageLabel')}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Primary Save button — full-width, padded to feel like the canonical

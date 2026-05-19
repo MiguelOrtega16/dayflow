@@ -1,6 +1,7 @@
 'use client'
 
 import { format, isToday } from 'date-fns'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2, ChevronDown, Loader2 } from 'lucide-react'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime, getInitials, formatRelativeTime, statusLabel, categoryLabel, priorityLabel } from '@/lib/utils'
 import { updateActivityStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
@@ -59,7 +60,6 @@ export function DayDetailPanel({
   date, activities, currentUserId, currentUserColor,
   allUsers, onAddActivity, onEditActivity, onActivityUpdated, loading = false,
 }: DayDetailPanelProps) {
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [openCommentId, setOpenCommentId] = useState<string | null>(null)
   const [commentsMap, setCommentsMap] = useState<Record<string, ActivityComment[]>>({})
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
@@ -236,7 +236,6 @@ export function DayDetailPanel({
   const handleDelete = async (activity: Activity, deleteAll = false) => {
     if (activity.user_id !== currentUserId) return
     await deleteActivity(activity.id, deleteAll)
-    setOpenMenuId(null)
     onActivityUpdated()
   }
 
@@ -306,24 +305,32 @@ export function DayDetailPanel({
               )}
             </div>
             {isOwnActivity && (
-              <div className="relative shrink-0">
-                <button
-                  onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === activity.id ? null : activity.id) }}
-                  className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <MoreHorizontal className="w-3.5 h-3.5" />
-                </button>
-                {openMenuId === activity.id && (
-                  <div className="absolute right-0 top-7 z-50 w-44 bg-popover border border-border rounded-xl shadow-lg py-1 text-sm" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => { onEditActivity(activity); setOpenMenuId(null) }} className="w-full text-left px-3 py-1.5 hover:bg-muted transition-colors">✏️ {t('common.edit')}</button>
-                    <div className="border-t border-border my-1" />
-                    <button onClick={() => handleDelete(activity)} className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors">🗑 {t('common.delete')}</button>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    onClick={e => e.stopPropagation()}
+                    className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-background/60 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                  >
+                    <MoreHorizontal className="w-3.5 h-3.5" />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="end"
+                    sideOffset={6}
+                    collisionPadding={8}
+                    className="z-50 w-44 bg-popover border border-border rounded-xl shadow-lg py-1 text-sm"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <DropdownMenu.Item onSelect={() => onEditActivity(activity)} className="px-3 py-1.5 hover:bg-muted transition-colors outline-none cursor-pointer">✏️ {t('common.edit')}</DropdownMenu.Item>
+                    <DropdownMenu.Separator className="border-t border-border my-1" />
+                    <DropdownMenu.Item onSelect={() => handleDelete(activity)} className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer">🗑 {t('common.delete')}</DropdownMenu.Item>
                     {activity.recurrence_type !== 'none' && (
-                      <button onClick={() => handleDelete(activity, true)} className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors">🗑 {t('calendar.deleteAllRecurring')}</button>
+                      <DropdownMenu.Item onSelect={() => handleDelete(activity, true)} className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer">🗑 {t('calendar.deleteAllRecurring')}</DropdownMenu.Item>
                     )}
-                  </div>
-                )}
-              </div>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             )}
           </div>
         </div>
@@ -498,75 +505,77 @@ export function DayDetailPanel({
               )}
 
               {isOwnActivity && (
-                <div className="relative">
-                  <button
-                    onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === activity.id ? null : activity.id) }}
-                    className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <MoreHorizontal className="w-3.5 h-3.5" />
-                  </button>
-
-                  {openMenuId === activity.id && (
-                    <div
-                      className="absolute right-0 top-7 z-50 w-52 bg-popover border border-border rounded-xl shadow-lg py-1 text-sm"
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <button
+                      onClick={e => e.stopPropagation()}
+                      className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-background/60 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <MoreHorizontal className="w-3.5 h-3.5" />
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      align="end"
+                      sideOffset={6}
+                      collisionPadding={8}
+                      className="z-50 w-52 bg-popover border border-border rounded-xl shadow-lg py-1 text-sm max-h-[80vh] overflow-y-auto"
                       onClick={e => e.stopPropagation()}
                     >
-                      <button
-                        onClick={() => { onEditActivity(activity); setOpenMenuId(null) }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-muted transition-colors"
+                      <DropdownMenu.Item
+                        onSelect={() => onEditActivity(activity)}
+                        className="px-3 py-1.5 hover:bg-muted transition-colors outline-none cursor-pointer"
                       >
                         ✏️ {t('common.edit')}
-                      </button>
-                      <div className="border-t border-border my-1" />
-                      <p className="px-3 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t('goals.statusHeading')}</p>
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Separator className="border-t border-border my-1" />
+                      <DropdownMenu.Label className="px-3 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t('goals.statusHeading')}</DropdownMenu.Label>
                       {STATUS_CYCLE.map(s => {
                         const cfg = STATUS_CONFIG[s]
                         const Icon = STATUS_ICON[s]
                         const isCurrent = activity.status === s
                         return (
-                          <button
+                          <DropdownMenu.Item
                             key={s}
-                            onClick={async () => {
-                              if (!isCurrent) {
-                                markUpdating(activity.id, true)
-                                try {
-                                  await updateActivityStatus(activity.id, s, currentUserId)
-                                  onActivityUpdated()
-                                } finally {
-                                  markUpdating(activity.id, false)
-                                }
+                            onSelect={async () => {
+                              if (isCurrent) return
+                              markUpdating(activity.id, true)
+                              try {
+                                await updateActivityStatus(activity.id, s, currentUserId)
+                                onActivityUpdated()
+                              } finally {
+                                markUpdating(activity.id, false)
                               }
-                              setOpenMenuId(null)
                             }}
                             className={cn(
-                              'w-full flex items-center gap-2 px-3 py-1.5 transition-colors',
+                              'flex items-center gap-2 px-3 py-1.5 transition-colors outline-none cursor-pointer',
                               isCurrent ? 'bg-muted font-medium' : 'hover:bg-muted'
                             )}
                           >
                             <Icon className={cn('w-3.5 h-3.5 shrink-0', cfg.color)} />
                             <span>{statusLabel(s, locale)}</span>
                             {isCurrent && <span className="ml-auto text-[10px] text-muted-foreground">✓</span>}
-                          </button>
+                          </DropdownMenu.Item>
                         )
                       })}
-                      <div className="border-t border-border my-1" />
-                      <button
-                        onClick={() => handleDelete(activity)}
-                        className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors"
+                      <DropdownMenu.Separator className="border-t border-border my-1" />
+                      <DropdownMenu.Item
+                        onSelect={() => handleDelete(activity)}
+                        className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer"
                       >
                         🗑 {t('calendar.deleteThis')}
-                      </button>
+                      </DropdownMenu.Item>
                       {activity.recurrence_type !== 'none' && (
-                        <button
-                          onClick={() => handleDelete(activity, true)}
-                          className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors"
+                        <DropdownMenu.Item
+                          onSelect={() => handleDelete(activity, true)}
+                          className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer"
                         >
                           🗑 {t('calendar.deleteAllRecurring')}
-                        </button>
+                        </DropdownMenu.Item>
                       )}
-                    </div>
-                  )}
-                </div>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
               )}
             </div>
           </div>
@@ -828,9 +837,6 @@ export function DayDetailPanel({
         )}
       </div>
 
-      {openMenuId && (
-        <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
-      )}
     </div>
   )
 }

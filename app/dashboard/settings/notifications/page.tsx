@@ -10,6 +10,7 @@ import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { CustomSelect } from '@/components/ui/custom-select'
 import { cn } from '@/lib/utils'
+import { useBackButtonRoute } from '@/lib/back-button'
 import {
   getUserPreferences, updateUserPreferences,
   type UserPreferences, type ReminderType, type SnoozeMinutes, type DailySlot,
@@ -37,6 +38,10 @@ export default function NotificationsSettingsPage() {
   const [isNative, setIsNative] = useState(false)
   const [prefs, setPrefs] = useState<UserPreferences | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Hardware back returns to the main settings page instead of the
+  // quit-app confirm.
+  useBackButtonRoute(() => router.push('/dashboard/settings'))
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
 
@@ -210,7 +215,7 @@ export default function NotificationsSettingsPage() {
                 hours={MORNING_HOURS}
                 defaultHour={7}
                 isPro={entitlement.isPro}
-                onProGate={() => openPaywall('locked_theme')}
+                onProGate={() => openPaywall('custom_reminders')}
                 t={t}
                 kind="morning"
               />
@@ -223,7 +228,7 @@ export default function NotificationsSettingsPage() {
                 hours={EVENING_HOURS}
                 defaultHour={20}
                 isPro={entitlement.isPro}
-                onProGate={() => openPaywall('locked_theme')}
+                onProGate={() => openPaywall('custom_reminders')}
                 t={t}
                 kind="evening"
               />

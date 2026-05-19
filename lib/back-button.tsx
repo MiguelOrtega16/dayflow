@@ -112,6 +112,27 @@ export function useBackButtonClose(open: boolean, onClose: () => void) {
   }, [open, register])
 }
 
+/**
+ * For sub-pages reached via in-app navigation (e.g. settings → appearance):
+ * register a callback that runs the supplied navigation function when the
+ * Android hardware back button is pressed. Without this, the default
+ * back-button handler would treat the sub-page as "nothing to close" and
+ * show the quit-app confirm dialog.
+ *
+ * Pass a stable navigation callback (e.g. `() => router.push('/dashboard/settings')`).
+ * Mount and unmount tie the registration to the page lifecycle so nested
+ * pushes still work — the most recently mounted page wins.
+ */
+export function useBackButtonRoute(navigate: () => void) {
+  const { register } = useContext(BackButtonContext)
+  const navigateRef = useRef(navigate)
+  useEffect(() => { navigateRef.current = navigate }, [navigate])
+
+  useEffect(() => {
+    return register(() => navigateRef.current())
+  }, [register])
+}
+
 function QuitConfirm({
   onCancel, onConfirm, texts,
 }: {

@@ -26,6 +26,13 @@ function csvRow(fields: unknown[]): string {
  * Build a CSV from a list of activities. Includes a BOM so Excel/Google
  * Sheets autodetect UTF-8 (without it, accented characters render as
  * mojibake when the user opens the file in Excel on Windows).
+ *
+ * `sharedActivityIds` carries the canonical "is this activity shared"
+ * truth from the caller — checking `a.invitation_id` alone misses cases
+ * where the current user is the OWNER of an activity they shared with
+ * others (the owner's row has no invitation_id even when invitations
+ * exist), so the caller fetches the activity_invitations table and
+ * passes the union here.
  */
 export function activitiesToCsv(
   activities: Activity[],
@@ -35,46 +42,44 @@ export function activitiesToCsv(
     description: string
     category: string
     status: string
-    priority: string
     startTime: string
     endTime: string
     completion: string
-    tags: string
     goal: string
-    reminders: string
     recurrence: string
     isShared: string
+    yes: string
+    no: string
     createdAt: string
     categoryLabels: Record<ActivityCategory, string>
     statusLabels: Record<ActivityStatus, string>
   },
+  sharedActivityIds: Set<string> = new Set(),
 ): string {
   const header = csvRow([
     labels.date, labels.title, labels.description, labels.category, labels.status,
-    labels.priority, labels.startTime, labels.endTime, labels.completion,
-    labels.tags, labels.goal, labels.reminders, labels.recurrence,
+    labels.startTime, labels.endTime, labels.completion,
+    labels.goal, labels.recurrence,
     labels.isShared, labels.createdAt,
   ])
 
-  const rows = activities.map(a => csvRow([
-    a.date,
-    a.title,
-    a.description ?? '',
-    labels.categoryLabels[a.category] ?? a.category,
-    labels.statusLabels[a.status] ?? a.status,
-    a.priority,
-    a.start_time ?? '',
-    a.end_time ?? '',
-    a.completion_percentage,
-    (a.tags ?? []).join('; '),
-    a.goal?.title ?? '',
-    // Reminder offsets are minutes-before-start. Join with semicolons because
-    // commas would split the cell, and we already use ';' for tags.
-    (a.reminder_offsets ?? []).join('; '),
-    a.recurrence_type,
-    a.invitation_id ? 'yes' : 'no',
-    a.created_at,
-  ]))
+  const rows = activities.map(a => {
+    const shared = sharedActivityIds.has(a.id) || !!a.invitation_id
+    return csvRow([
+      a.date,
+      a.title,
+      a.description ?? '',
+      labels.categoryLabels[a.category] ?? a.category,
+      labels.statusLabels[a.status] ?? a.status,
+      a.start_time ?? '',
+      a.end_time ?? '',
+      a.completion_percentage,
+      a.goal?.title ?? '',
+      a.recurrence_type,
+      shared ? labels.yes : labels.no,
+      a.created_at,
+    ])
+  })
 
   // BOM + CRLF line endings (RFC 4180 + Excel-friendly).
   return '﻿' + [header, ...rows].join('\r\n')
