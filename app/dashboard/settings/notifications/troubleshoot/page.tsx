@@ -6,6 +6,7 @@ import { ArrowLeft, Check, AlertCircle, HelpCircle } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { useI18n } from '@/lib/i18n'
+import { SystemSettings } from '@/lib/system-settings'
 import { cn } from '@/lib/utils'
 
 type PermState = 'granted' | 'denied' | 'prompt' | 'unsupported' | 'unknown'
@@ -15,28 +16,34 @@ export default function NotifTroubleshootPage() {
   const router = useRouter()
   const [isNative, setIsNative] = useState(false)
   const [permission, setPermission] = useState<PermState>('unknown')
+  const [batteryIgnoring, setBatteryIgnoring] = useState<boolean | null>(null)
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
 
-  // Read the current permission state on mount, then again whenever the page
-  // gains focus (so returning from system settings refreshes the chip).
+  // Read all states on mount + whenever the page regains focus (so returning
+  // from system settings refreshes the chips).
   useEffect(() => {
-    refreshPermission()
-    const onVisible = () => { if (document.visibilityState === 'visible') refreshPermission() }
+    refreshAll()
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshAll() }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNative])
 
-  const refreshPermission = async () => {
+  const refreshAll = async () => {
     if (isNative) {
       try {
         const res = await LocalNotifications.checkPermissions()
-        // Capacitor returns 'granted' | 'denied' | 'prompt' | 'prompt-with-rationale'
         const d = res.display
         setPermission(d === 'granted' ? 'granted' : d === 'denied' ? 'denied' : 'prompt')
       } catch {
         setPermission('unknown')
+      }
+      try {
+        const { ignoring } = await SystemSettings.checkBatteryOptimization()
+        setBatteryIgnoring(ignoring)
+      } catch {
+        setBatteryIgnoring(null)
       }
     } else if (typeof window !== 'undefined' && 'Notification' in window) {
       const p = Notification.permission
@@ -46,18 +53,31 @@ export default function NotifTroubleshootPage() {
     }
   }
 
-  const handleRequest = async () => {
+  // ── Notifications row ──────────────────────────────────────────────────────
+  const handleNotificationsAction = async () => {
     if (isNative) {
+      // If we've never asked (or only soft-denied), use the permission prompt.
+      // If hard-denied, jump to the app's notification settings instead.
+      if (permission === 'denied') {
+        try { await SystemSettings.openAppNotificationSettings() } catch {}
+        return
+      }
       try {
         const res = await LocalNotifications.requestPermissions()
         setPermission(res.display === 'granted' ? 'granted' : res.display === 'denied' ? 'denied' : 'prompt')
-      } catch {
-        // No-op — refreshPermission catches the post-request state on visibility.
-      }
+      } catch {}
     } else if ('Notification' in window) {
       const p = await Notification.requestPermission()
       setPermission(p === 'granted' ? 'granted' : p === 'denied' ? 'denied' : 'prompt')
     }
+  }
+
+  // ── Battery / Auto-restart rows ────────────────────────────────────────────
+  const handleBatteryAction = async () => {
+    try { await SystemSettings.openBatteryOptimizationSettings() } catch {}
+  }
+  const handleAutoRestartAction = async () => {
+    try { await SystemSettings.openAutoStartSettings() } catch {}
   }
 
   return (
@@ -79,41 +99,40 @@ export default function NotifTroubleshootPage() {
         </p>
 
         {isNative ? (
-          // Mobile: full Android checklist. Only the Allow-Notification row is
-          // interactive — the others (overlay/battery/auto-restart) require
-          // manufacturer-specific deep links we don't have yet, so they
-          // currently document what the user should check manually.
+          // Mobile checklist — each row opens the relevant Android settings
+          // screen via the SystemSettings native plugin. Floating-window row
+          // was dropped: it's primarily relevant for foreground services /
+          // overlay permissions, neither of which the app uses.
           <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
-            <ChecklistRow
-              title={t('notifSettings.troubleshoot.floatingWindow')}
-              desc={t('notifSettings.troubleshoot.floatingWindowDesc')}
-              status={null}
-              actionLabel={t('notifSettings.troubleshoot.enable')}
-              onAction={() => {}}
-              disabled
-            />
             <ChecklistRow
               title={t('notifSettings.troubleshoot.battery')}
               desc={t('notifSettings.troubleshoot.batteryDesc')}
-              status={null}
-              actionLabel={t('notifSettings.troubleshoot.enable')}
-              onAction={() => {}}
-              disabled
+              status={batteryIgnoring === null ? null : batteryIgnoring ? 'granted' : 'prompt'}
+              actionLabel={t('notifSettings.troubleshoot.openSettings')}
+              onAction={handleBatteryAction}
+              statusLabel={
+                batteryIgnoring === true  ? t('notifSettings.troubleshoot.enabled') :
+                batteryIgnoring === false ? t('notifSettings.troubleshoot.disabled') :
+                null
+              }
             />
             <ChecklistRow
               title={t('notifSettings.troubleshoot.autoRestart')}
               desc={t('notifSettings.troubleshoot.autoRestartDesc')}
               status={null}
-              actionLabel={t('notifSettings.troubleshoot.enable')}
-              onAction={() => {}}
-              disabled
+              actionLabel={t('notifSettings.troubleshoot.openSettings')}
+              onAction={handleAutoRestartAction}
             />
             <ChecklistRow
               title={t('notifSettings.troubleshoot.allowNotif')}
               desc={t('notifSettings.troubleshoot.allowNotifDesc')}
               status={permission}
-              actionLabel={t('notifSettings.troubleshoot.enable')}
-              onAction={handleRequest}
+              actionLabel={
+                permission === 'denied'
+                  ? t('notifSettings.troubleshoot.openSettings')
+                  : t('notifSettings.troubleshoot.enable')
+              }
+              onAction={handleNotificationsAction}
               statusLabel={
                 permission === 'granted' ? t('notifSettings.troubleshoot.granted') :
                 permission === 'denied'  ? t('notifSettings.troubleshoot.denied')  :
@@ -130,7 +149,7 @@ export default function NotifTroubleshootPage() {
               desc={permission === 'unsupported' ? t('notifSettings.troubleshoot.webNotSupported') : t('notifSettings.troubleshoot.allowNotifDesc')}
               status={permission}
               actionLabel={t('notifSettings.troubleshoot.requestWeb')}
-              onAction={handleRequest}
+              onAction={handleNotificationsAction}
               statusLabel={
                 permission === 'granted' ? t('notifSettings.troubleshoot.granted') :
                 permission === 'denied'  ? t('notifSettings.troubleshoot.denied')  :

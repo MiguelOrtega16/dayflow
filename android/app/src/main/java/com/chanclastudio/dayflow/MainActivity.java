@@ -6,11 +6,13 @@ import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 import com.chanclastudio.dayflow.widget.WidgetBridgePlugin;
+import com.chanclastudio.dayflow.system.SystemSettingsPlugin;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(WidgetBridgePlugin.class);
+        registerPlugin(SystemSettingsPlugin.class);
         super.onCreate(savedInstanceState);
         handleDeepLink(getIntent());
     }

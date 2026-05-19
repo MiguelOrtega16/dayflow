@@ -13,6 +13,7 @@ import {
   getUserPreferences, updateUserPreferences,
   type ReminderType, type Ringtone,
 } from '@/lib/user-preferences'
+import { playRingtonePreview } from '@/lib/ringtone-preview'
 
 const RINGTONE_KEYS: readonly Ringtone[] = ['system', 'gentle', 'chime', 'digital', 'marimba', 'bell']
 
@@ -26,6 +27,7 @@ export default function NotificationsSettingsPage() {
   const [isNative, setIsNative] = useState(false)
   const [reminderType, setReminderType] = useState<ReminderType>('notification')
   const [ringtone, setRingtone] = useState<Ringtone>('system')
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
 
@@ -46,27 +48,46 @@ export default function NotificationsSettingsPage() {
       .catch(err => console.error('[notif-settings] load prefs failed', err))
   }, [userId])
 
+  // Translate Supabase / Postgres errors into something users can act on.
+  // The most common cause when nothing else changed is the schema migration
+  // for the `preferences` column hasn't been applied yet — surface that
+  // explicitly so the user knows to run the migration.
+  const errorMessage = (err: unknown): string => {
+    const msg = String((err as { message?: string })?.message ?? err ?? '')
+    if (msg.includes('preferences') && msg.includes('column')) {
+      return t('notifSettings.errors.missingColumn')
+    }
+    return msg || t('notifSettings.errors.generic')
+  }
+
   const persistReminderType = async (next: ReminderType) => {
     if (!userId) return
     const previous = reminderType
     setReminderType(next)  // optimistic
+    setSaveError(null)
     try {
       await updateUserPreferences(userId, { reminder_type: next })
     } catch (err) {
       console.error('[notif-settings] save reminder_type failed', err)
       setReminderType(previous)  // rollback
+      setSaveError(errorMessage(err))
     }
   }
 
   const persistRingtone = async (next: Ringtone) => {
     if (!userId) return
+    // Play the preview clip immediately on tap — the audio context needs the
+    // tap as its activation gesture, so this can't wait for the save.
+    playRingtonePreview(next).catch(() => {})
     const previous = ringtone
     setRingtone(next)  // optimistic
+    setSaveError(null)
     try {
       await updateUserPreferences(userId, { ringtone: next })
     } catch (err) {
       console.error('[notif-settings] save ringtone failed', err)
       setRingtone(previous)  // rollback
+      setSaveError(errorMessage(err))
     }
   }
 
@@ -100,6 +121,12 @@ export default function NotificationsSettingsPage() {
       </header>
 
       <div className="p-4 space-y-4 max-w-lg mx-auto w-full">
+        {saveError && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            {saveError}
+          </div>
+        )}
+
         {/* Troubleshoot row — same on mobile + desktop, page renders different
             content based on platform. Right-aligned info icon (instead of the
             usual chevron) signals "tap to learn more" rather than "more
@@ -187,18 +214,22 @@ export default function NotificationsSettingsPage() {
                 })}
               </div>
 
-              {/* Pro options */}
+              {/* Pro options — record + music pick are stubs until the native
+                  recording / file-picker flows land. Free users see the
+                  paywall on tap; Pro users see a Coming-soon hint. */}
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <ProRingtoneButton
                   icon={<Mic className="w-4 h-4" />}
                   label={t('notifSettings.taskReminder.recordCustom')}
                   isPro={entitlement.isPro}
+                  comingSoon={entitlement.isPro}
                   onClick={handleRecordCustom}
                 />
                 <ProRingtoneButton
                   icon={<Music className="w-4 h-4" />}
                   label={t('notifSettings.taskReminder.pickFromMusic')}
                   isPro={entitlement.isPro}
+                  comingSoon={entitlement.isPro}
                   onClick={handlePickFromMusic}
                 />
               </div>
@@ -211,27 +242,39 @@ export default function NotificationsSettingsPage() {
 }
 
 function ProRingtoneButton({
-  icon, label, isPro, onClick,
+  icon, label, isPro, comingSoon, onClick,
 }: {
   icon: React.ReactNode
   label: string
   isPro: boolean
+  comingSoon?: boolean
   onClick: () => void
 }) {
+  const { t } = useI18n()
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={comingSoon}
       className={cn(
         'flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors',
-        isPro
-          ? 'border-border hover:border-foreground/30'
-          : 'border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/5',
+        comingSoon
+          ? 'border-border text-muted-foreground cursor-not-allowed opacity-70'
+          : isPro
+            ? 'border-border hover:border-foreground/30'
+            : 'border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/5',
       )}
     >
       <span className="shrink-0">{icon}</span>
-      <span className="flex-1 text-left truncate">{label}</span>
-      {!isPro && <Crown className="w-3.5 h-3.5 text-indigo-500 shrink-0" />}
+      <span className="flex-1 min-w-0 text-left">
+        <span className="block truncate">{label}</span>
+        {comingSoon && (
+          <span className="block text-[10px] text-muted-foreground font-normal">
+            {t('notifSettings.taskReminder.alarmComingSoon')}
+          </span>
+        )}
+      </span>
+      {!isPro && !comingSoon && <Crown className="w-3.5 h-3.5 text-indigo-500 shrink-0" />}
     </button>
   )
 }
