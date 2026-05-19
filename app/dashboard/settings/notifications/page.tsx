@@ -2,31 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Crown, Mic, Music } from 'lucide-react'
+import { ArrowLeft, Info } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { useI18n } from '@/lib/i18n'
-import { useEntitlement } from '@/lib/billing/use-entitlement'
-import { usePaywall } from '@/components/paywall/paywall-provider'
 import { cn } from '@/lib/utils'
 import {
   getUserPreferences, updateUserPreferences,
-  type ReminderType, type Ringtone,
+  type ReminderType,
 } from '@/lib/user-preferences'
-import { playRingtonePreview } from '@/lib/ringtone-preview'
-
-const RINGTONE_KEYS: readonly Ringtone[] = ['system', 'gentle', 'chime', 'digital', 'marimba', 'bell']
 
 export default function NotificationsSettingsPage() {
   const { t } = useI18n()
   const router = useRouter()
   const [userId, setUserId] = useState<string | null>(null)
-  const { entitlement } = useEntitlement(userId)
-  const { open: openPaywall } = usePaywall()
 
   const [isNative, setIsNative] = useState(false)
   const [reminderType, setReminderType] = useState<ReminderType>('notification')
-  const [ringtone, setRingtone] = useState<Ringtone>('system')
   const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
@@ -41,10 +33,7 @@ export default function NotificationsSettingsPage() {
   useEffect(() => {
     if (!userId) return
     getUserPreferences(userId)
-      .then(prefs => {
-        setReminderType(prefs.reminder_type)
-        setRingtone(prefs.ringtone)
-      })
+      .then(prefs => setReminderType(prefs.reminder_type))
       .catch(err => console.error('[notif-settings] load prefs failed', err))
   }, [userId])
 
@@ -72,39 +61,6 @@ export default function NotificationsSettingsPage() {
       setReminderType(previous)  // rollback
       setSaveError(errorMessage(err))
     }
-  }
-
-  const persistRingtone = async (next: Ringtone) => {
-    if (!userId) return
-    // Play the preview clip immediately on tap — the audio context needs the
-    // tap as its activation gesture, so this can't wait for the save.
-    playRingtonePreview(next).catch(() => {})
-    const previous = ringtone
-    setRingtone(next)  // optimistic
-    setSaveError(null)
-    try {
-      await updateUserPreferences(userId, { ringtone: next })
-    } catch (err) {
-      console.error('[notif-settings] save ringtone failed', err)
-      setRingtone(previous)  // rollback
-      setSaveError(errorMessage(err))
-    }
-  }
-
-  const handleRecordCustom = () => {
-    if (!entitlement.isPro) {
-      openPaywall('custom_ringtone')
-      return
-    }
-    // TODO: native recording flow (separate phase — UI stub only for now).
-  }
-
-  const handlePickFromMusic = () => {
-    if (!entitlement.isPro) {
-      openPaywall('custom_ringtone')
-      return
-    }
-    // TODO: native file picker (separate phase — UI stub only for now).
   }
 
   return (
@@ -145,14 +101,17 @@ export default function NotificationsSettingsPage() {
           </button>
         </div>
 
-        {/* Mobile-only: Default Reminder Type + Ringtone. The actual native
-            wiring (alarm sound, ringtone playback) is a follow-up; for now
-            these persist the user's choice in localStorage. */}
+        {/* Mobile-only: Default Reminder Type. Alarm routes notifications
+            through the higher-importance Android channel. Ringtone selection
+            used to live here but was dropped — per-channel Android sound
+            requires bundling N audio files and creating N channels per type,
+            which clutters the user's app notification settings for limited
+            value. The reminder's actual sound is whatever the channel default
+            is on the device. */}
         {isNative && (
-          <div className="bg-card border border-border rounded-2xl p-5 space-y-5">
+          <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
             <h2 className="text-sm font-semibold">{t('notifSettings.taskReminder.sectionHeading')}</h2>
 
-            {/* Default Task Reminder Type */}
             <div>
               <p className="text-sm font-medium">{t('notifSettings.taskReminder.defaultTypeLabel')}</p>
               <p className="text-xs text-muted-foreground mt-0.5 mb-3">{t('notifSettings.taskReminder.defaultTypeSub')}</p>
@@ -173,7 +132,7 @@ export default function NotificationsSettingsPage() {
                   type="button"
                   onClick={() => persistReminderType('alarm')}
                   className={cn(
-                    'rounded-xl border px-3 py-2.5 text-sm text-left transition-colors relative',
+                    'rounded-xl border px-3 py-2.5 text-sm text-left transition-colors',
                     reminderType === 'alarm'
                       ? 'border-primary bg-primary/10 text-primary font-medium'
                       : 'border-border hover:border-foreground/30',
@@ -183,98 +142,9 @@ export default function NotificationsSettingsPage() {
                 </button>
               </div>
             </div>
-
-            {/* Default Ringtone */}
-            <div>
-              <p className="text-sm font-medium">{t('notifSettings.taskReminder.defaultRingtoneLabel')}</p>
-              <p className="text-xs text-muted-foreground mt-0.5 mb-3">{t('notifSettings.taskReminder.defaultRingtoneSub')}</p>
-
-              <div className="space-y-1">
-                {RINGTONE_KEYS.map(r => {
-                  const sel = ringtone === r
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => persistRingtone(r)}
-                      className={cn(
-                        'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm text-left transition-colors',
-                        sel
-                          ? 'border-primary bg-primary/10 text-primary font-medium'
-                          : 'border-border hover:border-foreground/30',
-                      )}
-                    >
-                      <span className={cn(
-                        'w-3.5 h-3.5 rounded-full border-2 shrink-0',
-                        sel ? 'border-primary bg-primary' : 'border-muted-foreground/40',
-                      )} />
-                      <span className="flex-1">{t(`notifSettings.taskReminder.ringtones.${r}`)}</span>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Pro options — record + music pick are stubs until the native
-                  recording / file-picker flows land. Free users see the
-                  paywall on tap; Pro users see a Coming-soon hint. */}
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <ProRingtoneButton
-                  icon={<Mic className="w-4 h-4" />}
-                  label={t('notifSettings.taskReminder.recordCustom')}
-                  isPro={entitlement.isPro}
-                  comingSoon={entitlement.isPro}
-                  onClick={handleRecordCustom}
-                />
-                <ProRingtoneButton
-                  icon={<Music className="w-4 h-4" />}
-                  label={t('notifSettings.taskReminder.pickFromMusic')}
-                  isPro={entitlement.isPro}
-                  comingSoon={entitlement.isPro}
-                  onClick={handlePickFromMusic}
-                />
-              </div>
-            </div>
           </div>
         )}
       </div>
     </div>
-  )
-}
-
-function ProRingtoneButton({
-  icon, label, isPro, comingSoon, onClick,
-}: {
-  icon: React.ReactNode
-  label: string
-  isPro: boolean
-  comingSoon?: boolean
-  onClick: () => void
-}) {
-  const { t } = useI18n()
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={comingSoon}
-      className={cn(
-        'flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors',
-        comingSoon
-          ? 'border-border text-muted-foreground cursor-not-allowed opacity-70'
-          : isPro
-            ? 'border-border hover:border-foreground/30'
-            : 'border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/5',
-      )}
-    >
-      <span className="shrink-0">{icon}</span>
-      <span className="flex-1 min-w-0 text-left">
-        <span className="block truncate">{label}</span>
-        {comingSoon && (
-          <span className="block text-[10px] text-muted-foreground font-normal">
-            {t('notifSettings.taskReminder.alarmComingSoon')}
-          </span>
-        )}
-      </span>
-      {!isPro && !comingSoon && <Crown className="w-3.5 h-3.5 text-indigo-500 shrink-0" />}
-    </button>
   )
 }

@@ -1216,24 +1216,59 @@ function BottomSheet({
   const { t } = useI18n()
   const contentRef = useRef<HTMLDivElement>(null)
 
-  // Keep the focused input visible when the soft keyboard opens. Capacitor's
-  // WebView + windowSoftInputMode=adjustResize gives us a smaller viewport,
-  // but inputs that landed in the bottom half of the sheet still need to be
-  // scrolled into view explicitly — the browser's auto-scroll doesn't fire
-  // reliably inside a flex-overflow-y container.
+  // Keep the focused input visible when the soft keyboard opens. Two
+  // independent triggers because timing varies by device:
+  //   1) On focusin we delay-scroll once (covers the common case where the
+  //      keyboard finishes animating within ~250ms)
+  //   2) We also listen on visualViewport.resize and re-scroll whenever the
+  //      visual viewport shrinks — that's the authoritative "keyboard is up
+  //      now" signal on Android Capacitor (adjustResize re-emits resize as
+  //      the IME finishes). Using only setTimeout misses devices where the
+  //      keyboard takes >250ms to fully appear; using only the resize event
+  //      misses focuses that don't change the viewport (refocus on same
+  //      field, etc.). Doing both is cheap.
   useEffect(() => {
     if (!open) return
-    const node = contentRef.current
-    if (!node) return
-    const onFocusIn = (e: FocusEvent) => {
-      const t = e.target as HTMLElement | null
-      if (!t || !t.matches('input, textarea, select')) return
-      // 150ms lets the keyboard begin animating in so scrollIntoView lands
-      // against the *resized* viewport rather than the pre-resize one.
-      setTimeout(() => t.scrollIntoView({ block: 'center', behavior: 'smooth' }), 150)
+    const container = contentRef.current
+    if (!container) return
+
+    // Scroll the focused input to the center of the sheet's scroll container.
+    // We compute against contentRef explicitly rather than relying on
+    // Element.scrollIntoView's "nearest scrollable ancestor" heuristic,
+    // which has occasionally picked the document scroller and left the
+    // sheet's internal scroll untouched.
+    const scrollFocusedIntoView = (input: HTMLElement) => {
+      const inputRect = input.getBoundingClientRect()
+      const containerRect = container.getBoundingClientRect()
+      // Where the input sits, relative to the container's *current* scrollTop.
+      const inputTopInContainer = (inputRect.top - containerRect.top) + container.scrollTop
+      // Aim to land the input at ~1/3 from the top of the visible area so
+      // there's still room for the input's caret and any label above it.
+      const target = inputTopInContainer - containerRect.height / 3
+      container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
     }
-    node.addEventListener('focusin', onFocusIn)
-    return () => node.removeEventListener('focusin', onFocusIn)
+
+    let activeInput: HTMLElement | null = null
+    const onFocusIn = (e: FocusEvent) => {
+      const el = e.target as HTMLElement | null
+      if (!el || !el.matches('input, textarea, select')) return
+      activeInput = el
+      setTimeout(() => { if (activeInput === el) scrollFocusedIntoView(el) }, 250)
+    }
+    const onFocusOut = () => { activeInput = null }
+    const onVVResize = () => {
+      if (activeInput) scrollFocusedIntoView(activeInput)
+    }
+
+    container.addEventListener('focusin', onFocusIn)
+    container.addEventListener('focusout', onFocusOut)
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null
+    vv?.addEventListener('resize', onVVResize)
+    return () => {
+      container.removeEventListener('focusin', onFocusIn)
+      container.removeEventListener('focusout', onFocusOut)
+      vv?.removeEventListener('resize', onVVResize)
+    }
   }, [open])
 
   // Mount/unmount via `open` so the slide-in animation re-fires every time.
@@ -1430,20 +1465,34 @@ function ScheduleRow({
 
 // ─── TimePicker (12h format, text inputs) ─────────────────────────────────────
 function TimePicker({ value, onChange }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  // Parse the serialized HH:mm. The display-side strips the leading zero on
+  // minutes so the field reads '5' for 5 minutes — otherwise typing '5' would
+  // round-trip back to '05' and a follow-up '3' would hit maxLength=2 and be
+  // dropped. The serialized output via push() still pads both sides.
   const parse = (v: string) => {
     if (!v) return { h: '', m: '', p: (new Date().getHours() >= 12 ? 'PM' : 'AM') as 'AM' | 'PM' }
     const [hRaw, mRaw] = v.split(':')
     const h24 = parseInt(hRaw)
     return {
       h: String(h24 % 12 || 12),
-      m: mRaw || '00',
+      m: mRaw ? String(parseInt(mRaw)) : '',
       p: (h24 >= 12 ? 'PM' : 'AM') as 'AM' | 'PM',
     }
   }
 
   const [local, setLocal] = useState(() => parse(value))
+  // While the user is mid-edit we DON'T want incoming value changes to
+  // overwrite their digits — that's what caused the "5 → 05 → can't add 3"
+  // glitch (the controlled input snapped back to the padded form after the
+  // first push, hit maxLength on the next keystroke, dropped it). We track
+  // focus state via a ref so the useEffect can early-out without
+  // re-rendering.
+  const focusedField = useRef<'h' | 'm' | null>(null)
 
-  useEffect(() => { setLocal(parse(value)) }, [value])
+  useEffect(() => {
+    if (focusedField.current) return
+    setLocal(parse(value))
+  }, [value])
 
   const push = (h: string, m: string, p: 'AM' | 'PM') => {
     const hNum = parseInt(h)
@@ -1469,8 +1518,13 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
           const n = parseInt(v)
           if (v === '' || (!isNaN(n) && n >= 0 && n <= 12)) update('h', v)
         }}
+        onFocus={() => { focusedField.current = 'h' }}
         onBlur={() => {
+          focusedField.current = null
           if (local.h) push(local.h, local.m, local.p as 'AM' | 'PM')
+          // Re-sync from the now-canonical value so the field shows its
+          // settled form once the user moves on.
+          setLocal(parse(local.h ? `${String(parseInt(local.h)).padStart(2, '0')}:${String(parseInt(local.m) || 0).padStart(2, '0')}` : ''))
         }}
         className={inputCls}
       />
@@ -1480,6 +1534,14 @@ function TimePicker({ value, onChange }: { value: string; onChange: (v: string) 
           const v = e.target.value.replace(/\D/g, '')
           const n = parseInt(v)
           if (v === '' || (!isNaN(n) && n <= 59)) update('m', v)
+        }}
+        onFocus={() => { focusedField.current = 'm' }}
+        onBlur={() => {
+          focusedField.current = null
+          if (local.h) push(local.h, local.m, local.p as 'AM' | 'PM')
+          // Pad to two digits on the way out — '5' becomes '05' once the
+          // user is done editing, matching the canonical HH:mm display.
+          setLocal(prev => ({ ...prev, m: prev.m ? String(parseInt(prev.m)).padStart(2, '0') : '' }))
         }}
         className={inputCls}
       />

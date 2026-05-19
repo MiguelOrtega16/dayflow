@@ -11,31 +11,26 @@ import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export type ReminderType = 'notification' | 'alarm'
-export type Ringtone     = 'system' | 'gentle' | 'chime' | 'digital' | 'marimba' | 'bell'
 
 export interface UserPreferences {
   reminder_type: ReminderType
-  ringtone:      Ringtone
 }
 
 const DEFAULTS: UserPreferences = {
   reminder_type: 'notification',
-  ringtone:      'system',
 }
 
-/** Coerce a raw jsonb value (any shape) into a typed UserPreferences. */
+/** Coerce a raw jsonb value (any shape) into a typed UserPreferences.
+ *  Unknown keys (e.g. an older `ringtone` field from a previous version of
+ *  the settings page) are silently dropped from the typed view, but the
+ *  patch-and-merge in updateUserPreferences won't actively delete them
+ *  from the underlying JSON. */
 export function normalizePreferences(raw: unknown): UserPreferences {
   if (!raw || typeof raw !== 'object') return { ...DEFAULTS }
   const r = raw as Record<string, unknown>
   const rt = r.reminder_type
-  const rg = r.ringtone
   return {
     reminder_type: (rt === 'notification' || rt === 'alarm') ? rt : DEFAULTS.reminder_type,
-    ringtone:
-      (rg === 'system' || rg === 'gentle' || rg === 'chime' ||
-       rg === 'digital' || rg === 'marimba' || rg === 'bell')
-        ? rg
-        : DEFAULTS.ringtone,
   }
 }
 
