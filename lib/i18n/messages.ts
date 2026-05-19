@@ -251,6 +251,8 @@ export const messages = {
       emptyToday: 'Aún no hay actividades para hoy.',
       emptyPeriod: 'Sin actividades en este período.',
       goToCalendar: '¡Ve al Calendario para agregar algunas!',
+      dropHere: 'Soltar aquí',
+      dragHandle: 'Arrastrar actividad',
     },
     goals: {
       title: 'Metas',
@@ -1009,6 +1011,8 @@ export const messages = {
       emptyToday: 'No activities for today yet.',
       emptyPeriod: 'No activities in this period.',
       goToCalendar: 'Head to the Calendar to add some!',
+      dropHere: 'Drop here',
+      dragHandle: 'Drag activity',
     },
     goals: {
       title: 'Goals',

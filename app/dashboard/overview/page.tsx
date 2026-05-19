@@ -8,11 +8,15 @@ import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, formatTime } from 
 import type { Activity, ActivityStatus, ActivityCategory, Profile } from '@/types'
 import {
   CheckCircle2, Circle, Play, Ban, SkipForward, Loader2,
-  Search, ChevronDown, Clock, Target, Calendar as CalendarIcon, X,
+  Search, ChevronDown, Clock, Target, Calendar as CalendarIcon, X, GripVertical,
 } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useI18n, useFormatDate } from '@/lib/i18n'
 import { BillingDebugButton } from '@/components/billing-debug-button'
+import {
+  DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors,
+  useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
+} from '@dnd-kit/core'
 
 const STATUS_ICONS = {
   todo: Circle,
@@ -52,6 +56,52 @@ export default function OverviewPage() {
     })
   }
   const supabase = createClient()
+
+  // ── Drag & drop ──────────────────────────────────────────────────────────
+  // PointerSensor with a small activation distance lets taps on the in-card
+  // status button still work — only past 6px of movement does it start a drag.
+  // TouchSensor uses a hold delay so vertical page scroll keeps working.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 180, tolerance: 6 } }),
+  )
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const draggingActivity = useMemo(
+    () => activities.find(a => a.id === draggingId) ?? null,
+    [activities, draggingId],
+  )
+
+  const handleDragStart = (e: DragStartEvent) => {
+    setDraggingId(String(e.active.id))
+    // Auto-expand the Blocked/Skipped panel so it's reachable as a drop
+    // target without forcing the user to expand it first.
+    setSecondaryOpen(true)
+  }
+
+  const handleDragEnd = async (e: DragEndEvent) => {
+    setDraggingId(null)
+    if (!e.over) return
+    const overData = e.over.data.current as { status?: ActivityStatus } | undefined
+    const nextStatus = overData?.status
+    if (!nextStatus) return
+    const activity = activities.find(a => a.id === String(e.active.id))
+    if (!activity || activity.status === nextStatus) return
+
+    // Optimistic: flip the status locally so the card pops to the new column
+    // immediately, no flash from a full refetch.
+    const previous = activity.status
+    setActivities(prev => prev.map(a => a.id === activity.id ? { ...a, status: nextStatus } : a))
+    setUpdatingIds(prev => new Set(prev).add(activity.id))
+    try {
+      await updateActivityStatus(activity.id, nextStatus, profile?.id)
+    } catch (err) {
+      console.error('[overview] drop status update failed', err)
+      // Roll back optimistic move on failure.
+      setActivities(prev => prev.map(a => a.id === activity.id ? { ...a, status: previous } : a))
+    } finally {
+      setUpdatingIds(prev => { const s = new Set(prev); s.delete(activity.id); return s })
+    }
+  }
 
   useEffect(() => { setLoading(true); loadData() // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range])
@@ -233,7 +283,7 @@ export default function OverviewPage() {
           onClearFilter={() => { setSearch(''); setActiveCategories(new Set()) }}
         />
       ) : (
-        <>
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
             {PRIMARY_STATUSES.map(status => (
               <StatusColumn
@@ -245,11 +295,15 @@ export default function OverviewPage() {
                 onCycle={handleCycleStatus}
                 open={openStatuses.has(status)}
                 onToggle={() => toggleStatus(status)}
+                draggingId={draggingId}
               />
             ))}
           </div>
 
-          {secondaryCount > 0 && (
+          {/* Always show secondary droppables when their column is empty? No —
+              keep the existing collapse UX. Drops onto Blocked/Skipped require
+              expanding the secondary panel first. */}
+          {(secondaryCount > 0 || draggingId) && (
             <div className="mt-5 bg-card border border-border rounded-2xl overflow-hidden">
               <button onClick={() => setSecondaryOpen(o => !o)}
                 className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors">
@@ -268,26 +322,40 @@ export default function OverviewPage() {
               </button>
               {secondaryOpen && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 pt-0">
-                  {SECONDARY_STATUSES.map(status =>
-                    grouped[status].length > 0 ? (
-                      <StatusColumn
-                        key={status}
-                        status={status}
-                        activities={sortColumn(grouped[status])}
-                        range={range}
-                        updatingIds={updatingIds}
-                        onCycle={handleCycleStatus}
-                        open={openStatuses.has(status)}
-                        onToggle={() => toggleStatus(status)}
-                        compact
-                      />
-                    ) : null
-                  )}
+                  {SECONDARY_STATUSES.map(status => (
+                    <StatusColumn
+                      key={status}
+                      status={status}
+                      activities={sortColumn(grouped[status])}
+                      range={range}
+                      updatingIds={updatingIds}
+                      onCycle={handleCycleStatus}
+                      open={openStatuses.has(status)}
+                      onToggle={() => toggleStatus(status)}
+                      compact
+                      draggingId={draggingId}
+                    />
+                  ))}
                 </div>
               )}
             </div>
           )}
-        </>
+
+          <DragOverlay dropAnimation={null}>
+            {draggingActivity && (
+              <div className="rotate-2 shadow-2xl opacity-95">
+                <ActivityCard
+                  activity={draggingActivity}
+                  status={draggingActivity.status}
+                  range={range}
+                  loading={false}
+                  onCycle={() => {}}
+                  overlay
+                />
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
       )}
     </div>
   )
@@ -398,7 +466,7 @@ function StatsCard({
 }
 
 function StatusColumn({
-  status, activities, range, updatingIds, onCycle, compact, open, onToggle,
+  status, activities, range, updatingIds, onCycle, compact, open, onToggle, draggingId,
 }: {
   status: ActivityStatus
   activities: Activity[]
@@ -408,14 +476,32 @@ function StatusColumn({
   compact?: boolean
   open: boolean
   onToggle: () => void
+  draggingId: string | null
 }) {
   const { t } = useI18n()
   const cfg = STATUS_CONFIG[status]
+  const { isOver, setNodeRef } = useDroppable({
+    id: `status:${status}`,
+    data: { status },
+  })
+  // Only highlight when a drag is in progress AND the drag would change the
+  // status (don't tease the user with a "drop here" hint over the source col).
+  const dragSourceStatus = draggingId
+    ? activities.some(a => a.id === draggingId) ? status : null
+    : null
+  const canAccept = !!draggingId && dragSourceStatus !== status
+  const showDropHint = canAccept && isOver
+
   return (
-    <section className={cn(
-      'flex flex-col rounded-2xl border border-border bg-card overflow-hidden',
-      compact && 'shadow-none'
-    )}>
+    <section
+      ref={setNodeRef}
+      className={cn(
+        'flex flex-col rounded-2xl border bg-card overflow-hidden transition-colors',
+        compact && 'shadow-none',
+        showDropHint ? 'border-primary ring-2 ring-primary/30' : 'border-border',
+        canAccept && !showDropHint && 'border-dashed',
+      )}
+    >
       <button
         type="button"
         onClick={onToggle}
@@ -438,8 +524,11 @@ function StatusColumn({
       </button>
       {open && (
         activities.length === 0 ? (
-          <div className="px-4 py-6 text-center text-xs text-muted-foreground/70">
-            {t('overview.noActivitiesStatus')}
+          <div className={cn(
+            'px-4 py-6 text-center text-xs transition-colors',
+            showDropHint ? 'text-primary font-medium' : 'text-muted-foreground/70',
+          )}>
+            {showDropHint ? t('overview.dropHere') : t('overview.noActivitiesStatus')}
           </div>
         ) : (
           <ul className="p-2 space-y-1.5">
@@ -451,6 +540,7 @@ function StatusColumn({
                 range={range}
                 loading={updatingIds.has(a.id)}
                 onCycle={() => onCycle(a)}
+                isDraggingThis={draggingId === a.id}
               />
             ))}
           </ul>
@@ -461,13 +551,15 @@ function StatusColumn({
 }
 
 function ActivityCard({
-  activity, status, range, loading, onCycle,
+  activity, status, range, loading, onCycle, isDraggingThis, overlay,
 }: {
   activity: Activity
   status: ActivityStatus
   range: 'today' | '7days' | '30days' | '90days'
   loading: boolean
   onCycle: () => void
+  isDraggingThis?: boolean
+  overlay?: boolean
 }) {
   const { t } = useI18n()
   const fmt = useFormatDate()
@@ -478,12 +570,36 @@ function ActivityCard({
   const hasTime = !!activity.start_time
   const isHighPri = activity.priority === 'high' || activity.priority === 'critical'
 
+  // Hook is called unconditionally; we just skip wiring its handlers when
+  // this card is the floating overlay (the source card under the cursor
+  // already has them).
+  const { attributes, listeners, setNodeRef } = useDraggable({
+    id: activity.id,
+    data: { from: status },
+    disabled: overlay,
+  })
+
+  // Drag listeners cover the entire card; the status circle stops its own
+  // pointerdown from bubbling so clicking it cycles the status instead of
+  // starting a drag. The PointerSensor's 6px activation distance keeps a
+  // small click (no movement) from starting a drag anywhere else either.
+  const dragProps = overlay ? {} : { ...attributes, ...listeners }
+
   return (
-    <li className={cn(
-      'group relative flex items-start gap-2.5 p-2.5 rounded-xl border transition-colors',
-      cfg.bgColor, cfg.color,
-      'hover:shadow-sm'
-    )}>
+    <li
+      ref={overlay ? undefined : setNodeRef}
+      {...dragProps}
+      aria-label={overlay ? undefined : t('overview.dragHandle')}
+      className={cn(
+        'group relative flex items-start gap-2.5 p-2.5 rounded-xl border transition-[opacity,box-shadow] touch-none',
+        cfg.bgColor, cfg.color,
+        'hover:shadow-sm',
+        !overlay && 'cursor-grab active:cursor-grabbing',
+        // Ghost the original card while it's being dragged — the DragOverlay
+        // renders the visible floating copy.
+        isDraggingThis && !overlay && 'opacity-30',
+      )}
+    >
       {isHighPri && (
         <span className={cn(
           'absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full',
@@ -491,9 +607,23 @@ function ActivityCard({
         )} />
       )}
 
+      {/* Visual grip cue — purely decorative now. Pointer events fall through
+          to the <li>'s drag listeners. */}
+      {!overlay && (
+        <span
+          aria-hidden
+          className="mt-0.5 -ml-0.5 shrink-0 w-4 h-4 hidden md:flex items-center justify-center text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors pointer-events-none"
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </span>
+      )}
+
       <button
         onClick={onCycle}
-        disabled={loading}
+        // Stop the pointerdown from reaching the <li>'s drag listeners so the
+        // circle stays a click target instead of being swallowed by the drag.
+        onPointerDown={e => e.stopPropagation()}
+        disabled={loading || overlay}
         className={cn('mt-0.5 shrink-0 hover:opacity-70 transition-opacity', cfg.textColor)}
         title={t('overview.changeStatusTitle')}
       >
