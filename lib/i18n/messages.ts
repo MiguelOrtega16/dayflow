@@ -925,6 +925,21 @@ export const messages = {
           },
         },
       },
+      setupChecklist: {
+        title: 'Termina de configurar',
+        dismiss: 'Ocultar',
+        steps: {
+          firstActivity: {
+            label: 'Agrega tu primera actividad',
+            cta: 'Agregar',
+          },
+          reminders: {
+            label: 'Activa los recordatorios',
+            cta: 'Activar',
+            denied: 'Bloqueados en el navegador',
+          },
+        },
+      },
     },
   },
   en: {
@@ -1845,6 +1860,21 @@ export const messages = {
           power_mornings: {
             name: 'Power Mornings',
             description: 'Wake up early and start your day ready.',
+          },
+        },
+      },
+      setupChecklist: {
+        title: 'Finish setting up',
+        dismiss: 'Hide',
+        steps: {
+          firstActivity: {
+            label: 'Add your first activity',
+            cta: 'Add',
+          },
+          reminders: {
+            label: 'Turn on reminders',
+            cta: 'Turn on',
+            denied: 'Blocked in browser',
           },
         },
       },

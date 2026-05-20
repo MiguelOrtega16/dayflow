@@ -33,10 +33,12 @@ alter table public.profiles add column if not exists web_push_subscription jsonb
 
 -- User-level preferences blob. Shape (all fields optional, treat null as default):
 --   {
---     "reminder_type":                "notification" | "alarm",   -- routes FCM channel
---     "ringtone":                     "system" | "gentle" | ...,  -- selected ringtone preset
---     "dismissed_starter_picker":     boolean,                    -- onboarding pack overlay shown / skipped
---     "dismissed_starter_picker_at":  ISO timestamp string,
+--     "reminder_type":                  "notification" | "alarm",   -- routes FCM channel
+--     "ringtone":                       "system" | "gentle" | ...,  -- selected ringtone preset
+--     "dismissed_starter_picker":       boolean,                    -- onboarding pack overlay shown / skipped
+--     "dismissed_starter_picker_at":    ISO timestamp string,
+--     "dismissed_setup_checklist":      boolean,                    -- setup-checklist card dismissed / completed
+--     "dismissed_setup_checklist_at":   ISO timestamp string,
 --   }
 -- Stored as jsonb so adding future settings doesn't require a migration; the
 -- client and cron each read just the keys they understand.

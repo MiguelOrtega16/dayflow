@@ -412,6 +412,10 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
           has_reminders: reminderOffsets.length > 0,
           is_public: isPublic,
         })
+        // Notify other surfaces in the same tab — the setup checklist needs
+        // to flip its "Add first activity" row to done without a reload, and
+        // the calendar view already refetches via its direct onSaved callback.
+        window.dispatchEvent(new CustomEvent('dayflow:activity-created'))
       }
 
       // Refresh the home-screen widget snapshot. Calendar-view also re-syncs

@@ -204,6 +204,20 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     return () => window.removeEventListener('dayflow:navigate', onNavigate)
   }, [])
 
+  // Onboarding hook — the setup checklist sits outside this component but
+  // wants to open the activity-form modal from its "Add first activity"
+  // step. Listening here keeps the modal owned by CalendarView; the checklist
+  // just yells into the window.
+  useEffect(() => {
+    const onOpenAdd = () => {
+      setModalInitialTime(null)
+      setEditingActivity(null)
+      setShowAddModal(true)
+    }
+    window.addEventListener('dayflow:open-add-activity', onOpenAdd)
+    return () => window.removeEventListener('dayflow:open-add-activity', onOpenAdd)
+  }, [])
+
   // Persist the selected date so a page refresh returns to the same day.
   // IMPORTANT: format in LOCAL timezone, not UTC. toISOString() returns the
   // UTC date, which jumps a day forward in negative-UTC timezones during the

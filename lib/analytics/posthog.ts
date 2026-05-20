@@ -18,6 +18,10 @@ type AnalyticsEvent =
   | 'starter_pack_selected'
   | 'starter_pack_inserted'
   | 'starter_picker_skipped'
+  | 'setup_checklist_shown'
+  | 'setup_checklist_step_clicked'
+  | 'setup_checklist_dismissed'
+  | 'setup_checklist_completed'
 
 type EventProps = Record<string, string | number | boolean | null | undefined>
 
