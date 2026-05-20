@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, Check, Plus, X } from 'lucide-react'
+import { Bell, Plus, X } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase/client'
 import { initPushNotifications } from '@/lib/push-notifications'
@@ -155,43 +155,39 @@ export function SetupChecklist({ userId, hasActivities, hasPushSubscription }: P
 
   if (hidden || visibleStepCount === 0) return null
 
+  // Top inline banner. Block element so the dashboard can stack it above the
+  // calendar with a flex column — no fixed positioning, no z-index gymnastics,
+  // no FAB conflict. Compact enough to fit the calendar's monthly header
+  // beneath it on mobile without forcing scroll on the calendar's first paint.
   return (
     <div
+      role="region"
+      aria-label={t('onboarding.setupChecklist.title')}
       className={cn(
-        'fixed z-30 transition-opacity duration-500',
+        'shrink-0 border-b border-border bg-primary/5 transition-opacity duration-500',
         allDoneEver ? 'opacity-0' : 'opacity-100',
-        'left-2 right-2 sm:left-auto sm:right-4 sm:max-w-sm',
       )}
-      style={{ bottom: 'calc(env(safe-area-inset-bottom) + 5.5rem)' }}
     >
-      <div className="bg-card border border-border rounded-2xl shadow-lg overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/40">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {t('onboarding.setupChecklist.title')}
-          </h3>
-          <button
-            type="button"
-            onClick={handleDismiss}
-            disabled={dismissing}
-            className="w-7 h-7 -mr-1.5 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
-            aria-label={t('onboarding.setupChecklist.dismiss')}
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <ul className="p-2 space-y-1">
+      <div className="flex items-center gap-2 px-3 sm:px-4 py-2 max-w-6xl mx-auto">
+        <span className="hidden sm:flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-foreground/70 shrink-0">
+          <span aria-hidden>🌱</span>
+          {t('onboarding.setupChecklist.title')}
+        </span>
+        <span className="text-[10px] sm:hidden font-semibold uppercase tracking-wide text-foreground/70 shrink-0">
+          <span aria-hidden>🌱</span>
+        </span>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none">
           {showFirstActivity && (
-            <ChecklistRow
-              icon={<Plus className="w-4 h-4" />}
+            <ChecklistChip
+              icon={<Plus className="w-3.5 h-3.5" />}
               label={t('onboarding.setupChecklist.steps.firstActivity.label')}
               cta={t('onboarding.setupChecklist.steps.firstActivity.cta')}
               onClick={handleFirstActivity}
             />
           )}
           {showReminders && (
-            <ChecklistRow
-              icon={<Bell className="w-4 h-4" />}
+            <ChecklistChip
+              icon={<Bell className="w-3.5 h-3.5" />}
               label={t('onboarding.setupChecklist.steps.reminders.label')}
               cta={
                 reminderState === 'denied'
@@ -204,13 +200,22 @@ export function SetupChecklist({ userId, hasActivities, hasPushSubscription }: P
               onClick={handleReminders}
             />
           )}
-        </ul>
+        </div>
+        <button
+          type="button"
+          onClick={handleDismiss}
+          disabled={dismissing}
+          className="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+          aria-label={t('onboarding.setupChecklist.dismiss')}
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
       </div>
     </div>
   )
 }
 
-function ChecklistRow({
+function ChecklistChip({
   icon, label, cta, onClick, muted = false,
 }: {
   icon: React.ReactNode
@@ -220,27 +225,29 @@ function ChecklistRow({
   muted?: boolean
 }) {
   return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted transition-colors text-left"
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1.5 rounded-full',
+        'bg-card border border-border hover:border-primary/40 hover:bg-muted transition-colors',
+        'shrink-0 max-w-[16rem]',
+      )}
+    >
+      <span className="w-5 h-5 shrink-0 flex items-center justify-center rounded-md bg-primary/10 text-primary">
+        {icon}
+      </span>
+      <span className="text-xs sm:text-sm font-medium truncate">{label}</span>
+      <span
+        className={cn(
+          'text-[10px] sm:text-xs font-semibold px-1.5 py-0.5 rounded shrink-0',
+          muted
+            ? 'text-muted-foreground bg-muted'
+            : 'text-primary bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground transition-colors',
+        )}
       >
-        <span className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-primary/10 text-primary">
-          {icon}
-        </span>
-        <span className="flex-1 min-w-0 text-sm font-medium truncate">{label}</span>
-        <span
-          className={cn(
-            'text-xs font-semibold px-2.5 py-1 rounded-lg shrink-0',
-            muted
-              ? 'text-muted-foreground bg-muted'
-              : 'text-primary bg-primary/10',
-          )}
-        >
-          {cta}
-        </span>
-      </button>
-    </li>
+        {cta}
+      </span>
+    </button>
   )
 }

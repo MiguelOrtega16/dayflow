@@ -2,14 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { addDays, format } from 'date-fns'
 import { ArrowLeft, Plus, X } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 import { useBackButtonRoute } from '@/lib/back-button'
-import { createClient } from '@/lib/supabase/client'
-import { createRecurringActivities } from '@/lib/api'
 import { getTemplate } from '@/lib/activity-templates'
-import type { Activity, RecurrenceType, RecurrenceConfig } from '@/types'
 import { cn } from '@/lib/utils'
 
 // 0 = Sunday … 6 = Saturday. Order matches the screenshot's chip rail.
@@ -18,22 +14,8 @@ const DAYS: { v: number; key: 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 's
   { v: 3, key: 'wed' }, { v: 4, key: 'thu' }, { v: 5, key: 'fri' }, { v: 6, key: 'sat' },
 ]
 
-// Templates use a 1-month rolling cap so adding one doesn't bury the calendar
-// in ~500 ghost rows. Users who want longer-running habits can re-add or use
-// the form modal to set explicit count/end-date.
-const TEMPLATE_RECURRENCE_DAYS = 30
-
-function pickRecurrence(days: number[], endDate: string): { type: RecurrenceType; config: RecurrenceConfig } {
-  const sorted = [...days].sort((a, b) => a - b)
-  const allSeven = sorted.length === 7
-  const isMonFri = sorted.length === 5 && sorted.every((d, i) => d === i + 1)
-  if (allSeven) return { type: 'daily',    config: { interval: 1, end_date: endDate } }
-  if (isMonFri) return { type: 'weekdays', config: { end_date: endDate } }
-  return { type: 'custom', config: { days_of_week: sorted, end_date: endDate } }
-}
-
 export default function TemplateDetailPage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const template = useMemo(() => getTemplate(params.id), [params.id])
@@ -102,44 +84,25 @@ export default function TemplateDetailPage() {
     setBusy(true)
     setError(null)
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('not authenticated')
+      // Insert routes through the server because the activities-RLS recurrence
+      // gate blocks free users from inserting 'weekdays' / 'custom' patterns
+      // directly. The endpoint validates the template against an allow-list
+      // and uses the service role to bypass that gate.
+      const res = await fetch('/api/templates/insert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template_id:    template.id,
+          days_of_week:   selectedDays,
+          reminder_times: reminderTimes,
+          phrase,
+          locale,
+        }),
+      })
 
-      const today = format(new Date(), 'yyyy-MM-dd')
-      const endDate = format(addDays(new Date(), TEMPLATE_RECURRENCE_DAYS), 'yyyy-MM-dd')
-      const recurrence = pickRecurrence(selectedDays, endDate)
-      const title       = t(`templates.${template.id}.name`)
-      const description = t(`templates.${template.id}.description`)
-
-      // One recurring activity per reminder time. Same title / phrase /
-      // recurrence pattern, different start_time. Reminder fires AT
-      // start_time via reminder_offsets=[0].
-      for (const time of reminderTimes) {
-        const base: Omit<Activity, 'id' | 'created_at' | 'updated_at' | 'profile' | 'goal'> = {
-          user_id:               user.id,
-          title,
-          description,
-          date:                  today,
-          status:                'todo',
-          priority:              'medium',
-          category:              template.defaults.activity_category,
-          goal_id:               null,
-          tags:                  [],
-          color:                 null,
-          emoji:                 template.emoji,
-          start_time:            time,
-          end_time:              null,
-          recurrence_type:       recurrence.type,
-          recurrence_config:     recurrence.config,
-          reminder_offsets:      [0],
-          reminder_phrase:       phrase || null,
-          parent_activity_id:    null,
-          is_public:             false,
-          notes:                 null,
-          completion_percentage: 0,
-        }
-        await createRecurringActivities(base, recurrence.type, recurrence.config)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `HTTP ${res.status}`)
       }
 
       setDone(true)

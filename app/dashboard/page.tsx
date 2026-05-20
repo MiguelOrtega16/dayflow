@@ -74,14 +74,10 @@ export default async function DashboardPage() {
   const showSetupChecklist = !!profile && !checklistDismissed && !showStarterPicker
 
   return (
-    <>
-      <CalendarView
-        currentUser={profile}
-        sharedCalendars={sharedCalendars || []}
-      />
-      {showStarterPicker && profile && (
-        <StarterPackPicker userId={profile.id} />
-      )}
+    // Flex column so the optional setup-checklist banner stacks on top of
+    // the calendar instead of overlaying it. The calendar's outer container
+    // already uses h-full, which resolves against this wrapper's flex-1 row.
+    <div className="flex flex-col h-full min-h-0">
       {showSetupChecklist && profile && (
         <SetupChecklist
           userId={profile.id}
@@ -89,6 +85,15 @@ export default async function DashboardPage() {
           hasPushSubscription={hasPushSubscription}
         />
       )}
-    </>
+      <div className="flex-1 min-h-0">
+        <CalendarView
+          currentUser={profile}
+          sharedCalendars={sharedCalendars || []}
+        />
+      </div>
+      {showStarterPicker && profile && (
+        <StarterPackPicker userId={profile.id} />
+      )}
+    </div>
   )
 }
