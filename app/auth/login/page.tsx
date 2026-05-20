@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
 import { translateAuthError } from '@/lib/auth-errors'
 import { useI18n } from '@/lib/i18n'
+import { identify, track } from '@/lib/analytics/posthog'
 
 export default function LoginPage() {
   const { t, locale } = useI18n()
@@ -29,11 +30,13 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       setError(translateAuthError(error.message, locale))
       setLoading(false)
     } else {
+      if (data.user?.id) identify(data.user.id, { email })
+      track('user_logged_in', { method: 'email' })
       router.push('/dashboard')
       router.refresh()
     }

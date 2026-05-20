@@ -25,6 +25,7 @@ import { CustomSelect } from '@/components/ui/custom-select'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { syncWidgetSnapshot } from '@/lib/widget-sync'
+import { track } from '@/lib/analytics/posthog'
 import type {
   Activity, ActivityStatus, ActivityCategory, RecurrenceType, RecurrenceFrequency,
   Profile, Goal, ActivityInvitation,
@@ -398,6 +399,19 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
             console.warn('[ActivityForm] invite failed for', invitee.id, err)
           )
         }
+      }
+
+      if (!isEditing) {
+        track('activity_created', {
+          category,
+          is_reminder: isReminder,
+          has_recurrence: recurrenceType !== 'none',
+          recurrence_type: recurrenceType,
+          has_goal: !!goalId,
+          has_invitees: pendingInvitees.length > 0,
+          has_reminders: reminderOffsets.length > 0,
+          is_public: isPublic,
+        })
       }
 
       // Refresh the home-screen widget snapshot. Calendar-view also re-syncs

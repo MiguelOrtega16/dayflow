@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { billingAdminClient } from '@/lib/billing/supabase-admin'
 import { productIdFromStripePrice } from '@/lib/billing/products'
 import type { BillingProductId, SubscriptionStatus } from '@/types'
+import { trackServer } from '@/lib/analytics/posthog-server'
 
 export const runtime = 'nodejs'
 // Stripe needs the raw body for signature verification — never let Next parse it.
@@ -126,6 +127,12 @@ export async function POST(request: Request) {
         trialEnd: obj.trial_end ? new Date(obj.trial_end * 1000).toISOString() : null,
         raw: event,
       })
+
+      if (type === 'customer.subscription.created') {
+        await trackServer(userId, 'subscription_started', { plan: productId, platform: 'web', status })
+      } else if (type === 'customer.subscription.deleted') {
+        await trackServer(userId, 'subscription_cancelled', { plan: productId, platform: 'web' })
+      }
     } else if (type === 'checkout.session.completed' && obj.mode === 'payment') {
       // One-time payment (lifetime)
       const userId = obj.metadata?.user_id ?? obj.client_reference_id
@@ -145,6 +152,7 @@ export async function POST(request: Request) {
         trialEnd: null,
         raw: event,
       })
+      await trackServer(userId, 'subscription_started', { plan: 'pro_lifetime', platform: 'web', status: 'active' })
     }
   } catch (err) {
     console.error('[stripe webhook] handler error', err)

@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { Eye, EyeOff } from 'lucide-react'
 import { translateAuthError } from '@/lib/auth-errors'
 import { useI18n } from '@/lib/i18n'
+import { identify, track } from '@/lib/analytics/posthog'
 
 export default function SignupPage() {
   const { t, locale } = useI18n()
@@ -37,9 +38,13 @@ export default function SignupPage() {
       setError(translateAuthError(error.message, locale))
       setLoading(false)
     } else if (data.session) {
+      if (data.user?.id) identify(data.user.id, { email, full_name: fullName })
+      track('user_signed_up', { method: 'email', confirmation_required: false })
       router.push('/dashboard')
       router.refresh()
     } else {
+      if (data.user?.id) identify(data.user.id, { email, full_name: fullName })
+      track('user_signed_up', { method: 'email', confirmation_required: true })
       setNeedsConfirmation(true)
       setLoading(false)
     }

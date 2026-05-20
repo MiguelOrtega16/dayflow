@@ -9,6 +9,7 @@ import { useI18n, LOCALE_NAMES, LOCALES, type Locale } from '@/lib/i18n'
 import { CustomSelect } from '@/components/ui/custom-select'
 import type { Profile } from '@/types'
 import { useRouter } from 'next/navigation'
+import { track } from '@/lib/analytics/posthog'
 
 export default function SettingsPage() {
   const { t, locale, setLocale } = useI18n()
@@ -64,6 +65,7 @@ export default function SettingsPage() {
   }
 
   const handleSignOut = async () => {
+    track('user_logged_out')
     await supabase.auth.signOut()
     router.push('/auth/login')
     router.refresh()

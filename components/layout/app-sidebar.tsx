@@ -9,6 +9,7 @@ import { cn, getInitials } from '@/lib/utils'
 import { useTheme } from './theme-provider'
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
+import { track } from '@/lib/analytics/posthog'
 import type { Profile } from '@/types'
 import {
   ListChecks, Users, Settings,
@@ -52,6 +53,7 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
   const navItems = isNative ? [...NAV_KEYS, ...NATIVE_NAV_KEYS] : NAV_KEYS
 
   const handleSignOut = async () => {
+    track('user_logged_out')
     await supabase.auth.signOut()
     router.push('/auth/login')
     router.refresh()

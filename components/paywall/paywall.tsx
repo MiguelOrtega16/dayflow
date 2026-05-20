@@ -15,6 +15,7 @@ import {
 } from '@/lib/billing/revenuecat'
 import { cn } from '@/lib/utils'
 import type { BillingProductId } from '@/types'
+import { track } from '@/lib/analytics/posthog'
 
 export type PaywallTrigger =
   | 'sharing_limit'
@@ -91,6 +92,11 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
     setBusy(true)
     setError(null)
     setInfo(null)
+    track('paywall_plan_selected', {
+      plan: selected,
+      trigger,
+      platform: native ? 'android' : 'web',
+    })
     try {
       if (native) {
         await purchaseProduct(selected)

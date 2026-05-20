@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { format } from 'date-fns'
+import { addDays, format } from 'date-fns'
 import { ArrowLeft, Plus, X } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 import { useBackButtonRoute } from '@/lib/back-button'
 import { createClient } from '@/lib/supabase/client'
-import { createRecurringActivities, RECURRENCE_HARD_CAP } from '@/lib/api'
+import { createRecurringActivities } from '@/lib/api'
 import { getTemplate } from '@/lib/activity-templates'
 import type { Activity, RecurrenceType, RecurrenceConfig } from '@/types'
 import { cn } from '@/lib/utils'
@@ -18,21 +18,18 @@ const DAYS: { v: number; key: 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 's
   { v: 3, key: 'wed' }, { v: 4, key: 'thu' }, { v: 5, key: 'fri' }, { v: 6, key: 'sat' },
 ]
 
-/**
- * Pick the cheapest recurrence representation for a set of weekday selections.
- * - All 7 days → 'daily' (interval=1).
- * - Exact Mon-Fri → 'weekdays'.
- * - Any other subset → 'custom' with explicit days_of_week. (Custom recurrence
- *   is Pro-gated in the modal picker, but the DB doesn't gate it on insert,
- *   so templates can hand it out as part of the free flow.)
- */
-function pickRecurrence(days: number[]): { type: RecurrenceType; config: RecurrenceConfig } {
+// Templates use a 1-month rolling cap so adding one doesn't bury the calendar
+// in ~500 ghost rows. Users who want longer-running habits can re-add or use
+// the form modal to set explicit count/end-date.
+const TEMPLATE_RECURRENCE_DAYS = 30
+
+function pickRecurrence(days: number[], endDate: string): { type: RecurrenceType; config: RecurrenceConfig } {
   const sorted = [...days].sort((a, b) => a - b)
   const allSeven = sorted.length === 7
   const isMonFri = sorted.length === 5 && sorted.every((d, i) => d === i + 1)
-  if (allSeven) return { type: 'daily',    config: { interval: 1, occurrences: RECURRENCE_HARD_CAP } }
-  if (isMonFri) return { type: 'weekdays', config: { occurrences: RECURRENCE_HARD_CAP } }
-  return { type: 'custom', config: { days_of_week: sorted, occurrences: RECURRENCE_HARD_CAP } }
+  if (allSeven) return { type: 'daily',    config: { interval: 1, end_date: endDate } }
+  if (isMonFri) return { type: 'weekdays', config: { end_date: endDate } }
+  return { type: 'custom', config: { days_of_week: sorted, end_date: endDate } }
 }
 
 export default function TemplateDetailPage() {
@@ -110,7 +107,8 @@ export default function TemplateDetailPage() {
       if (!user) throw new Error('not authenticated')
 
       const today = format(new Date(), 'yyyy-MM-dd')
-      const recurrence = pickRecurrence(selectedDays)
+      const endDate = format(addDays(new Date(), TEMPLATE_RECURRENCE_DAYS), 'yyyy-MM-dd')
+      const recurrence = pickRecurrence(selectedDays, endDate)
       const title       = t(`templates.${template.id}.name`)
       const description = t(`templates.${template.id}.description`)
 

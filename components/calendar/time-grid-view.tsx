@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { format, isToday } from 'date-fns'
 import { cn, STATUS_CONFIG, statusLabel } from '@/lib/utils'
-import { updateActivityStatus, deleteActivity } from '@/lib/api'
+import { updateActivityStatus } from '@/lib/api'
 import type { Activity, ActivityStatus } from '@/types'
 import { useI18n, dateFnsLocale } from '@/lib/i18n'
+import { DeleteActivityDialog } from '@/components/activities/delete-activity-dialog'
 
 const HOUR_HEIGHT = 56
 
@@ -78,6 +79,7 @@ export function TimeGridView({
 }: TimeGridViewProps) {
   const scrollRef  = useRef<HTMLDivElement>(null)
   const [ctx, setCtx] = useState<CtxMenu | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Activity | null>(null)
   const { locale, t } = useI18n()
 
   useEffect(() => {
@@ -115,10 +117,9 @@ export function TimeGridView({
     onActivityUpdated?.()
   }
 
-  const handleDelete = async (activity: Activity, all = false) => {
+  const handleDeleteRequest = (activity: Activity) => {
     closeCtx()
-    await deleteActivity(activity.id, all)
-    onActivityUpdated?.()
+    setPendingDelete(activity)
   }
 
   const handleSlotClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -309,20 +310,23 @@ export function TimeGridView({
             {ctx.activity.user_id === currentUserId && (
               <>
                 <div className="border-t border-border my-1" />
-                <button onClick={() => handleDelete(ctx.activity)}
+                <button onClick={() => handleDeleteRequest(ctx.activity)}
                   className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors flex items-center gap-2">
-                  <span>🗑</span> {t('calendar.deleteThis')}
+                  <span>🗑</span> {t('common.delete')}
                 </button>
-                {ctx.activity.recurrence_type !== 'none' && (
-                  <button onClick={() => handleDelete(ctx.activity, true)}
-                    className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors flex items-center gap-2 text-xs">
-                    <span>🗑</span> {t('calendar.deleteAllRecurring')}
-                  </button>
-                )}
               </>
             )}
           </div>
         </>
+      )}
+
+      {pendingDelete && currentUserId && (
+        <DeleteActivityDialog
+          activity={pendingDelete}
+          currentUserId={currentUserId}
+          onClose={() => setPendingDelete(null)}
+          onDeleted={() => onActivityUpdated?.()}
+        />
       )}
     </div>
   )

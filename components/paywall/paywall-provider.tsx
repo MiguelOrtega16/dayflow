@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Paywall, type PaywallTrigger } from './paywall'
+import { track } from '@/lib/analytics/posthog'
 
 interface PaywallContextValue {
   open: (trigger?: PaywallTrigger) => void
@@ -38,10 +39,17 @@ export function PaywallProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const open = useCallback((trigger?: PaywallTrigger) => {
-    setActiveTrigger(trigger ?? 'generic')
+    const t = trigger ?? 'generic'
+    setActiveTrigger(t)
+    track('paywall_viewed', { trigger: t })
   }, [])
 
-  const close = useCallback(() => setActiveTrigger(null), [])
+  const close = useCallback(() => {
+    setActiveTrigger(prev => {
+      if (prev) track('paywall_dismissed', { trigger: prev })
+      return null
+    })
+  }, [])
 
   return (
     <PaywallContext.Provider value={{ open, close }}>

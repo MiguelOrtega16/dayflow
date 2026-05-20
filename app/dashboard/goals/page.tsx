@@ -12,6 +12,7 @@ import type { Goal, ActivityStatus, ActivityPriority, Profile } from '@/types'
 import { useI18n, useFormatDate } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
+import { track } from '@/lib/analytics/posthog'
 
 // Free tier can have this many active goals (status not in done/skipped).
 // Keep in sync with the RLS subquery in schema.sql.
@@ -88,6 +89,11 @@ export default function GoalsPage() {
         is_public: true,
       })
       setGoals(prev => [{ ...goal, task_count: 0, done_count: 0 }, ...prev])
+      track('goal_created', {
+        priority: newPriority,
+        has_target_date: !!newTargetDate,
+        has_description: !!newDescription.trim(),
+      })
       setNewTitle('')
       setNewDescription('')
       setNewTargetDate('')

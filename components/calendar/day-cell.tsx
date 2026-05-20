@@ -5,9 +5,10 @@ import { format } from 'date-fns'
 import { Plus, X } from 'lucide-react'
 import { cn, STATUS_CONFIG, getInitials, statusLabel } from '@/lib/utils'
 import { useDateTimePrefs } from '@/lib/datetime-prefs'
-import { deleteActivity, updateActivityStatus } from '@/lib/api'
+import { updateActivityStatus } from '@/lib/api'
 import type { Activity, ActivityStatus, Profile } from '@/types'
 import { useI18n, useFormatDate } from '@/lib/i18n'
+import { DeleteActivityDialog } from '@/components/activities/delete-activity-dialog'
 
 interface DayCellProps {
   date: Date
@@ -54,7 +55,7 @@ export function DayCell({
 }: DayCellProps) {
   const [showAll, setShowAll]       = useState(false)
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Activity | null>(null)
   const { locale, t } = useI18n()
   const fmt = useFormatDate()
 
@@ -86,15 +87,9 @@ export function DayCell({
     onActivityUpdated()
   }
 
-  const handleDelete = async (activity: Activity, deleteAll = false) => {
+  const handleDeleteRequest = (activity: Activity) => {
     closeContextMenu()
-    setDeletingId(activity.id)
-    try {
-      await deleteActivity(activity.id, deleteAll)
-      onActivityUpdated()
-    } finally {
-      setDeletingId(null)
-    }
+    setPendingDelete(activity)
   }
 
   return (
@@ -162,7 +157,7 @@ export function DayCell({
                 currentUserId={currentUserId}
                 allUsers={allUsers}
                 isSharedView={isSharedView}
-                deleting={deletingId === activity.id}
+                deleting={pendingDelete?.id === activity.id}
                 onClick={onClick}
                 onEditActivity={onEditActivity}
                 onContextMenu={openContextMenu}
@@ -208,7 +203,7 @@ export function DayCell({
             <div className="space-y-1">
               {activities.map(activity => (
                 <ActivityPill key={activity.id} activity={activity} currentUserId={currentUserId}
-                  allUsers={allUsers} isSharedView={isSharedView} deleting={deletingId === activity.id}
+                  allUsers={allUsers} isSharedView={isSharedView} deleting={pendingDelete?.id === activity.id}
                   onClick={() => { setShowAll(false); onClick() }}
                   onEditActivity={a => { setShowAll(false); onEditActivity(a) }}
                   onContextMenu={openContextMenu} expanded
@@ -276,20 +271,23 @@ export function DayCell({
             {contextMenu.activity.user_id === currentUserId && (
               <>
                 <div className="border-t border-border my-1" />
-                <button onClick={() => handleDelete(contextMenu.activity)}
+                <button onClick={() => handleDeleteRequest(contextMenu.activity)}
                   className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors flex items-center gap-2">
-                  <span>🗑</span> {t('calendar.deleteThis')}
+                  <span>🗑</span> {t('common.delete')}
                 </button>
-                {contextMenu.activity.recurrence_type !== 'none' && (
-                  <button onClick={() => handleDelete(contextMenu.activity, true)}
-                    className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive transition-colors flex items-center gap-2 text-xs">
-                    <span>🗑</span> {t('calendar.deleteAllRecurring')}
-                  </button>
-                )}
               </>
             )}
           </div>
         </>
+      )}
+
+      {pendingDelete && (
+        <DeleteActivityDialog
+          activity={pendingDelete}
+          currentUserId={currentUserId}
+          onClose={() => setPendingDelete(null)}
+          onDeleted={onActivityUpdated}
+        />
       )}
     </div>
   )

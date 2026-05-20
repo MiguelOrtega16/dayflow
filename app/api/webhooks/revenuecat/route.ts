@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { billingAdminClient } from '@/lib/billing/supabase-admin'
 import { productIdFromPlaySku } from '@/lib/billing/products'
 import type { BillingPlatform, BillingProductId, SubscriptionStatus } from '@/types'
+import { trackServer } from '@/lib/analytics/posthog-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -106,6 +107,17 @@ export async function POST(request: Request) {
   if (error) {
     console.error('[rc webhook] upsert failed', error)
     return NextResponse.json({ error: 'upsert failed' }, { status: 500 })
+  }
+
+  // Map RC event types onto our funnel-friendly event names. INITIAL_PURCHASE
+  // and NON_RENEWING_PURCHASE (lifetime) both count as "started"; RENEWAL has
+  // its own event so we can distinguish gross vs. recurring revenue later.
+  if (event.type === 'INITIAL_PURCHASE' || event.type === 'NON_RENEWING_PURCHASE') {
+    await trackServer(userId, 'subscription_started', { plan: productId, platform, status: finalStatus })
+  } else if (event.type === 'RENEWAL') {
+    await trackServer(userId, 'subscription_renewed', { plan: productId, platform })
+  } else if (event.type === 'CANCELLATION' || event.type === 'EXPIRATION') {
+    await trackServer(userId, 'subscription_cancelled', { plan: productId, platform, reason: event.cancel_reason ?? null })
   }
 
   return NextResponse.json({ received: true })

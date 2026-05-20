@@ -643,6 +643,15 @@ export const messages = {
       current: 'actual',
       deleteThis: 'Eliminar esta actividad',
       deleteAllRecurring: 'Eliminar todas las recurrentes',
+      deleteConfirm: {
+        title: '¿Eliminar actividad?',
+        subtitleSingle: 'Esta acción no se puede deshacer.',
+        subtitleRecurring: 'Esta actividad se repite. Elige qué deseas eliminar.',
+        thisOne: 'Solo esta',
+        allRepeats: 'Todas las repeticiones',
+        confirm: 'Eliminar',
+        error: 'No se pudo eliminar. Inténtalo de nuevo.',
+      },
       progress: '{done}/{total} completadas',
       simultaneous: 'Simultáneo',
       tasksWord: 'Tarea',
@@ -884,6 +893,35 @@ export const messages = {
           stats_export: {
             title: 'Historial completo y exportación de estadísticas',
             subtitle: 'Tendencias más allá de 30 días y exportación a CSV.',
+          },
+        },
+      },
+    },
+    onboarding: {
+      starterPicker: {
+        title: 'Empieza con un set',
+        subtitle: 'Elige un set y añadiremos algunas actividades recurrentes para que tu semana arranque. Puedes editar o eliminar lo que quieras después.',
+        skip: 'Empezar desde cero',
+        cta: 'Añadir {count} actividades',
+        inserting: 'Añadiendo…',
+        added: '¡Listo!',
+        error: 'No se pudo añadir el set. Inténtalo de nuevo.',
+        packs: {
+          healthy_habits: {
+            name: 'Hábitos saludables',
+            description: 'Lo básico para sentirte bien todos los días.',
+          },
+          student_focus: {
+            name: 'Estudiante / Enfoque',
+            description: 'Rutina pensada para sacarle el jugo a tus días de estudio.',
+          },
+          wellness_reset: {
+            name: 'Bienestar y calma',
+            description: 'Un poco de aire para tu mente y tu cuerpo.',
+          },
+          power_mornings: {
+            name: 'Mañanas con energía',
+            description: 'Despierta temprano y arranca el día listo.',
           },
         },
       },
@@ -1531,6 +1569,15 @@ export const messages = {
       current: 'current',
       deleteThis: 'Delete this activity',
       deleteAllRecurring: 'Delete all recurrences',
+      deleteConfirm: {
+        title: 'Delete activity?',
+        subtitleSingle: 'This can\'t be undone.',
+        subtitleRecurring: 'This activity repeats. Choose what to delete.',
+        thisOne: 'Just this one',
+        allRepeats: 'All repeats',
+        confirm: 'Delete',
+        error: 'Couldn\'t delete. Try again.',
+      },
       progress: '{done}/{total} completed',
       simultaneous: 'Overlap',
       tasksWord: 'Task',
@@ -1769,6 +1816,35 @@ export const messages = {
           stats_export: {
             title: 'Full stats history and export',
             subtitle: 'Trends beyond 30 days and CSV export.',
+          },
+        },
+      },
+    },
+    onboarding: {
+      starterPicker: {
+        title: 'Start with a pack',
+        subtitle: 'Pick a pack and we\'ll add a few recurring activities so your week isn\'t empty. You can edit or delete anything later.',
+        skip: 'Start fresh',
+        cta: 'Add {count} activities',
+        inserting: 'Adding…',
+        added: 'Done!',
+        error: 'Couldn\'t add the pack. Try again.',
+        packs: {
+          healthy_habits: {
+            name: 'Healthy Habits',
+            description: 'The basics to feel good every day.',
+          },
+          student_focus: {
+            name: 'Student / Focus',
+            description: 'A routine built for getting the most out of study days.',
+          },
+          wellness_reset: {
+            name: 'Wellness Reset',
+            description: 'Breathing room for your mind and body.',
+          },
+          power_mornings: {
+            name: 'Power Mornings',
+            description: 'Wake up early and start your day ready.',
           },
         },
       },

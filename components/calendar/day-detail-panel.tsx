@@ -5,7 +5,8 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2, ChevronDown, Loader2 } from 'lucide-react'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, getInitials, formatRelativeTime, statusLabel, categoryLabel, priorityLabel } from '@/lib/utils'
 import { useDateTimePrefs } from '@/lib/datetime-prefs'
-import { updateActivityStatus, deleteActivity, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
+import { updateActivityStatus, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
+import { DeleteActivityDialog } from '@/components/activities/delete-activity-dialog'
 import type { Activity, ActivityStatus, Profile, ActivityComment } from '@/types'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -70,6 +71,7 @@ export function DayDetailPanel({
   const [collapsedUsers, setCollapsedUsers] = useState<Set<string>>(new Set())
   const [transitioning, setTransitioning] = useState(false)
   const [updatingIds, setUpdatingIds]     = useState<Set<string>>(new Set())
+  const [pendingDelete, setPendingDelete] = useState<Activity | null>(null)
   const supabase = createClient()
   const { locale, t } = useI18n()
   const fmt = useFormatDate()
@@ -235,10 +237,9 @@ export function DayDetailPanel({
     }
   }
 
-  const handleDelete = async (activity: Activity, deleteAll = false) => {
+  const handleDeleteRequest = (activity: Activity) => {
     if (activity.user_id !== currentUserId) return
-    await deleteActivity(activity.id, deleteAll)
-    onActivityUpdated()
+    setPendingDelete(activity)
   }
 
   const handleToggleComments = useCallback(async (activityId: string) => {
@@ -326,10 +327,7 @@ export function DayDetailPanel({
                   >
                     <DropdownMenu.Item onSelect={() => onEditActivity(activity)} className="px-3 py-1.5 hover:bg-muted transition-colors outline-none cursor-pointer">✏️ {t('common.edit')}</DropdownMenu.Item>
                     <DropdownMenu.Separator className="border-t border-border my-1" />
-                    <DropdownMenu.Item onSelect={() => handleDelete(activity)} className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer">🗑 {t('common.delete')}</DropdownMenu.Item>
-                    {activity.recurrence_type !== 'none' && (
-                      <DropdownMenu.Item onSelect={() => handleDelete(activity, true)} className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer">🗑 {t('calendar.deleteAllRecurring')}</DropdownMenu.Item>
-                    )}
+                    <DropdownMenu.Item onSelect={() => handleDeleteRequest(activity)} className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer">🗑 {t('common.delete')}</DropdownMenu.Item>
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
@@ -562,19 +560,11 @@ export function DayDetailPanel({
                       })}
                       <DropdownMenu.Separator className="border-t border-border my-1" />
                       <DropdownMenu.Item
-                        onSelect={() => handleDelete(activity)}
+                        onSelect={() => handleDeleteRequest(activity)}
                         className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer"
                       >
-                        🗑 {t('calendar.deleteThis')}
+                        🗑 {t('common.delete')}
                       </DropdownMenu.Item>
-                      {activity.recurrence_type !== 'none' && (
-                        <DropdownMenu.Item
-                          onSelect={() => handleDelete(activity, true)}
-                          className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer"
-                        >
-                          🗑 {t('calendar.deleteAllRecurring')}
-                        </DropdownMenu.Item>
-                      )}
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
@@ -839,6 +829,14 @@ export function DayDetailPanel({
         )}
       </div>
 
+      {pendingDelete && (
+        <DeleteActivityDialog
+          activity={pendingDelete}
+          currentUserId={currentUserId}
+          onClose={() => setPendingDelete(null)}
+          onDeleted={onActivityUpdated}
+        />
+      )}
     </div>
   )
 }
