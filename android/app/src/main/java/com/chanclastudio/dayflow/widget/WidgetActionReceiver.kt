@@ -1,14 +1,11 @@
 package com.chanclastudio.dayflow.widget
 
-import android.app.PendingIntent
-import android.appwidget.AppWidgetManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import org.json.JSONObject
 
 /**
  * Single entry point for all widget user actions. Dispatches by action string.
@@ -33,12 +30,10 @@ class WidgetActionReceiver : BroadcastReceiver() {
     }
 
     private fun handleRefresh(ctx: Context) {
-        runOnIo {
-            val list = SupabaseRest.fetchActivities(ctx) ?: return@runOnIo
-            val snap = JSONObject().put("activities", list)
-            WidgetStore.writeSnapshot(ctx, snap.toString())
-            mainHandler.post { TodayWidgetProvider.renderAll(ctx) }
-        }
+        // Delegates the whole pipeline (fetch + compute stats/next + write
+        // full snapshot + render all three providers) to one place so Today,
+        // Streak, and NextUp stay in lockstep.
+        WidgetSnapshotSync.refresh(ctx)
     }
 
     private fun handleRowClick(ctx: Context, intent: Intent) {
@@ -51,23 +46,20 @@ class WidgetActionReceiver : BroadcastReceiver() {
         }
         val newStatus = if (wasDone) "todo" else "done"
 
-        // Optimistic local update so the widget redraws instantly
+        // Optimistic local update so the Today widget redraws instantly. Only
+        // touches the activities array — Streak/NextUp catch up after the
+        // post-PATCH sync below, which is fast enough that a one-second lag on
+        // those tiles is acceptable for the perceived snappiness on Today.
         optimisticUpdate(ctx, id, newStatus)
         mainHandler.post { TodayWidgetProvider.renderAll(ctx) }
 
-        // Push to Supabase, then re-sync from DB on BOTH paths. If the PATCH
-        // failed (auth, RLS, 0 rows), the refetch overwrites the optimistic
-        // snapshot with truth so the widget can't get stuck in a wrong state.
         runOnIo {
-            val ok = SupabaseRest.updateStatus(ctx, id, newStatus)
-            val list = SupabaseRest.fetchActivities(ctx)
-            if (list != null) {
-                val snap = JSONObject().put("activities", list)
-                WidgetStore.writeSnapshot(ctx, snap.toString())
-            } else {
-                Log.w("DayFlowWidget", "post-update refetch failed; widget may show stale state until next refresh (ok=$ok)")
-            }
-            mainHandler.post { TodayWidgetProvider.renderAll(ctx) }
+            SupabaseRest.updateStatus(ctx, id, newStatus)
+            // Rebuild the full snapshot from truth, even if the PATCH failed —
+            // the fetch returns the unchanged row so the optimistic update
+            // gets reverted and the user can't get stuck in a wrong state.
+            // refresh() handles the render fan-out for all three providers.
+            WidgetSnapshotSync.refresh(ctx)
         }
     }
 

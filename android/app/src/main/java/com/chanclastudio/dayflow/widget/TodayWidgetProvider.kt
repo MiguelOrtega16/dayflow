@@ -27,6 +27,11 @@ class TodayWidgetProvider : AppWidgetProvider() {
                 Log.e("DayFlowWidget", "renderWidget failed for id=$id", t)
             }
         }
+        // Self-refresh on widget placement + the system's ~30 min periodic
+        // onUpdate so a freshly placed widget doesn't sit on a stale snapshot
+        // until the user opens the app. Cheap idempotent check — only hits
+        // the network if the cached data is older than 5 minutes.
+        WidgetSnapshotSync.refreshIfStale(ctx)
     }
 
     override fun onAppWidgetOptionsChanged(

@@ -32,6 +32,11 @@ class NextUpWidgetProvider : AppWidgetProvider() {
             catch (t: Throwable) { Log.e("DayFlowWidget", "nextup render failed id=$id", t) }
         }
         scheduleNextTick(ctx)
+        // Self-refresh on placement + the system's ~30 min periodic onUpdate
+        // so a freshly added NextUp widget can find the soonest upcoming
+        // activity without waiting for the app to be opened. The per-minute
+        // tick above only re-renders; it doesn't touch the snapshot.
+        WidgetSnapshotSync.refreshIfStale(ctx)
     }
 
     override fun onAppWidgetOptionsChanged(

@@ -80,16 +80,20 @@ object SupabaseRest {
     }
 
     /**
-     * Fetch activities for the next 30 days for the current user, plus any
-     * completed activities for today. Returns the JSON array body (or null).
+     * Fetch the activity window the widgets care about for the current user:
+     * 60 days behind (for Streak math — counts consecutive past days with at
+     * least one completion) through 30 days ahead (for the Today list and the
+     * NextUp pointer). Returns the JSON array body, or null on auth / network
+     * failure. WidgetSnapshotSync slices this further when building the
+     * snapshot fields.
      */
     fun fetchActivities(ctx: Context): JSONArray? {
         val auth = ensureAccessToken(ctx) ?: return null
-        val today = todayStr()
+        val since = daysFromNow(-60)
         val until = daysFromNow(30)
         val select = "id,title,emoji,start_time,end_time,status,category,date,user_id"
         val q = "select=$select&user_id=eq.${auth.userId}" +
-                "&date=gte.$today&date=lte.$until" +
+                "&date=gte.$since&date=lte.$until" +
                 "&order=date.asc,start_time.asc.nullslast"
         val url = "${auth.supabaseUrl}/rest/v1/activities?$q"
         val resp = httpJson("GET", url, null, mapOf(
@@ -100,11 +104,7 @@ object SupabaseRest {
             Log.w(TAG, "fetch activities failed: ${resp.status} ${resp.body.take(200)}")
             return null
         }
-
-        // Append today's completed activities (which we'd otherwise miss because
-        // the snapshot writer also includes them — keeping parity here)
-        val list = runCatching { JSONArray(resp.body) }.getOrNull() ?: JSONArray()
-        return list
+        return runCatching { JSONArray(resp.body) }.getOrNull() ?: JSONArray()
     }
 
     /**

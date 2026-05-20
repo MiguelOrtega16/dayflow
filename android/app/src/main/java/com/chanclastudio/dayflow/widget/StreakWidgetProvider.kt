@@ -25,6 +25,10 @@ class StreakWidgetProvider : AppWidgetProvider() {
             try { renderWidget(ctx, mgr, id) }
             catch (t: Throwable) { Log.e("DayFlowWidget", "streak render failed id=$id", t) }
         }
+        // Self-refresh on placement + the system's ~30 min periodic onUpdate.
+        // Without this, a freshly added Streak widget would render zeros until
+        // the user opens the app (which is the bug we're fixing here).
+        WidgetSnapshotSync.refreshIfStale(ctx)
     }
 
     override fun onAppWidgetOptionsChanged(
