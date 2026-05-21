@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Capacitor } from '@capacitor/core'
 import { Bell, Plus, X } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 import { createClient } from '@/lib/supabase/client'
@@ -34,6 +35,13 @@ export function SetupChecklist({ userId, hasActivities, hasPushSubscription }: P
   const [createdInSession, setCreatedInSession] = useState(false)
   const [reminderState, setReminderState] = useState<ReminderState>(() => {
     if (hasPushSubscription) return 'granted'
+    // On Capacitor native the web Notification global isn't a reliable signal
+    // — Android webviews vary on whether it exists, and even when it does its
+    // permission state can be out of sync with the actual FCM permission. The
+    // source of truth on native is the fcm_token (passed via
+    // hasPushSubscription). If we don't have one yet, we're "pending" and the
+    // CTA should call initPushNotifications to (re-)prompt or surface settings.
+    if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) return 'pending'
     if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported'
     if (Notification.permission === 'granted') return 'granted'
     if (Notification.permission === 'denied')  return 'denied'
@@ -48,8 +56,10 @@ export function SetupChecklist({ userId, hasActivities, hasPushSubscription }: P
 
   // Sync from the browser API in case the user granted in another tab and
   // didn't refresh — keeps the step state honest without a full reload.
+  // Skipped on Capacitor native; see the initial-state comment for why.
   useEffect(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) return
+    if (Capacitor.isNativePlatform()) return
     const sync = () => {
       const perm = Notification.permission
       setReminderState(prev =>
@@ -144,7 +154,30 @@ export function SetupChecklist({ userId, hasActivities, hasPushSubscription }: P
     setReminderState('requesting')
     try {
       await initPushNotifications(userId)
-      // Read the post-request state authoritatively from the browser.
+
+      if (Capacitor.isNativePlatform()) {
+        // On native, initPushNotifications resolves before the FCM
+        // 'registration' event fires — the token write to profile.fcm_token
+        // happens asynchronously inside that callback. Give it a beat, then
+        // re-read the profile to decide whether the user granted (token
+        // landed) or denied (token still null).
+        setTimeout(async () => {
+          try {
+            const supabase = createClient()
+            const { data } = await supabase
+              .from('profiles')
+              .select('fcm_token')
+              .eq('id', userId)
+              .single()
+            setReminderState(data?.fcm_token ? 'granted' : 'pending')
+          } catch {
+            setReminderState('pending')
+          }
+        }, 1500)
+        return
+      }
+
+      // Web: read the post-request state authoritatively from the browser.
       const perm = typeof Notification !== 'undefined' ? Notification.permission : 'default'
       setReminderState(perm === 'granted' ? 'granted' : perm === 'denied' ? 'denied' : 'pending')
     } catch (err) {
