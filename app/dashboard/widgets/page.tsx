@@ -217,17 +217,31 @@ export default function WidgetsPage() {
                 : kind === 'nextup'
                   ? t('widgets.nextupName')
                   : t('widgets.todayName')
+              // Soft-revert: a Pro widget installed during an active
+              // subscription stays on the home screen after downgrade
+              // (native widgets can't be uninstalled remotely), but the
+              // in-app configure entry is gated so the user can't change
+              // its color/opacity without re-subscribing.
+              const isProWidget = kind === 'streak' || kind === 'nextup'
+              const locked = isProWidget && !entitlement.isPro
               return (
                 <button
                   key={`${kind}-${id}`}
-                  onClick={() => router.push(`/dashboard/widget/${id}`)}
+                  onClick={() => locked ? openPaywall('locked_widget') : router.push(`/dashboard/widget/${id}`)}
                   className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors"
                 >
-                  <div>
-                    <p className="text-sm font-medium">{kindLabel}</p>
-                    <p className="text-xs text-muted-foreground">{t('widgets.customizeShort')}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    {locked && <Crown className="w-4 h-4 text-indigo-500 shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{kindLabel}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {locked ? t('widgets.proLockedTitle') : t('widgets.customizeShort')}
+                      </p>
+                    </div>
                   </div>
-                  <Settings className="w-4 h-4 text-muted-foreground" />
+                  {locked
+                    ? <Lock className="w-4 h-4 text-muted-foreground shrink-0" />
+                    : <Settings className="w-4 h-4 text-muted-foreground shrink-0" />}
                 </button>
               )
             })}

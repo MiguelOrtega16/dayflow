@@ -25,6 +25,11 @@ interface DayDetailPanelProps {
       instead of the empty-state ("no activities") so a slow fetch doesn't
       flash a false-empty message before real data arrives. */
   loading?: boolean
+  /** Notifies the parent (CalendarView) when the user is actively typing in
+   *  a comment composer. The parent uses this to hide the FAB and the
+   *  compact month grid so the keyboard-driven layout doesn't make the
+   *  send button or the panel header collide with other UI. */
+  onComposingChange?: (composing: boolean) => void
 }
 
 const STATUS_CYCLE: ActivityStatus[] = ['todo', 'in_progress', 'done', 'blocked', 'skipped']
@@ -61,6 +66,7 @@ const STATUS_ICON = {
 export function DayDetailPanel({
   date, activities, currentUserId, currentUserColor,
   allUsers, onAddActivity, onEditActivity, onActivityUpdated, loading = false,
+  onComposingChange,
 }: DayDetailPanelProps) {
   const { formatTime } = useDateTimePrefs()
   const [openCommentId, setOpenCommentId] = useState<string | null>(null)
@@ -625,11 +631,13 @@ export function DayDetailPanel({
                   </div>
                 )}
 
-                <div className="px-3 py-2 border-t border-border/30 flex items-center gap-2">
+                <div className="relative z-10 bg-card px-3 py-2 border-t border-border/30 flex items-center gap-2">
                   <input
                     type="text"
                     value={newCommentText[activity.id] || ''}
                     onChange={e => setNewCommentText(prev => ({ ...prev, [activity.id]: e.target.value }))}
+                    onFocus={() => onComposingChange?.(true)}
+                    onBlur={() => onComposingChange?.(false)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(activity.id) } }}
                     placeholder={t('calendar.writeComment')}
                     className="flex-1 text-xs bg-background rounded-lg border border-input px-2 py-1.5 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
@@ -652,8 +660,9 @@ export function DayDetailPanel({
 
   return (
     <div className="flex-1 bg-card/50 flex flex-col overflow-hidden min-h-0">
-      {/* Encabezado */}
-      <div className="px-4 py-4 border-b border-border">
+      {/* Encabezado — opaque bg so the keyboard pushing layout up can't make
+          this overlay the compact month grid above it on mobile. */}
+      <div className="px-4 py-4 border-b border-border bg-card relative z-10">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">

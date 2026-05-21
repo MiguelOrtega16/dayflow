@@ -64,6 +64,11 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   const [isMobile, setIsMobile]   = useState(false)
   // Tablet: 768–1279 px — uses bottom panel instead of right-side panel
   const [isTablet, setIsTablet]   = useState(false)
+  // True while the user is focused in a comment composer inside the day
+  // detail panel. Mobile view hides the FAB and the compact month grid
+  // while composing so the keyboard-driven layout doesn't crowd the send
+  // button or overlap the panel header on top of the grid.
+  const [composing, setComposing] = useState(false)
   // Live copy of shared calendars — the server prop is static; this refreshes in real-time
   const [liveSharedCalendars, setLiveSharedCalendars] = useState(sharedCalendars)
   const supabase = createClient()
@@ -445,31 +450,35 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           )}
         />
 
-        {/* Compact grid — swipeable on mobile */}
-        <div
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          className="shrink-0 border-b border-border" style={{
-          height: (() => {
-            if (mode !== 'month') return '25dvh'
-            const rows = eachDayOfInterval({
-              start: startOfWeek(startOfMonth(currentDate), { weekStartsOn }),
-              end:   endOfWeek(endOfMonth(currentDate),   { weekStartsOn }),
-            }).length / 7
-            return rows >= 6 ? '28dvh' : rows >= 5 ? '25dvh' : '22dvh'
-          })(),
-        }}>
-          <CompactMonthGrid
-            currentDate={mode === 'week' ? (isMobileWeek ? selectedDate : currentDate) : currentDate}
-            selectedDate={selectedDate}
-            days={gridDays}
-            activities={activities}
-            holidays={holidays}
-            allUsers={allUsers}
-            activeUserIds={activeUserIds}
-            onDateSelect={d => { setSelectedDate(d); setCurrentDate(d) }}
-          />
-        </div>
+        {/* Compact grid — swipeable on mobile. Hidden while the user is
+            composing a comment so the keyboard-driven layout can't make
+            the day-detail header overlap the calendar grid. */}
+        {!composing && (
+          <div
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            className="shrink-0 border-b border-border" style={{
+            height: (() => {
+              if (mode !== 'month') return '25dvh'
+              const rows = eachDayOfInterval({
+                start: startOfWeek(startOfMonth(currentDate), { weekStartsOn }),
+                end:   endOfWeek(endOfMonth(currentDate),   { weekStartsOn }),
+              }).length / 7
+              return rows >= 6 ? '28dvh' : rows >= 5 ? '25dvh' : '22dvh'
+            })(),
+          }}>
+            <CompactMonthGrid
+              currentDate={mode === 'week' ? (isMobileWeek ? selectedDate : currentDate) : currentDate}
+              selectedDate={selectedDate}
+              days={gridDays}
+              activities={activities}
+              holidays={holidays}
+              allUsers={allUsers}
+              activeUserIds={activeUserIds}
+              onDateSelect={d => { setSelectedDate(d); setCurrentDate(d) }}
+            />
+          </div>
+        )}
 
         {/* Day detail — remaining space, min-h-0 ensures flex child can shrink below content.
             Also handles horizontal swipe so users can navigate the calendar from
@@ -481,18 +490,21 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          <DayDetailPanel {...detailProps} />
+          <DayDetailPanel {...detailProps} onComposingChange={setComposing} />
         </div>
 
-        {/* Floating action button — anchored above the bottom nav */}
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="fixed right-4 z-30 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform animate-attention"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4rem)' }}
-          aria-label={t('calendar.newActivity')}
-        >
-          <Plus className="w-6 h-6" />
-        </button>
+        {/* Floating action button — anchored above the bottom nav. Hidden
+            while composing so it doesn't cover the comment send button. */}
+        {!composing && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="fixed right-4 z-30 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform animate-attention"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4rem)' }}
+            aria-label={t('calendar.newActivity')}
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        )}
 
         {(showAddModal || editingActivity) && (
           <ActivityFormModal
@@ -610,7 +622,11 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
       {/* ── Detail panel — bottom on tablet, right side on desktop ── */}
       {mode !== 'day' && (
         isTablet ? (
-          <div className="shrink-0 border-t border-border overflow-hidden" style={{ height: '35dvh' }}>
+          // 50dvh leaves enough vertical room to actually read a day's
+          // activity list on tablet portrait — the previous 35dvh was
+          // almost entirely consumed by the panel header + progress bar,
+          // hiding the activities the user came to see.
+          <div className="shrink-0 border-t border-border overflow-hidden" style={{ height: '50dvh' }}>
             <DayDetailPanel
               date={selectedDate}
               activities={getActivitiesForDate(selectedDate)}

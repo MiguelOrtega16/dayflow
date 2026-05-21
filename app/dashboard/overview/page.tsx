@@ -621,28 +621,27 @@ function ActivityCard({
   // Hook is called unconditionally; we just skip wiring its handlers when
   // this card is the floating overlay (the source card under the cursor
   // already has them).
-  const { attributes, listeners, setNodeRef } = useDraggable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef } = useDraggable({
     id: activity.id,
     data: { from: status },
     disabled: overlay,
   })
 
-  // Drag listeners cover the entire card; the status circle stops its own
-  // pointerdown from bubbling so clicking it cycles the status instead of
-  // starting a drag. The PointerSensor's 6px activation distance keeps a
-  // small click (no movement) from starting a drag anywhere else either.
+  // Drag listeners are attached to the grip handle only — not the whole
+  // card — so a touch on the card body still scrolls the Tasks page on
+  // mobile. With listeners on the <li>, `touch-action: none` was needed
+  // for dnd-kit to detect drags, and that blocked the browser's vertical
+  // pan, leaving the kanban list effectively unscrollable on phones.
   const dragProps = overlay ? {} : { ...attributes, ...listeners }
 
   return (
     <li
       ref={overlay ? undefined : setNodeRef}
-      {...dragProps}
       aria-label={overlay ? undefined : t('overview.dragHandle')}
       className={cn(
-        'group relative flex items-start gap-2.5 p-2.5 rounded-xl border transition-[opacity,box-shadow] touch-none',
+        'group relative flex items-start gap-2.5 p-2.5 rounded-xl border transition-[opacity,box-shadow]',
         cfg.bgColor, cfg.color,
         'hover:shadow-sm',
-        !overlay && 'cursor-grab active:cursor-grabbing',
         // Ghost the original card while it's being dragged — the DragOverlay
         // renders the visible floating copy.
         isDraggingThis && !overlay && 'opacity-30',
@@ -655,14 +654,19 @@ function ActivityCard({
         )} />
       )}
 
-      {/* Visual grip cue — purely decorative now. Pointer events fall through
-          to the <li>'s drag listeners. */}
+      {/* Drag handle — the ONLY surface that initiates a drag. Shown on
+          every breakpoint so mobile users can still reorder; the rest of
+          the card stays scrollable. touch-none on this element only so
+          dnd-kit can see the touch sequence without fighting the page
+          scroll. */}
       {!overlay && (
         <span
-          aria-hidden
-          className="mt-0.5 -ml-0.5 shrink-0 w-4 h-4 hidden md:flex items-center justify-center text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors pointer-events-none"
+          ref={setActivatorNodeRef}
+          {...dragProps}
+          aria-label={t('overview.dragHandle')}
+          className="touch-none mt-0.5 -ml-0.5 shrink-0 w-5 h-5 flex items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground hover:bg-background/60 cursor-grab active:cursor-grabbing transition-colors"
         >
-          <GripVertical className="w-3.5 h-3.5" />
+          <GripVertical className="w-4 h-4" />
         </span>
       )}
 
