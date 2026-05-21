@@ -40,6 +40,27 @@ function isEnabled(): boolean {
   return process.env.BILLING_DEBUG_ENABLED === '1' || process.env.NODE_ENV === 'development'
 }
 
+// Customer ID to embed in the synthetic `raw` payload so the
+// /api/billing/portal endpoint can extract it the same way it does for
+// real webhook-sourced rows. Set STRIPE_DEBUG_CUSTOMER_ID in .env.local
+// to a real test-mode customer (e.g. cus_test_abc...) to make the manage
+// button actually open the portal. Otherwise we use a clearly-fake id so
+// the portal endpoint at least returns a real Stripe error ("No such
+// customer") instead of our generic 404, which confirms the wiring.
+function debugStripeCustomerId(): string {
+  return process.env.STRIPE_DEBUG_CUSTOMER_ID ?? 'cus_debug_placeholder'
+}
+
+// Build a minimal `raw` field that mimics the shape of a Stripe webhook
+// event payload — specifically the path the portal route reads
+// (raw.data.object.customer). Anything else can stay empty.
+function debugRaw() {
+  return {
+    debug: true,
+    data: { object: { customer: debugStripeCustomerId() } },
+  }
+}
+
 // Build the row payload for a given state. user_id is filled in by the
 // caller. Returns null for `free` which is just a delete-and-stop.
 function buildRow(state: State): Record<string, unknown> | null {
@@ -50,6 +71,15 @@ function buildRow(state: State): Record<string, unknown> | null {
   // Synthetic provider id so the unique (provider, provider_subscription_id)
   // constraint is satisfied and these debug rows are easy to spot in the DB.
   const fakeId = (prefix: string) => `debug_${prefix}_${Date.now()}`
+  // Stripe-provider rows get a synthetic raw payload so the manage button
+  // can reach Stripe; RC rows skip this since the portal route only looks
+  // at Stripe rows anyway.
+  const stripeBase = (subId: string) => ({
+    provider: 'stripe' as const,
+    platform: 'web' as const,
+    provider_subscription_id: subId,
+    raw: debugRaw(),
+  })
 
   switch (state) {
     case 'free':
@@ -57,8 +87,7 @@ function buildRow(state: State): Record<string, unknown> | null {
 
     case 'pro_monthly_active':
       return {
-        provider: 'stripe', platform: 'web',
-        provider_subscription_id: fakeId('mo'),
+        ...stripeBase(fakeId('mo')),
         product_id: 'pro_monthly',
         status: 'active',
         current_period_end: in30d,
@@ -68,8 +97,7 @@ function buildRow(state: State): Record<string, unknown> | null {
 
     case 'pro_annual_trialing':
       return {
-        provider: 'stripe', platform: 'web',
-        provider_subscription_id: fakeId('an_tr'),
+        ...stripeBase(fakeId('an_tr')),
         product_id: 'pro_annual',
         status: 'trialing',
         current_period_end: in365d,
@@ -79,8 +107,7 @@ function buildRow(state: State): Record<string, unknown> | null {
 
     case 'pro_annual_active':
       return {
-        provider: 'stripe', platform: 'web',
-        provider_subscription_id: fakeId('an'),
+        ...stripeBase(fakeId('an')),
         product_id: 'pro_annual',
         status: 'active',
         current_period_end: in365d,
@@ -90,8 +117,7 @@ function buildRow(state: State): Record<string, unknown> | null {
 
     case 'pro_lifetime':
       return {
-        provider: 'stripe', platform: 'web',
-        provider_subscription_id: fakeId('life'),
+        ...stripeBase(fakeId('life')),
         product_id: 'pro_lifetime',
         status: 'active',
         current_period_end: null,
@@ -101,8 +127,7 @@ function buildRow(state: State): Record<string, unknown> | null {
 
     case 'canceling':
       return {
-        provider: 'stripe', platform: 'web',
-        provider_subscription_id: fakeId('cancel'),
+        ...stripeBase(fakeId('cancel')),
         product_id: 'pro_monthly',
         status: 'active',
         current_period_end: in30d,
@@ -112,8 +137,7 @@ function buildRow(state: State): Record<string, unknown> | null {
 
     case 'past_due':
       return {
-        provider: 'stripe', platform: 'web',
-        provider_subscription_id: fakeId('pd'),
+        ...stripeBase(fakeId('pd')),
         product_id: 'pro_monthly',
         status: 'past_due',
         current_period_end: in30d,
@@ -126,8 +150,7 @@ function buildRow(state: State): Record<string, unknown> | null {
       // after a sub naturally winds down. computeEntitlement filters these
       // out so the user falls back to free.
       return {
-        provider: 'stripe', platform: 'web',
-        provider_subscription_id: fakeId('exp'),
+        ...stripeBase(fakeId('exp')),
         product_id: 'pro_monthly',
         status: 'canceled',
         current_period_end: yesterday,
