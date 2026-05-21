@@ -10,10 +10,10 @@ android {
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
     implementation project(':capacitor-app')
-    implementation project(':capawesome-capacitor-app-update')
     implementation project(':capacitor-local-notifications')
     implementation project(':capacitor-push-notifications')
     implementation project(':capacitor-splash-screen')
+    implementation project(':capawesome-capacitor-app-update')
     implementation project(':revenuecat-purchases-capacitor')
 
 }
