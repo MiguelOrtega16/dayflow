@@ -64,6 +64,13 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   const [isMobile, setIsMobile]   = useState(false)
   // Tablet: 768–1279 px — uses bottom panel instead of right-side panel
   const [isTablet, setIsTablet]   = useState(false)
+  // Landscape-shaped viewport (w > h). Used together with isTablet to fall
+  // back to the desktop right-side panel layout for tablet-width viewports
+  // that are too short for the 50dvh bottom panel to leave room for any
+  // activities — mostly mobile phones rotated to landscape (e.g. S24 Ultra
+  // ~882×412 lands in the tablet width range but a 50dvh panel on 412 px
+  // crushes the activity list to 0 px tall).
+  const [isLandscape, setIsLandscape] = useState(false)
   // True while the user is focused in a comment composer inside the day
   // detail panel. Mobile view hides the FAB and the compact month grid
   // while composing so the keyboard-driven layout doesn't crowd the send
@@ -76,13 +83,20 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   useEffect(() => {
     const check = () => {
       const w = window.innerWidth
+      const h = window.innerHeight
       setIsMobile(w < 768)
       setIsTablet(w >= 768 && w < 1280)
+      setIsLandscape(w > h)
     }
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  // Tablet-width viewports in portrait get the bottom panel; in landscape
+  // they fall back to the desktop right-side panel so the activity list
+  // isn't crushed by a vertical split on a short screen.
+  const useBottomPanel = isTablet && !isLandscape
 
   // Refresh shared calendars from the DB (called on realtime events & dayflow:refresh)
   const refreshSharedCalendars = useCallback(async () => {
@@ -520,7 +534,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   }
 
   return (
-    <div className={cn('flex h-full', isTablet && mode !== 'day' ? 'flex-col' : 'flex-row')}>
+    <div className={cn('flex h-full', useBottomPanel && mode !== 'day' ? 'flex-col' : 'flex-row')}>
       {/* Main calendar area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <CalendarHeader
@@ -619,9 +633,12 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
         </div>}
       </div>
 
-      {/* ── Detail panel — bottom on tablet, right side on desktop ── */}
+      {/* ── Detail panel — bottom on tablet portrait, right side on desktop
+          and tablet landscape (phones rotated to landscape end up in the
+          tablet width range but the bottom panel crushes the activity
+          list on a short screen). ── */}
       {mode !== 'day' && (
-        isTablet ? (
+        useBottomPanel ? (
           // 50dvh leaves enough vertical room to actually read a day's
           // activity list on tablet portrait — the previous 35dvh was
           // almost entirely consumed by the panel header + progress bar,
