@@ -22,6 +22,8 @@ type AnalyticsEvent =
   | 'setup_checklist_step_clicked'
   | 'setup_checklist_dismissed'
   | 'setup_checklist_completed'
+  | 'page_tour_shown'
+  | 'page_tour_dismissed'
 
 type EventProps = Record<string, string | number | boolean | null | undefined>
 

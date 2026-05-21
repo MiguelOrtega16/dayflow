@@ -14,6 +14,7 @@ import {
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useI18n, useFormatDate } from '@/lib/i18n'
 import { BillingDebugButton } from '@/components/billing-debug-button'
+import { PageTour } from '@/components/onboarding/page-tour'
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
@@ -61,10 +62,12 @@ export default function OverviewPage() {
   // ── Drag & drop ──────────────────────────────────────────────────────────
   // PointerSensor with a small activation distance lets taps on the in-card
   // status button still work — only past 6px of movement does it start a drag.
-  // TouchSensor uses a hold delay so vertical page scroll keeps working.
+  // TouchSensor uses a noticeable hold delay + larger tolerance so users
+  // scrolling through a long list don't accidentally pick up a card when
+  // their finger briefly pauses on a row. Drag is a deliberate long-press.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor,   { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 400, tolerance: 10 } }),
   )
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const draggingActivity = useMemo(
@@ -170,6 +173,11 @@ export default function OverviewPage() {
 
   const secondaryCount = grouped.blocked.length + grouped.skipped.length
 
+  // Tour gate — read from preferences alongside the profile fetch. The
+  // banner persists its own dismissal so this only needs to flip once.
+  const prefs = (profile?.preferences as Record<string, unknown> | null) ?? {}
+  const showTour = !!profile && prefs.dismissed_tour_overview !== true
+
   const sortColumn = (acts: Activity[]) =>
     [...acts].sort((a, b) => {
       if (a.start_time && b.start_time) return a.start_time.localeCompare(b.start_time)
@@ -231,6 +239,19 @@ export default function OverviewPage() {
       )}
       */}
 
+      {showTour && profile && (
+        <PageTour
+          tourId="overview"
+          userId={profile.id}
+          title={t('onboarding.pageTour.overview.title')}
+          bullets={[
+            t('onboarding.pageTour.overview.bullets.scope'),
+            t('onboarding.pageTour.overview.bullets.filter'),
+            t('onboarding.pageTour.overview.bullets.drag'),
+          ]}
+        />
+      )}
+
       <div className="mb-5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
         <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none" />
@@ -248,7 +269,9 @@ export default function OverviewPage() {
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           {(Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
-            .filter(c => c !== 'habit' && c !== 'note')
+            // Notes don't have a status lifecycle so they don't fit the
+            // kanban view — habits and every other category do.
+            .filter(c => c !== 'note')
             .map(cat => {
               const active = activeCategories.has(cat)
               const cfg = CATEGORY_CONFIG[cat]

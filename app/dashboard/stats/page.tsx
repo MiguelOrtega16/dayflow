@@ -10,6 +10,7 @@ import { useI18n, useFormatDate } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { activitiesToCsv, downloadCsv } from '@/lib/csv-export'
+import { PageTour } from '@/components/onboarding/page-tour'
 import {
   ClipboardList, CheckCircle2, Gauge, Flame, Users, Download, Crown,
 } from 'lucide-react'
@@ -37,12 +38,35 @@ export default function StatsPage() {
   const [range, setRange]                         = useState<'week' | 'month' | '3months'>('month')
   const [userId, setUserId]                       = useState<string | null>(null)
   const [exporting, setExporting]                 = useState(false)
+  // Tour gate. Loaded on mount (separate from loadStats so it doesn't refire
+  // on every range change). Defaults to false so the tour never flashes
+  // before we know whether the user has already dismissed it.
+  const [showTour, setShowTour]                   = useState(false)
   const supabase = createClient()
   const { entitlement } = useEntitlement(userId)
   const { open: openPaywall } = usePaywall()
 
   useEffect(() => { loadStats() // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range])
+
+  // One-time preferences read to decide whether to show the page tour.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || cancelled) return
+      const { data } = await supabase
+        .from('profiles')
+        .select('preferences')
+        .eq('id', user.id)
+        .single()
+      if (cancelled) return
+      const prefs = (data?.preferences as Record<string, unknown> | null) ?? {}
+      setShowTour(prefs.dismissed_tour_stats !== true)
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loadStats = async () => {
     setLoading(true)
@@ -273,6 +297,19 @@ export default function StatsPage() {
           </button>
         </div>
       </div>
+
+      {showTour && userId && (
+        <PageTour
+          tourId="stats"
+          userId={userId}
+          title={t('onboarding.pageTour.stats.title')}
+          bullets={[
+            t('onboarding.pageTour.stats.bullets.kpis'),
+            t('onboarding.pageTour.stats.bullets.breakdown'),
+            t('onboarding.pageTour.stats.bullets.export'),
+          ]}
+        />
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard icon={<ClipboardList className="w-4 h-4" />} label={t('stats.kpis.total')} value={total} accent="primary" />

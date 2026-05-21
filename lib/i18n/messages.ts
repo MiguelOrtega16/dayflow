@@ -940,6 +940,25 @@ export const messages = {
           },
         },
       },
+      pageTour: {
+        dismiss: 'Ocultar guía',
+        overview: {
+          title: '¿Cómo usar Tareas?',
+          bullets: {
+            scope:  'Estas son las actividades del periodo que elegiste arriba (hoy, 7, 30 o 90 días).',
+            filter: 'Filtra por tipo de actividad con los chips o busca por título.',
+            drag:   'Arrastra una tarjeta entre columnas para cambiar su estado. En móvil, mantén presionado un segundo para activarlo.',
+          },
+        },
+        stats: {
+          title: '¿Qué muestra Estadísticas?',
+          bullets: {
+            kpis:     'Totales, completadas, porcentaje y racha del rango seleccionado arriba.',
+            breakdown:'Desglose por estado, categoría y propias vs. compartidas.',
+            export:   'Exporta todo a CSV con el botón Descargar (función Pro).',
+          },
+        },
+      },
     },
   },
   en: {
@@ -1875,6 +1894,25 @@ export const messages = {
             label: 'Turn on reminders',
             cta: 'Turn on',
             denied: 'Blocked in browser',
+          },
+        },
+      },
+      pageTour: {
+        dismiss: 'Hide guide',
+        overview: {
+          title: 'How Tasks works',
+          bullets: {
+            scope:  'These are the activities for the range you picked above (today, 7, 30 or 90 days).',
+            filter: 'Filter by activity type using the chips, or search by title.',
+            drag:   'Drag a card between columns to change its status. On mobile, hold a card for a moment to start the drag.',
+          },
+        },
+        stats: {
+          title: 'What Stats shows you',
+          bullets: {
+            kpis:     'Totals, completion, streak and rate for the range you selected above.',
+            breakdown:'Breakdowns by status, category, and own vs. shared activities.',
+            export:   'Export your full data to CSV with the Download button (Pro feature).',
           },
         },
       },

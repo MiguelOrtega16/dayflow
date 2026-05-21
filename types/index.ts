@@ -73,6 +73,9 @@ export interface Profile {
   color: string
   email_notifications: boolean
   fcm_token: string | null
+  /** Free-form JSON preferences blob — see schema.sql for the documented
+   *  shape. Treated as a loose Record so callers always read with `?? {}`. */
+  preferences: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }

@@ -39,6 +39,8 @@ alter table public.profiles add column if not exists web_push_subscription jsonb
 --     "dismissed_starter_picker_at":    ISO timestamp string,
 --     "dismissed_setup_checklist":      boolean,                    -- setup-checklist card dismissed / completed
 --     "dismissed_setup_checklist_at":   ISO timestamp string,
+--     "dismissed_tour_<tourId>":        boolean,                    -- per-page tour banner dismissed (one key per <tourId>)
+--     "dismissed_tour_<tourId>_at":     ISO timestamp string,
 --   }
 -- Stored as jsonb so adding future settings doesn't require a migration; the
 -- client and cron each read just the keys they understand.
