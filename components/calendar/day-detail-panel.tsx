@@ -302,6 +302,21 @@ export function DayDetailPanel({
     if (isReminderActivity) {
       const isDone    = activity.status === 'done'
       const isSkipped = activity.status === 'skipped'
+      const isUpdating = updatingIds.has(activity.id)
+      // Reminders don't cycle through the full 5-state STATUS_CYCLE — most
+      // users just want to mark "remembered" vs. "didn't yet". Tap toggles
+      // between todo and done; the dropdown still covers other transitions.
+      const toggleReminderDone = async () => {
+        if (!canInteract) return
+        const next = isDone ? 'todo' : 'done'
+        markUpdating(activity.id, true)
+        try {
+          await updateActivityStatus(activity.id, next, currentUserId)
+          onActivityUpdated()
+        } finally {
+          markUpdating(activity.id, false)
+        }
+      }
       return (
         <div
           key={activity.id}
@@ -313,6 +328,22 @@ export function DayDetailPanel({
           style={{ borderLeftColor: '#9333ea' }}
         >
           <div className="flex items-center gap-2.5 px-3 py-2.5">
+            <button
+              onClick={toggleReminderDone}
+              disabled={!canInteract || isUpdating}
+              aria-label={isDone ? t('calendar.markAsTodo') : t('calendar.markAsDone')}
+              className={cn(
+                'shrink-0 transition-colors',
+                canInteract ? 'hover:opacity-70 cursor-pointer' : 'cursor-default',
+                isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-purple-500 dark:text-purple-400',
+              )}
+            >
+              {isUpdating
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : isDone
+                  ? <CheckCircle2 className="w-4 h-4" />
+                  : <Circle className="w-4 h-4" />}
+            </button>
             <span className="text-base shrink-0">🔔</span>
             <div className="flex-1 min-w-0">
               <p className={cn('text-sm font-medium truncate', isDone && 'line-through')}>
@@ -732,7 +763,10 @@ export function DayDetailPanel({
             <p className="text-xs text-muted-foreground/70 mt-1">{t('calendar.noActivitiesHelp')}</p>
           </div>
         ) : (
-          <div className="p-3 space-y-4">
+          // pb-24 reserves space below the last card for the mobile FAB
+          // (anchored ~64 px above the bottom nav, ~56 px tall) so the last
+          // activity in a long list isn't covered by the floating +.
+          <div className="p-3 pb-24 space-y-4">
 
             {/* ── Section 1: My activities ── */}
             <div>

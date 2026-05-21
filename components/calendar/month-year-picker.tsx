@@ -2,7 +2,7 @@
 
 import * as Popover from '@radix-ui/react-popover'
 import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { useI18n, dateFnsLocale } from '@/lib/i18n'
@@ -41,6 +41,36 @@ export function MonthYearPicker({ value, onChange, label, triggerClassName }: Mo
     format(new Date(2020, m, 1), 'MMM', { locale: dateFnsLocale(locale) })
   )
 
+  // Refs for keyboard arrow-key navigation across the 3x4 month grid.
+  const monthButtonsRef = useRef<(HTMLButtonElement | null)[]>([])
+  const focusMonth = (idx: number) => monthButtonsRef.current[idx]?.focus()
+
+  // Wraps within the 12 indices. Up/Down step by 3 (the grid column count)
+  // so the focus follows the visual column the user is in.
+  const handleGridKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement
+    const idxStr = target.dataset?.monthIdx
+    if (idxStr == null) return
+    const idx = Number(idxStr)
+    let next: number | null = null
+    if      (e.key === 'ArrowLeft')  next = (idx + 11) % 12
+    else if (e.key === 'ArrowRight') next = (idx + 1)  % 12
+    else if (e.key === 'ArrowUp')    next = (idx + 9)  % 12
+    else if (e.key === 'ArrowDown')  next = (idx + 3)  % 12
+    if (next !== null) {
+      e.preventDefault()
+      focusMonth(next)
+    }
+  }
+
+  // PageUp / PageDown step the year regardless of which element holds
+  // focus inside the popover — keeps year-jumping reachable without
+  // moving focus to the arrow buttons.
+  const handlePopoverKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'PageUp')   { e.preventDefault(); setYear(y => y - 1) }
+    if (e.key === 'PageDown') { e.preventDefault(); setYear(y => y + 1) }
+  }
+
   const pick = (monthIndex: number) => {
     onChange(new Date(year, monthIndex, 1))
     setOpen(false)
@@ -74,6 +104,15 @@ export function MonthYearPicker({ value, onChange, label, triggerClassName }: Mo
           align="start"
           sideOffset={6}
           collisionPadding={8}
+          onOpenAutoFocus={(e) => {
+            // Default Radix behavior focuses the first focusable element
+            // (the prev-year arrow). Override so the selected month gets
+            // focus instead — that's the natural starting point for
+            // arrow-key navigation across the grid.
+            e.preventDefault()
+            requestAnimationFrame(() => focusMonth(selectedMonth))
+          }}
+          onKeyDown={handlePopoverKeyDown}
           className="z-[100] w-64 rounded-2xl border border-border bg-popover shadow-lg p-3 font-sans animate-in fade-in-0 zoom-in-95"
         >
           {/* Year navigation */}
@@ -97,15 +136,18 @@ export function MonthYearPicker({ value, onChange, label, triggerClassName }: Mo
             </button>
           </div>
 
-          {/* 12-month grid (4 rows × 3 cols) */}
-          <div className="grid grid-cols-3 gap-1.5">
+          {/* 12-month grid (4 rows × 3 cols). Arrow keys navigate inside
+              the grid; Tab still moves between grid + year arrows. */}
+          <div className="grid grid-cols-3 gap-1.5" onKeyDown={handleGridKeyDown}>
             {monthLabels.map((m, idx) => {
               const isSelected = idx === selectedMonth && year === selectedYear
               const isToday    = idx === todayMonth    && year === todayYear
               return (
                 <button
                   key={m}
+                  ref={(el) => { monthButtonsRef.current[idx] = el }}
                   type="button"
+                  data-month-idx={idx}
                   onClick={() => pick(idx)}
                   className={cn(
                     'h-9 rounded-lg text-xs font-medium capitalize transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',

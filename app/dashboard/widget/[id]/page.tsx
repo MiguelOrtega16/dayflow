@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Plus, RefreshCcw, Settings, Check } from 'lucide-react'
-import { WidgetBridge, isWidgetSupported } from '@/lib/widget-bridge'
+import { ArrowLeft, Plus, RefreshCcw, Settings, Check, Crown, Lock } from 'lucide-react'
+import { WidgetBridge, isWidgetSupported, type WidgetKind } from '@/lib/widget-bridge'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
+import { usePaywall } from '@/components/paywall/paywall-provider'
+import { createClient } from '@/lib/supabase/client'
 
 const COLOR_SWATCHES = [
   '#7C6FE3', // brand purple (default)
@@ -23,11 +26,23 @@ export default function WidgetConfigPage() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const widgetId = Number(params?.id)
+  const { open: openPaywall } = usePaywall()
 
   const [color,   setColor]   = useState('#7C6FE3')
   const [opacity, setOpacity] = useState(95)
   const [saving,  setSaving]  = useState(false)
   const [saved,   setSaved]   = useState(false)
+  // Pro entitlement is loaded async. We need both the user id and the
+  // widget kind to decide whether to lock this page — the kind isn't in
+  // the URL (only the numeric id), so we look it up via WidgetBridge.
+  const [userId, setUserId] = useState<string | null>(null)
+  const [widgetKind, setWidgetKind] = useState<WidgetKind | null>(null)
+  const [kindResolved, setKindResolved] = useState(false)
+  const { entitlement, loading: entLoading } = useEntitlement(userId)
+
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
+  }, [])
 
   useEffect(() => {
     if (Number.isNaN(widgetId)) return
@@ -36,6 +51,32 @@ export default function WidgetConfigPage() {
       setOpacity(cfg.opacity)
     })
   }, [widgetId])
+
+  // Resolve which provider kind this widgetId belongs to. Needed for the
+  // soft-revert lock — bookmarking /dashboard/widget/<id> for a Pro widget
+  // would otherwise let a downgraded user keep customizing it.
+  useEffect(() => {
+    if (Number.isNaN(widgetId)) { setKindResolved(true); return }
+    let cancelled = false
+    Promise.all([
+      WidgetBridge.listWidgetIds('today'),
+      WidgetBridge.listWidgetIds('streak'),
+      WidgetBridge.listWidgetIds('nextup'),
+    ]).then(([today, streak, nextup]) => {
+      if (cancelled) return
+      if      (streak.includes(widgetId)) setWidgetKind('streak')
+      else if (nextup.includes(widgetId)) setWidgetKind('nextup')
+      else if (today.includes(widgetId))  setWidgetKind('today')
+      setKindResolved(true)
+    })
+    return () => { cancelled = true }
+  }, [widgetId])
+
+  const isProWidget = widgetKind === 'streak' || widgetKind === 'nextup'
+  // Only consider locked once both the kind AND the entitlement are known
+  // so we don't flash a Pro-gated screen at an active Pro user during the
+  // brief subscriptions fetch.
+  const locked = kindResolved && !entLoading && isProWidget && !entitlement.isPro
 
   const handleSave = async () => {
     if (Number.isNaN(widgetId)) return
@@ -55,6 +96,39 @@ export default function WidgetConfigPage() {
     return (
       <div className="p-8 text-sm text-muted-foreground">
         {t('widgetConfig.invalidId')}
+      </div>
+    )
+  }
+
+  if (locked) {
+    return (
+      <div className="flex flex-col h-full overflow-y-auto bg-background">
+        <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border px-4 h-14 flex items-center gap-3 shrink-0">
+          <button
+            onClick={() => router.back()}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={t('widgetConfig.back')}
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <h1 className="text-lg font-semibold">{t('widgetConfig.title')}</h1>
+        </header>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-sm w-full rounded-2xl border border-border bg-card p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-500 mx-auto flex items-center justify-center mb-3">
+              <Crown className="w-6 h-6" />
+            </div>
+            <h2 className="text-base font-semibold mb-1">{t('widgetConfig.proLockedTitle')}</h2>
+            <p className="text-sm text-muted-foreground mb-5">{t('widgetConfig.proLockedBody')}</p>
+            <button
+              onClick={() => openPaywall('locked_widget')}
+              className="w-full py-2.5 rounded-full bg-primary text-primary-foreground font-bold tracking-wider hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              {t('widgetConfig.proLockedCta')}
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
