@@ -300,14 +300,29 @@ export function DayDetailPanel({
 
     // ── Reminder card: simplified visual ──────────────────────────────────────
     if (isReminderActivity) {
+      const isDone    = activity.status === 'done'
+      const isSkipped = activity.status === 'skipped'
       return (
-        <div key={activity.id} className="rounded-xl border border-l-2 bg-purple-50/50 dark:bg-purple-500/5" style={{ borderLeftColor: '#9333ea' }}>
+        <div
+          key={activity.id}
+          className={cn(
+            'rounded-xl border border-l-2 bg-purple-50/50 dark:bg-purple-500/5 transition-opacity',
+            isDone    && 'opacity-60',
+            isSkipped && 'opacity-40',
+          )}
+          style={{ borderLeftColor: '#9333ea' }}
+        >
           <div className="flex items-center gap-2.5 px-3 py-2.5">
             <span className="text-base shrink-0">🔔</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{activity.title}</p>
+              <p className={cn('text-sm font-medium truncate', isDone && 'line-through')}>
+                {activity.title}
+              </p>
               {activity.start_time && (
-                <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mt-0.5">
+                <p className={cn(
+                  'text-xs text-purple-600 dark:text-purple-400 font-medium mt-0.5',
+                  isDone && 'line-through',
+                )}>
                   {formatTime(activity.start_time)}
                   {activity.recurrence_type !== 'none' && ` · 🔄 ${t('calendar.recurring')}`}
                 </p>

@@ -350,6 +350,15 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     }
   }
 
+  // Jump directly to a month/year picked from the header's MonthYearPicker.
+  // For mobile week view we also realign the selected day so the week strip
+  // shows the target month — otherwise the strip stays on the previous week
+  // and the title and visible days disagree.
+  const jumpToDate = (date: Date) => {
+    setCurrentDate(date)
+    if (isMobileWeek) setSelectedDate(date)
+  }
+
   const days = getDaysForView()
 
   // Week day headers — 7 fixed labels for month/desktop week, dynamic 3 for
@@ -421,6 +430,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onNavigate={navigate}
           onToday={() => { const t = new Date(); setCurrentDate(t); setSelectedDate(t) }}
           onModeChange={m => { setMode(m) }}
+          onJumpToDate={jumpToDate}
           userId={currentUser?.id}
         />
         <div
@@ -476,6 +486,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onNavigate={navigate}
           onToday={() => { const t = new Date(); setCurrentDate(t); setSelectedDate(t) }}
           onModeChange={m => { setMode(m) }}
+          onJumpToDate={jumpToDate}
           userId={currentUser?.id}
         />
         <UserFilterBar
@@ -568,6 +579,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
             setSelectedDate(today)
           }}
           onModeChange={setMode}
+          onJumpToDate={jumpToDate}
           userId={currentUser?.id}
         />
 

@@ -324,16 +324,24 @@ function ActivityPill({
           'relative flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs overflow-hidden transition-opacity',
           'bg-purple-50 dark:bg-purple-500/10 border border-dashed border-purple-300 dark:border-purple-500/50',
           canInteract ? 'cursor-pointer hover:opacity-80' : 'cursor-default',
+          activity.status === 'done'    && 'opacity-60',
+          activity.status === 'skipped' && 'opacity-40',
           deleting && 'opacity-30 pointer-events-none',
         )}
         title={`🔔 ${activity.title}${activity.start_time ? ' · ' + formatTime(activity.start_time) : ''}`}
       >
         <span className="text-[9px] shrink-0 leading-none">🔔</span>
-        <span className="font-medium flex-1 break-words leading-tight text-purple-700 dark:text-purple-300 truncate">
+        <span className={cn(
+          'font-medium flex-1 break-words leading-tight text-purple-700 dark:text-purple-300 truncate',
+          activity.status === 'done' && 'line-through',
+        )}>
           {activity.title}
         </span>
         {activity.start_time && (
-          <span className="text-[9px] text-purple-500 dark:text-purple-400 shrink-0 font-medium tabular-nums">
+          <span className={cn(
+            'text-[9px] text-purple-500 dark:text-purple-400 shrink-0 font-medium tabular-nums',
+            activity.status === 'done' && 'line-through',
+          )}>
             {formatTime(activity.start_time)}
           </span>
         )}

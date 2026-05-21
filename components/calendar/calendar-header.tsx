@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Calendar, LayoutGrid, CalendarDays } from 'l
 import { cn } from '@/lib/utils'
 import { NotificationBell } from '@/components/layout/notification-bell'
 import { CustomSelect } from '@/components/ui/custom-select'
+import { MonthYearPicker } from './month-year-picker'
 import { useI18n, useFormatDate } from '@/lib/i18n'
 
 interface CalendarHeaderProps {
@@ -12,11 +13,16 @@ interface CalendarHeaderProps {
   onNavigate: (dir: 'prev' | 'next') => void
   onToday: () => void
   onModeChange: (mode: 'month' | 'week' | 'day') => void
+  /** Jump the calendar straight to a specific month/year — wired to the
+   *  title popover so users don't have to chevron-click through 12+ months
+   *  to reach a distant date. Day-mode keeps the plain text title since the
+   *  picker's granularity is month, not day. */
+  onJumpToDate?: (date: Date) => void
   userId?: string
 }
 
 export function CalendarHeader({
-  currentDate, mode, onNavigate, onToday, onModeChange, userId
+  currentDate, mode, onNavigate, onToday, onModeChange, onJumpToDate, userId
 }: CalendarHeaderProps) {
   const { t } = useI18n()
   const fmt = useFormatDate()
@@ -24,6 +30,10 @@ export function CalendarHeader({
   const title = mode === 'day'
     ? fmt(currentDate, 'long')
     : fmt(currentDate, 'monthYear')
+  // The picker only makes sense when the title represents a month — in day
+  // mode the title is a specific date. We also need a jump callback to do
+  // anything useful with the pick.
+  const pickable = mode !== 'day' && !!onJumpToDate
 
   const navBtn = (dir: 'prev' | 'next') => (
     <button
@@ -45,7 +55,14 @@ export function CalendarHeader({
       <div className="md:hidden flex items-center justify-between gap-2 px-3 py-2">
         <div className="flex items-center gap-1 min-w-0">
           {navBtn('prev')}
-          <h1 className="text-base font-semibold capitalize truncate">{title}</h1>
+          {pickable
+            ? <MonthYearPicker
+                value={currentDate}
+                onChange={onJumpToDate!}
+                label={title}
+                triggerClassName="text-base font-semibold capitalize truncate min-w-0"
+              />
+            : <h1 className="text-base font-semibold capitalize truncate">{title}</h1>}
           {navBtn('next')}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -80,7 +97,14 @@ export function CalendarHeader({
           </button>
           <div className="flex items-center gap-1">
             {navBtn('prev')}
-            <h1 className="text-lg font-semibold capitalize px-1">{title}</h1>
+            {pickable
+              ? <MonthYearPicker
+                  value={currentDate}
+                  onChange={onJumpToDate!}
+                  label={title}
+                  triggerClassName="text-lg font-semibold capitalize px-1"
+                />
+              : <h1 className="text-lg font-semibold capitalize px-1">{title}</h1>}
             {navBtn('next')}
           </div>
         </div>

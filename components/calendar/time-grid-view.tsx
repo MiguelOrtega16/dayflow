@@ -230,14 +230,18 @@ export function TimeGridView({
                   const interactive = canInteract(a)
                   const leftPct     = col / numCols * 100
                   const widthPct    = 1  / numCols * 100
+                  const isDone      = a.status === 'done'
+                  const isSkipped   = a.status === 'skipped'
                   return (
                     <button key={a.id} data-event
                       onClick={e => { e.stopPropagation(); if (interactive) onEditActivity(a) }}
                       onContextMenu={e => openCtx(e, a)}
                       className={cn(
-                        'absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden z-10',
+                        'absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden z-10 transition-opacity',
                         interactive ? 'cursor-pointer hover:brightness-95' : 'cursor-default',
                         isReminder && 'border border-dashed border-purple-400 dark:border-purple-500',
+                        isDone    && 'opacity-60',
+                        isSkipped && 'opacity-40',
                       )}
                       style={{
                         top, height,
@@ -247,11 +251,20 @@ export function TimeGridView({
                         borderLeft: isReminder ? '3px dashed #9333ea' : `3px solid ${c}`,
                       }}
                     >
-                      <p className="text-[10px] font-semibold leading-tight truncate" style={{ color: c }}>
+                      <p
+                        className={cn(
+                          'text-[10px] font-semibold leading-tight truncate',
+                          isDone && 'line-through',
+                        )}
+                        style={{ color: c }}
+                      >
                         {isReminder ? '🔔' : a.emoji} {a.title}
                       </p>
                       {!isReminder && height >= 36 && (
-                        <p className="text-[9px] leading-tight mt-0.5" style={{ color: c + 'bb' }}>
+                        <p
+                          className={cn('text-[9px] leading-tight mt-0.5', isDone && 'line-through')}
+                          style={{ color: c + 'bb' }}
+                        >
                           {fmt12(a.start_time!)}{a.end_time && ` – ${fmt12(a.end_time)}`}
                         </p>
                       )}
