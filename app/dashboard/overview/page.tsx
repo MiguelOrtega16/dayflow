@@ -10,11 +10,13 @@ import type { Activity, ActivityStatus, ActivityCategory, Profile } from '@/type
 import {
   CheckCircle2, Circle, Play, Ban, SkipForward, Loader2,
   Search, ChevronDown, Clock, Target, Calendar as CalendarIcon, X, GripVertical,
+  Trash2,
 } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useI18n, useFormatDate } from '@/lib/i18n'
 import { BillingDebugButton } from '@/components/billing-debug-button'
 import { PageTour } from '@/components/onboarding/page-tour'
+import { DeleteActivityDialog } from '@/components/activities/delete-activity-dialog'
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragEndEvent, type DragStartEvent,
@@ -41,6 +43,7 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<'today' | '7days' | '30days' | '90days'>('today')
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set())
+  const [pendingDelete, setPendingDelete] = useState<Activity | null>(null)
   const [search, setSearch] = useState('')
   const [activeCategories, setActiveCategories] = useState<Set<ActivityCategory>>(new Set())
   const [secondaryOpen, setSecondaryOpen] = useState(false)
@@ -133,6 +136,10 @@ export default function OverviewPage() {
     } finally {
       setUpdatingIds(prev => { const s = new Set(prev); s.delete(activity.id); return s })
     }
+  }
+
+  const handleDeleteRequest = (activity: Activity) => {
+    setPendingDelete(activity)
   }
 
   const toggleCategory = (c: ActivityCategory) => {
@@ -317,6 +324,7 @@ export default function OverviewPage() {
                 range={range}
                 updatingIds={updatingIds}
                 onCycle={handleCycleStatus}
+                onDelete={handleDeleteRequest}
                 open={openStatuses.has(status)}
                 onToggle={() => toggleStatus(status)}
                 draggingId={draggingId}
@@ -354,6 +362,7 @@ export default function OverviewPage() {
                       range={range}
                       updatingIds={updatingIds}
                       onCycle={handleCycleStatus}
+                      onDelete={handleDeleteRequest}
                       open={openStatuses.has(status)}
                       onToggle={() => toggleStatus(status)}
                       compact
@@ -380,6 +389,15 @@ export default function OverviewPage() {
             )}
           </DragOverlay>
         </DndContext>
+      )}
+
+      {pendingDelete && profile && (
+        <DeleteActivityDialog
+          activity={pendingDelete}
+          currentUserId={profile.id}
+          onClose={() => setPendingDelete(null)}
+          onDeleted={() => loadData()}
+        />
       )}
     </div>
   )
@@ -490,13 +508,14 @@ function StatsCard({
 }
 
 function StatusColumn({
-  status, activities, range, updatingIds, onCycle, compact, open, onToggle, draggingId,
+  status, activities, range, updatingIds, onCycle, onDelete, compact, open, onToggle, draggingId,
 }: {
   status: ActivityStatus
   activities: Activity[]
   range: 'today' | '7days' | '30days' | '90days'
   updatingIds: Set<string>
   onCycle: (a: Activity) => void
+  onDelete: (a: Activity) => void
   compact?: boolean
   open: boolean
   onToggle: () => void
@@ -564,6 +583,7 @@ function StatusColumn({
                 range={range}
                 loading={updatingIds.has(a.id)}
                 onCycle={() => onCycle(a)}
+                onDelete={() => onDelete(a)}
                 isDraggingThis={draggingId === a.id}
               />
             ))}
@@ -575,13 +595,16 @@ function StatusColumn({
 }
 
 function ActivityCard({
-  activity, status, range, loading, onCycle, isDraggingThis, overlay,
+  activity, status, range, loading, onCycle, onDelete, isDraggingThis, overlay,
 }: {
   activity: Activity
   status: ActivityStatus
   range: 'today' | '7days' | '30days' | '90days'
   loading: boolean
   onCycle: () => void
+  /** Omitted on the drag-overlay copy — only the source card gets a working
+   *  delete button to avoid duplicate UI floating with the cursor. */
+  onDelete?: () => void
   isDraggingThis?: boolean
   overlay?: boolean
 }) {
@@ -709,13 +732,30 @@ function ActivityCard({
         )}
       </div>
 
-      <span className={cn(
-        'shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-background/70 border border-border/40',
-        catCfg.color
-      )}>
-        <span className="text-xs leading-none">{catCfg.emoji}</span>
-        <span className="hidden md:inline">{t(`category.${activity.category}`)}</span>
-      </span>
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        <span className={cn(
+          'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-background/70 border border-border/40',
+          catCfg.color
+        )}>
+          <span className="text-xs leading-none">{catCfg.emoji}</span>
+          <span className="hidden md:inline">{t(`category.${activity.category}`)}</span>
+        </span>
+        {!overlay && onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            // Stop the drag listeners from picking up the press — same trick
+            // the status circle uses above.
+            onPointerDown={e => e.stopPropagation()}
+            aria-label={t('common.delete')}
+            // Always visible on mobile (no hover state to lean on); fades in
+            // on group-hover on desktop so the card stays uncluttered.
+            className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
     </li>
   )
 }
