@@ -852,6 +852,20 @@ export const messages = {
         errors: {
           signIn: 'Inicia sesión primero',
           checkoutFailed: 'Falló el pago',
+          portalFailed: 'No se pudo abrir el portal de gestión',
+        },
+        active: {
+          title: 'Ya tienes DayFlow Pro',
+          subtitle: 'Todas las funciones Pro están activas en tu cuenta.',
+          planLabel: 'Tu plan',
+          renewsOn: 'Se renueva el {date}',
+          endsOn: 'Termina el {date}',
+          trialEnds: 'Prueba termina el {date}',
+          lifetime: 'Para siempre — sin renovación',
+          cancelingNotice: 'Cancelaste; sigues con Pro hasta el final del período.',
+          manage: 'Gestionar suscripción',
+          manageWeb: 'Abrir portal de Stripe',
+          manageAndroid: 'Abrir suscripciones de Google Play',
         },
         triggers: {
           generic: {
@@ -1817,6 +1831,20 @@ export const messages = {
         errors: {
           signIn: 'Please sign in first',
           checkoutFailed: 'Checkout failed',
+          portalFailed: 'Could not open the manage portal',
+        },
+        active: {
+          title: "You're already on DayFlow Pro",
+          subtitle: 'All Pro features are active on this account.',
+          planLabel: 'Your plan',
+          renewsOn: 'Renews on {date}',
+          endsOn: 'Ends on {date}',
+          trialEnds: 'Trial ends on {date}',
+          lifetime: 'Forever — no renewal',
+          cancelingNotice: "You've canceled — Pro stays active until the end of the period.",
+          manage: 'Manage subscription',
+          manageWeb: 'Open Stripe portal',
+          manageAndroid: 'Open Google Play subscriptions',
         },
         triggers: {
           generic: {

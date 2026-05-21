@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
-import { Check, X } from 'lucide-react'
+import { Check, X, Crown, ExternalLink } from 'lucide-react'
+import { format } from 'date-fns'
 import { useBackButtonClose } from '@/lib/back-button'
-import { useI18n } from '@/lib/i18n'
+import { useI18n, dateFnsLocale } from '@/lib/i18n'
 import { ANCHOR_PRICE_USD } from '@/lib/billing/products'
 import {
   getOfferingPrices,
@@ -13,6 +14,7 @@ import {
   restorePurchases,
   type OfferingPriceMap,
 } from '@/lib/billing/revenuecat'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { cn } from '@/lib/utils'
 import type { BillingProductId } from '@/types'
 import { track } from '@/lib/analytics/posthog'
@@ -40,7 +42,7 @@ interface PaywallProps {
 }
 
 export function Paywall({ userId, trigger, onClose }: PaywallProps) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [selected, setSelected] = useState<BillingProductId>('pro_annual')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,6 +50,12 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
   const [prices, setPrices] = useState<OfferingPriceMap | null>(null)
   const native = Capacitor.isNativePlatform()
   useBackButtonClose(true, onClose)
+  // Pull current entitlement so a Pro user opening the paywall (manually,
+  // via debug, or via a stale gate) sees a "you're already Pro" manage
+  // view instead of a "Subscribe" CTA they don't need. Loading-state is
+  // treated as "show buy view" so the modal doesn't flicker into the
+  // manage state and back when the realtime fetch lands a beat later.
+  const { entitlement, loading: entLoading } = useEntitlement(userId)
 
   // Pull store-localized prices (and per-plan availability) once on mount.
   // On native the strings come back in the user's local currency from Play
@@ -148,6 +156,131 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
       : selected === 'pro_lifetime'
         ? t('billing.paywall.cta.buyLifetime')
         : t('billing.paywall.cta.subscribe')
+
+  async function handleManage() {
+    setBusy(true)
+    setError(null)
+    setInfo(null)
+    try {
+      if (native) {
+        // Open the user's Play Store subscriptions list. We don't deep-link
+        // to the specific SKU on purpose — the generic list is robust to
+        // package-name changes and shows the user every active sub.
+        window.open('https://play.google.com/store/account/subscriptions', '_blank')
+        onClose()
+      } else {
+        const r = await fetch('/api/billing/portal', { method: 'POST' })
+        const data = await r.json()
+        if (data.url) {
+          window.location.href = data.url
+        } else {
+          setError(data.error ?? t('billing.paywall.errors.portalFailed'))
+        }
+      }
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // ── Pro-already view ───────────────────────────────────────────────────
+  // Shown whenever the current user has an active entitlement. Replaces the
+  // plans + Subscribe CTA with a plan summary + Manage button so the user
+  // can change / cancel via the provider's own portal instead of being
+  // re-pitched a plan they already pay for.
+  if (!entLoading && entitlement.isPro) {
+    const ent = entitlement
+    const fmtDate = (iso: string | null) =>
+      iso ? format(new Date(iso), 'PPP', { locale: dateFnsLocale(locale) }) : '—'
+
+    const planLabel =
+      ent.plan === 'pro_annual'   ? t('billing.paywall.plans.annual')
+      : ent.plan === 'pro_monthly' ? t('billing.paywall.plans.monthly')
+      : ent.plan === 'pro_lifetime'? t('billing.paywall.plans.lifetime')
+      : '—'
+
+    const periodLine = ent.plan === 'pro_lifetime'
+      ? t('billing.paywall.active.lifetime')
+      : ent.isInTrial && ent.expiresAt
+        ? t('billing.paywall.active.trialEnds', { date: fmtDate(ent.expiresAt) })
+        : ent.cancelAtPeriodEnd && ent.expiresAt
+          ? t('billing.paywall.active.endsOn', { date: fmtDate(ent.expiresAt) })
+          : ent.expiresAt
+            ? t('billing.paywall.active.renewsOn', { date: fmtDate(ent.expiresAt) })
+            : ''
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 text-muted-foreground hover:text-foreground p-1 rounded"
+            aria-label={t('billing.paywall.closeAria')}
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          <div className="p-6 pb-3 flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+              <Crown className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold leading-tight">{t('billing.paywall.active.title')}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{t('billing.paywall.active.subtitle')}</p>
+            </div>
+          </div>
+
+          <div className="px-6 pb-4">
+            <div className="rounded-xl border border-border bg-background p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                {t('billing.paywall.active.planLabel')}
+              </div>
+              <div className="text-sm font-semibold">{planLabel}</div>
+              {periodLine && <div className="text-xs text-muted-foreground mt-0.5">{periodLine}</div>}
+              {ent.cancelAtPeriodEnd && !ent.isInTrial && (
+                <div className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                  {t('billing.paywall.active.cancelingNotice')}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {error && <div className="px-6 pb-2 text-sm text-destructive">{error}</div>}
+          {info  && <div className="px-6 pb-2 text-sm text-muted-foreground">{info}</div>}
+
+          <div className="px-6 pb-6 space-y-2">
+            {ent.plan !== 'pro_lifetime' && (
+              <button
+                onClick={handleManage}
+                disabled={busy}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium rounded-xl py-3 transition-colors flex items-center justify-center gap-2"
+              >
+                {busy ? '…' : (
+                  <>
+                    {native
+                      ? t('billing.paywall.active.manageAndroid')
+                      : t('billing.paywall.active.manageWeb')}
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+            )}
+            {native && (
+              <button
+                onClick={handleRestore}
+                disabled={busy}
+                className="w-full text-xs text-muted-foreground hover:text-foreground py-1"
+              >
+                {t('billing.paywall.restore')}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
