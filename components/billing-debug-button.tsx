@@ -41,12 +41,25 @@ export function BillingDebugButton() {
   const { open } = usePaywall()
   const [platform, setPlatform] = useState<string>('?')
   const [userId, setUserId] = useState<string | null>(null)
-  const [rows, setRows] = useState<Subscription[]>([])
+  // Rows are stored loose so we can also surface fields the typed
+  // Subscription interface omits — currently `raw.data.object.customer`,
+  // which the portal route depends on. Useful for diagnosing
+  // "no stripe customer for user" errors from /api/billing/portal.
+  const [rows, setRows] = useState<Array<Subscription & { raw?: unknown }>>([])
   const [rowsLoading, setRowsLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [lastError, setLastError] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const { entitlement, loading: entLoading } = useEntitlement(userId)
+
+  // Pull the customer id out of the synthetic `raw` payload the debug API
+  // writes. Matches what the portal route does — if we show nothing here,
+  // the portal will return "no stripe customer for user" too.
+  const getCustomerId = (raw: unknown): string | null => {
+    if (!raw || typeof raw !== 'object') return null
+    const obj = (raw as { data?: { object?: { customer?: unknown } } }).data?.object?.customer
+    return typeof obj === 'string' ? obj : null
+  }
 
   useEffect(() => {
     setPlatform(Capacitor.isNativePlatform() ? 'native' : 'web')
@@ -67,7 +80,7 @@ export function BillingDebugButton() {
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
-      setRows((data ?? []) as Subscription[])
+      setRows((data ?? []) as Array<Subscription & { raw?: unknown }>)
     } finally {
       setRowsLoading(false)
     }
@@ -166,25 +179,39 @@ export function BillingDebugButton() {
               <div className="text-xs text-muted-foreground italic">None — user is Free.</div>
             ) : (
               <div className="space-y-1.5">
-                {rows.map(r => (
-                  <div key={r.id} className="rounded border border-border bg-card p-2 font-mono text-[10px] leading-relaxed">
-                    <div><span className="text-muted-foreground">provider:</span> {r.provider} · {r.platform}</div>
-                    <div><span className="text-muted-foreground">product:</span> {r.product_id}</div>
-                    <div>
-                      <span className="text-muted-foreground">status:</span>{' '}
-                      <span className={cn(
-                        'font-semibold',
-                        r.status === 'active'    && 'text-emerald-600',
-                        r.status === 'trialing'  && 'text-amber-600',
-                        r.status === 'past_due'  && 'text-orange-600',
-                        (r.status === 'canceled' || r.status === 'expired') && 'text-red-600',
-                      )}>{r.status}</span>
-                      {r.cancel_at_period_end && <span className="text-red-600"> · cancel_at_period_end</span>}
+                {rows.map(r => {
+                  const customerId = getCustomerId(r.raw)
+                  return (
+                    <div key={r.id} className="rounded border border-border bg-card p-2 font-mono text-[10px] leading-relaxed">
+                      <div><span className="text-muted-foreground">provider:</span> {r.provider} · {r.platform}</div>
+                      <div><span className="text-muted-foreground">product:</span> {r.product_id}</div>
+                      <div>
+                        <span className="text-muted-foreground">status:</span>{' '}
+                        <span className={cn(
+                          'font-semibold',
+                          r.status === 'active'    && 'text-emerald-600',
+                          r.status === 'trialing'  && 'text-amber-600',
+                          r.status === 'past_due'  && 'text-orange-600',
+                          (r.status === 'canceled' || r.status === 'expired') && 'text-red-600',
+                        )}>{r.status}</span>
+                        {r.cancel_at_period_end && <span className="text-red-600"> · cancel_at_period_end</span>}
+                      </div>
+                      <div><span className="text-muted-foreground">period_end:</span> {fmtTime(r.current_period_end)}</div>
+                      {r.trial_end && <div><span className="text-muted-foreground">trial_end:</span> {fmtTime(r.trial_end)}</div>}
+                      {r.provider === 'stripe' && (
+                        <div>
+                          <span className="text-muted-foreground">stripe_customer:</span>{' '}
+                          {customerId
+                            ? <span className={cn(
+                                customerId === 'cus_debug_placeholder' && 'text-amber-600',
+                                customerId.startsWith('cus_') && customerId !== 'cus_debug_placeholder' && 'text-emerald-600',
+                              )}>{customerId}</span>
+                            : <span className="text-red-600">missing</span>}
+                        </div>
+                      )}
                     </div>
-                    <div><span className="text-muted-foreground">period_end:</span> {fmtTime(r.current_period_end)}</div>
-                    {r.trial_end && <div><span className="text-muted-foreground">trial_end:</span> {fmtTime(r.trial_end)}</div>}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
