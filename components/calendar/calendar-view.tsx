@@ -90,13 +90,31 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     }
     check()
     window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
+    // Capacitor Android WebView doesn't always fire `resize` on rotation;
+    // listen to orientationchange + visualViewport as well, and re-check
+    // after a short delay so we read the post-rotation dimensions instead
+    // of the stale pre-rotation ones.
+    const onOrientation = () => { check(); setTimeout(check, 250) }
+    window.addEventListener('orientationchange', onOrientation)
+    window.visualViewport?.addEventListener('resize', check)
+    return () => {
+      window.removeEventListener('resize', check)
+      window.removeEventListener('orientationchange', onOrientation)
+      window.visualViewport?.removeEventListener('resize', check)
+    }
   }, [])
 
-  // Tablet-width viewports in portrait get the bottom panel; in landscape
-  // they fall back to the desktop right-side panel so the activity list
-  // isn't crushed by a vertical split on a short screen.
-  const useBottomPanel = isTablet && !isLandscape
+  // Layout selection by form factor + orientation:
+  //   - Mobile portrait                  → compact grid + bottom day panel
+  //   - Tablet portrait                  → full calendar + bottom 50dvh panel
+  //   - Mobile landscape, tablet landscape, desktop → right-side panel
+  // The mobile-landscape case matters for Samsung phones (e.g. S24 Ultra)
+  // whose landscape viewport can fall below 768 px when Display Size is
+  // set to Large/Largest; without this distinction, rotating to landscape
+  // kept the mobile portrait layout and left the activity list with no
+  // vertical room to render.
+  const isMobilePortrait = isMobile && !isLandscape
+  const useBottomPanel   = isTablet && !isLandscape
 
   // Refresh shared calendars from the DB (called on realtime events & dayflow:refresh)
   const refreshSharedCalendars = useCallback(async () => {
@@ -445,7 +463,10 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   }
 
   // ── Mobile month / week view (compact grid + permanent day detail) ─────────
-  if (isMobile && (mode === 'month' || mode === 'week')) {
+  // Portrait only — in landscape (short height) the compact grid + bottom
+  // panel split crushes the activity list to zero rows, so we fall through
+  // to the desktop right-side panel layout below.
+  if (isMobilePortrait && (mode === 'month' || mode === 'week')) {
     const gridDays = mode === 'month' ? undefined : weekStripDays
     return (
       <div className="flex flex-col h-full overflow-hidden">
@@ -656,7 +677,11 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
             />
           </div>
         ) : (
-          <div className="hidden md:flex w-80 shrink-0 border-l border-border">
+          // Right-side panel — used on desktop AND on landscape phones /
+          // tablets where the bottom-panel split would crush the activity
+          // list. Width steps down on narrower viewports so the calendar
+          // grid still has room (w-64 on mobile landscape, w-80 from md+).
+          <div className="flex w-64 md:w-80 shrink-0 border-l border-border">
             <DayDetailPanel
               date={selectedDate}
               activities={getActivitiesForDate(selectedDate)}
