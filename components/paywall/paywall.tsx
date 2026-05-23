@@ -340,15 +340,6 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
                 )}
                 {(!prices || prices.pro_lifetime.available) && (
                   <>
-                    {/* Lifetime is one-time on Play and can't replace a
-                        subscription on the Billing side. If the user has
-                        an active sub when they buy Lifetime, both will be
-                        billed until they cancel the sub in Play. Make the
-                        next step obvious — most users won't think to do
-                        it without prompting. */}
-                    <div className="text-[11px] text-amber-700 dark:text-amber-400 leading-snug">
-                      {t('billing.paywall.active.lifetimeWarning')}
-                    </div>
                     <UpgradeRow
                       title={t('billing.paywall.plans.lifetime')}
                       price={priceFor('pro_lifetime')}
@@ -358,6 +349,16 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
                       onClick={() => handleUpgradeTo('pro_lifetime')}
                       cta={t('billing.paywall.active.getLifetime')}
                     />
+                    {/* Lifetime is one-time on Play and can't replace a
+                        subscription on the Billing side. If the user has
+                        an active sub when they buy Lifetime, both will be
+                        billed until they cancel the sub in Play. Placed
+                        directly under the Lifetime row so it visually
+                        belongs to it — testers reported the previous
+                        placement felt like it referred to Annual. */}
+                    <div className="text-[11px] text-amber-700 dark:text-amber-400 leading-snug pl-1">
+                      {t('billing.paywall.active.lifetimeWarning')}
+                    </div>
                   </>
                 )}
               </div>

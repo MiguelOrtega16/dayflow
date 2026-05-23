@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette, Clock } from 'lucide-react'
+import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette, Clock, Crown } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { getInitials } from '@/lib/utils'
@@ -122,6 +122,21 @@ export default function SettingsPage() {
               className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
+        </div>
+
+        {/* Plan & Billing — separate card so it stands out above the
+            personalize section. Crown icon to match the Pro/paywall
+            visual language; tapping opens the full billing sub-page
+            where users see their current plan, the Free vs Pro
+            comparison table, and the manage/upgrade actions. */}
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <SettingsNavRow
+            icon={<Crown className="w-5 h-5 text-indigo-500" />}
+            title={t('settings.billingRow.label')}
+            sub={t('settings.billingRow.sub')}
+            onClick={() => router.push('/dashboard/settings/billing')}
+            isLast
+          />
         </div>
 
         {/* Customize section — navigation rows to sub-pages plus the
