@@ -2,7 +2,7 @@
 
 import { format, isToday } from 'date-fns'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2, ChevronDown, Loader2 } from 'lucide-react'
+import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2, ChevronDown, Loader2, Pencil } from 'lucide-react'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, getInitials, formatRelativeTime, statusLabel, categoryLabel, priorityLabel } from '@/lib/utils'
 import { useDateTimePrefs } from '@/lib/datetime-prefs'
 import { updateActivityStatus, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
@@ -377,9 +377,15 @@ export function DayDetailPanel({
                     className="z-50 w-44 bg-popover border border-border rounded-xl shadow-lg py-1 text-sm"
                     onClick={e => e.stopPropagation()}
                   >
-                    <DropdownMenu.Item onSelect={() => onEditActivity(activity)} className="px-3 py-1.5 hover:bg-muted transition-colors outline-none cursor-pointer">✏️ {t('common.edit')}</DropdownMenu.Item>
+                    <DropdownMenu.Item onSelect={() => onEditActivity(activity)} className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted transition-colors outline-none cursor-pointer">
+                      <Pencil className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                      <span>{t('common.edit')}</span>
+                    </DropdownMenu.Item>
                     <DropdownMenu.Separator className="border-t border-border my-1" />
-                    <DropdownMenu.Item onSelect={() => handleDeleteRequest(activity)} className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer">🗑 {t('common.delete')}</DropdownMenu.Item>
+                    <DropdownMenu.Item onSelect={() => handleDeleteRequest(activity)} className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer">
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>{t('common.delete')}</span>
+                    </DropdownMenu.Item>
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
@@ -576,9 +582,10 @@ export function DayDetailPanel({
                     >
                       <DropdownMenu.Item
                         onSelect={() => onEditActivity(activity)}
-                        className="px-3 py-1.5 hover:bg-muted transition-colors outline-none cursor-pointer"
+                        className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted transition-colors outline-none cursor-pointer"
                       >
-                        ✏️ {t('common.edit')}
+                        <Pencil className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                        <span>{t('common.edit')}</span>
                       </DropdownMenu.Item>
                       <DropdownMenu.Separator className="border-t border-border my-1" />
                       <DropdownMenu.Label className="px-3 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t('goals.statusHeading')}</DropdownMenu.Label>
@@ -613,9 +620,10 @@ export function DayDetailPanel({
                       <DropdownMenu.Separator className="border-t border-border my-1" />
                       <DropdownMenu.Item
                         onSelect={() => handleDeleteRequest(activity)}
-                        className="px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer"
+                        className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted text-destructive transition-colors outline-none cursor-pointer"
                       >
-                        🗑 {t('common.delete')}
+                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>{t('common.delete')}</span>
                       </DropdownMenu.Item>
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>

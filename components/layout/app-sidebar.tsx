@@ -15,7 +15,10 @@ import {
   ListChecks, Users, Settings,
   LogOut, Sun, Moon, ChevronLeft, ChevronRight,
   BarChart2, CalendarDays, LayoutPanelTop, ClipboardList,
+  LifeBuoy,
 } from 'lucide-react'
+
+const SUPPORT_EMAIL = 'support@day-flow.co'
 
 const NAV_KEYS = [
   { href: '/dashboard',           icon: CalendarDays,    key: 'calendar' },
@@ -153,6 +156,20 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
           <Settings className="w-4 h-4 shrink-0" />
           {!collapsed && <span>{t('nav.settings')}</span>}
         </Link>
+
+        {/* Support — mailto link, not a route (no Link prefetch). */}
+        <a
+          href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('DayFlow — Support')}`}
+          onClick={() => onNavClick?.()}
+          className={cn(
+            'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
+            collapsed && 'justify-center px-0'
+          )}
+          title={collapsed ? t('nav.support') : undefined}
+        >
+          <LifeBuoy className="w-4 h-4 shrink-0" />
+          {!collapsed && <span>{t('nav.support')}</span>}
+        </a>
 
         {/* Profile & Sign out */}
         <div className={cn(
