@@ -166,6 +166,10 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
         // Open the user's Play Store subscriptions list. We don't deep-link
         // to the specific SKU on purpose — the generic list is robust to
         // package-name changes and shows the user every active sub.
+        // Note: Play Store only supports cancellation / payment-method
+        // changes from this screen. SKU upgrades (monthly → annual) and
+        // adding lifetime have to happen via purchaseProduct() in-app —
+        // see the upgrade buttons in the Pro view below.
         window.open('https://play.google.com/store/account/subscriptions', '_blank')
         onClose()
       } else {
@@ -179,6 +183,39 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
       }
     } catch (err) {
       setError(String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Called by upgrade buttons in the Pro view (native only — web's Stripe
+  // portal handles plan changes natively, so this isn't needed there).
+  // Reuses the existing native purchase plumbing so Play Billing handles
+  // the cross-grade / one-time purchase the same way it would for a brand
+  // new purchase. RC fires the appropriate webhook and the subscriptions
+  // row updates via realtime.
+  async function handleUpgradeTo(targetProduct: BillingProductId) {
+    if (!userId) {
+      setError(t('billing.paywall.errors.signIn'))
+      return
+    }
+    setBusy(true)
+    setError(null)
+    setInfo(null)
+    track('paywall_plan_selected', {
+      plan: targetProduct,
+      trigger: 'upgrade',
+      platform: 'android',
+    })
+    try {
+      await purchaseProduct(targetProduct)
+      onClose()
+    } catch (err) {
+      if (isPurchaseCancelled(err)) {
+        setInfo(t('billing.paywall.cancelled'))
+      } else {
+        setError(String(err))
+      }
     } finally {
       setBusy(false)
     }
@@ -267,6 +304,45 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
                 )}
               </button>
             )}
+
+            {/* Upgrade options — native only. The Play Store subscriptions
+                screen doesn't let users switch SKUs or buy add-ons, so we
+                surface the upgrade paths in the paywall itself:
+                  monthly  → annual + lifetime
+                  annual   → lifetime
+                  lifetime → (nothing)
+                Web users can change plans via the Stripe portal directly
+                so this whole block is skipped there. */}
+            {native && ent.plan !== 'pro_lifetime' && (
+              <div className="pt-3 border-t border-border space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  {t('billing.paywall.active.upgradeHeading')}
+                </div>
+                {ent.plan === 'pro_monthly' && (
+                  <UpgradeRow
+                    title={t('billing.paywall.plans.annual')}
+                    price={priceFor('pro_annual')}
+                    cadence={t('billing.paywall.plans.perYear')}
+                    sub={t('billing.paywall.plans.bestValue')}
+                    disabled={busy}
+                    onClick={() => handleUpgradeTo('pro_annual')}
+                    cta={t('billing.paywall.active.switchToAnnual')}
+                  />
+                )}
+                {(!prices || prices.pro_lifetime.available) && (
+                  <UpgradeRow
+                    title={t('billing.paywall.plans.lifetime')}
+                    price={priceFor('pro_lifetime')}
+                    cadence={t('billing.paywall.plans.oneTime')}
+                    sub={t('billing.paywall.plans.lifetimeSub')}
+                    disabled={busy}
+                    onClick={() => handleUpgradeTo('pro_lifetime')}
+                    cta={t('billing.paywall.active.getLifetime')}
+                  />
+                )}
+              </div>
+            )}
+
             {native && (
               <button
                 onClick={handleRestore}
@@ -430,5 +506,39 @@ function PlanCard({
         </div>
       )}
     </button>
+  )
+}
+
+// Compact upgrade row used in the Pro-already view: shows the target plan
+// + price on the left and a tight CTA button on the right. Different shape
+// from PlanCard intentionally — these aren't picker tiles, they're direct
+// purchase actions.
+function UpgradeRow({
+  title, price, cadence, sub, cta, disabled, onClick,
+}: {
+  title: string
+  price: string
+  cadence: string
+  sub?: string
+  cta: string
+  disabled: boolean
+  onClick: () => void
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-background p-3 flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-sm">{title}</div>
+        <div className="text-[11px] text-muted-foreground tabular-nums">{price} {cadence}</div>
+        {sub && <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wider mt-1">{sub}</div>}
+      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className="shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg px-3 py-2 transition-colors"
+      >
+        {cta}
+      </button>
+    </div>
   )
 }

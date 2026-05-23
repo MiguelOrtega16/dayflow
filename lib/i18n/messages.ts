@@ -867,6 +867,9 @@ export const messages = {
           manage: 'Gestionar suscripción',
           manageWeb: 'Abrir portal de Stripe',
           manageAndroid: 'Abrir suscripciones de Google Play',
+          upgradeHeading: 'O cambia de plan',
+          switchToAnnual: 'Cambiar a anual',
+          getLifetime: 'Comprar de por vida',
         },
         triggers: {
           generic: {
@@ -1874,6 +1877,9 @@ export const messages = {
           manage: 'Manage subscription',
           manageWeb: 'Open Stripe portal',
           manageAndroid: 'Open Google Play subscriptions',
+          upgradeHeading: 'Or switch plans',
+          switchToAnnual: 'Switch to Annual',
+          getLifetime: 'Get Lifetime',
         },
         triggers: {
           generic: {
