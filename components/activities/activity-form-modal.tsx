@@ -26,6 +26,7 @@ import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { syncWidgetSnapshot } from '@/lib/widget-sync'
 import { track } from '@/lib/analytics/posthog'
+import { ChipTour, type ChipTourStep } from '@/components/onboarding/chip-tour'
 import type {
   Activity, ActivityStatus, ActivityCategory, RecurrenceType, RecurrenceFrequency,
   Profile, Goal, ActivityInvitation,
@@ -175,6 +176,23 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   // already in the past — they can't fire anymore so changing them just
   // confuses users. Recurring activities keep editable reminders since
   // changes apply to future occurrences.
+  // Lead-time check for reminder offsets. The cron at
+  // app/api/cron/activity-30min-reminders fires when
+  // `minutesUntilStart - offset` falls in [-FIRE_WINDOW_MIN, +FIRE_WINDOW_MIN].
+  // If we save with an offset bigger than the time remaining, that window is
+  // already in the past and the reminder is silently skipped — warn instead.
+  const REMINDER_FIRE_WINDOW_MIN = 2
+  const minutesUntilStart = (() => {
+    if (!selectedDate || !startTime) return null
+    const t = new Date(`${selectedDate}T${startTime}:00`).getTime()
+    if (isNaN(t)) return null
+    return Math.round((t - Date.now()) / 60_000)
+  })()
+  const offsetWillFire = (offset: number): boolean => {
+    if (minutesUntilStart === null) return true
+    return minutesUntilStart - offset >= -REMINDER_FIRE_WINDOW_MIN
+  }
+
   const isPastNonRecurring = isEditing && recurrenceType === 'none' && (() => {
     if (!selectedDate) return false
     if (startTime) {
@@ -192,6 +210,43 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   // transform-animated container in some browsers).
   type SheetKey = 'type' | 'schedule' | 'invitees' | null
   const [openSheet, setOpenSheet] = useState<SheetKey>(null)
+
+  // First-run chip tour. Fires once per user on mobile when:
+  //   - currentUser is loaded
+  //   - profile.preferences.dismissed_tour_activity_form_chips is falsy
+  //   - viewport matches the mobile chip-rail breakpoint (< sm = 640 px)
+  //   - no bottom sheet has been opened yet (so the chips are visible)
+  // We delay the gate by 350 ms after the modal mounts to let the slide-up
+  // animation settle — measuring chip positions mid-animation gives stale
+  // coordinates and the spotlight ends up off-screen.
+  const [showChipTour, setShowChipTour] = useState(false)
+  useEffect(() => {
+    if (!currentUser?.id) return
+    const prefs = (currentUser as { preferences?: Record<string, unknown> }).preferences ?? {}
+    if (prefs['dismissed_tour_activity_form_chips']) return
+    if (typeof window === 'undefined') return
+    if (!window.matchMedia('(max-width: 639px)').matches) return
+    const timer = setTimeout(() => setShowChipTour(true), 350)
+    return () => clearTimeout(timer)
+  }, [currentUser?.id])
+
+  const chipTourSteps: ChipTourStep[] = (() => {
+    const steps: ChipTourStep[] = []
+    if (!isEditing) {
+      steps.push({
+        targetSelector: '[data-tour="templates"]',
+        title: t('onboarding.chipTour.activityForm.templates.title'),
+        body:  t('onboarding.chipTour.activityForm.templates.body'),
+      })
+    }
+    steps.push(
+      { targetSelector: '[data-tour="type"]',       title: t('onboarding.chipTour.activityForm.type.title'),       body: t('onboarding.chipTour.activityForm.type.body') },
+      { targetSelector: '[data-tour="schedule"]',   title: t('onboarding.chipTour.activityForm.schedule.title'),   body: t('onboarding.chipTour.activityForm.schedule.body') },
+      { targetSelector: '[data-tour="invitees"]',   title: t('onboarding.chipTour.activityForm.invitees.title'),   body: t('onboarding.chipTour.activityForm.invitees.body') },
+      { targetSelector: '[data-tour="visibility"]', title: t('onboarding.chipTour.activityForm.visibility.title'), body: t('onboarding.chipTour.activityForm.visibility.body') },
+    )
+    return steps
+  })()
 
   // Inside the schedule sheet, the Time/Reminder/Repeat sub-rows expand inline.
   type ScheduleRowKey = 'time' | 'reminder' | 'repeat' | null
@@ -399,6 +454,36 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
             console.warn('[ActivityForm] invite failed for', invitee.id, err)
           )
         }
+      }
+
+      // Catch-up fire for the offset=0 ("at start time") reminder when the
+      // activity start is already past by more than the cron's fire window.
+      // The 5-min cron would otherwise see delta < -2 and skip it forever;
+      // here we trigger the push immediately so "remind me at start" still
+      // produces a notification when the user saved a few minutes late.
+      // Owner-only — invitees haven't accepted yet at this point.
+      if (
+        savedId &&
+        !isEditing &&
+        recurrenceType === 'none' &&
+        reminderOffsets.includes(0) &&
+        minutesUntilStart !== null &&
+        minutesUntilStart < -REMINDER_FIRE_WINDOW_MIN
+      ) {
+        const label = emoji ? `${emoji} ${title.trim()}` : title.trim()
+        const pushTitle = isReminder ? `🔔 ${title.trim()}` : `⏰ ${label}`
+        fetch('/api/send-push', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            recipientId: currentUser.id,
+            title: pushTitle,
+            body: t('activityForm.remindersHelp'),
+            type: isReminder ? 'activity_reminder' : 'activity_30min_reminder',
+            date: selectedDate,
+            activityId: savedId,
+          }),
+        }).catch(() => { /* catch-up is best-effort */ })
       }
 
       if (!isEditing) {
@@ -753,28 +838,38 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 </p>
               )}
 
-              {reminderOffsets.map((offset, idx) => (
-                <div key={idx} className={cn('flex items-center gap-2', isPastNonRecurring && 'opacity-60 pointer-events-none')}>
-                  <div className="flex-1 min-w-0">
-                    <CustomSelect
-                      value={String(offset)}
-                      onChange={(v) => updateReminderOffset(idx, Number(v))}
-                      options={REMINDER_PRESETS.map(p => ({
-                        value: String(p),
-                        label: formatReminderOffset(p),
-                      }))}
-                    />
+              {reminderOffsets.map((offset, idx) => {
+                const willFire = isPastNonRecurring ? false : offsetWillFire(offset)
+                return (
+                  <div key={idx} className="flex flex-col gap-1">
+                    <div className={cn('flex items-center gap-2', isPastNonRecurring && 'opacity-60 pointer-events-none')}>
+                      <div className="flex-1 min-w-0">
+                        <CustomSelect
+                          value={String(offset)}
+                          onChange={(v) => updateReminderOffset(idx, Number(v))}
+                          options={REMINDER_PRESETS.map(p => ({
+                            value: String(p),
+                            label: formatReminderOffset(p),
+                          }))}
+                        />
+                      </div>
+                      <button type="button"
+                        onClick={() => removeReminderOffset(idx)}
+                        disabled={isPastNonRecurring}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                        aria-label={t('common.remove')}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {!isPastNonRecurring && !willFire && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 pl-1">
+                        {t('activityForm.reminderTooLate')}
+                      </p>
+                    )}
                   </div>
-                  <button type="button"
-                    onClick={() => removeReminderOffset(idx)}
-                    disabled={isPastNonRecurring}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                    aria-label={t('common.remove')}
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+                )
+              })}
 
               {!isPastNonRecurring && reminderOffsets.length < REMINDER_HARD_CAP && (
                 <button type="button"
@@ -1107,27 +1202,32 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
                 <ChipBtn icon={<ClipboardList className="w-3.5 h-3.5" />}
                   label={t('templatesPage.title')}
                   highlighted
+                  dataTour="templates"
                   onClick={() => { onClose(); router.push('/dashboard/templates') }}
                 />
               )}
               <ChipBtn icon={<Tag className="w-3.5 h-3.5" />}
                 label={t('activityForm.section.type')}
                 value={categoryLabel(category, locale)}
+                dataTour="type"
                 onClick={() => setOpenSheet('type')}
               />
               <ChipBtn icon={<CalendarIcon className="w-3.5 h-3.5" />}
                 label={dateChipValue}
                 value={scheduleChipSummary !== dateChipValue ? scheduleChipSummary.replace(`${dateChipValue} · `, '') : ''}
+                dataTour="schedule"
                 onClick={() => setOpenSheet('schedule')}
               />
               <ChipBtn icon={<Users className="w-3.5 h-3.5" />}
                 label={t('activityForm.section.invitees')}
                 value={inviteesChipValue}
+                dataTour="invitees"
                 onClick={() => setOpenSheet('invitees')}
               />
               <ChipBtn icon={isPublic ? <Eye className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
                 label={t('activityForm.section.visibility')}
                 value={isPublic ? t('activityForm.visible') : t('activityForm.private')}
+                dataTour="visibility"
                 onClick={() => setIsPublic(p => !p)}
               />
             </div>
@@ -1238,6 +1338,20 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
       >
         {renderInviteesContent()}
       </BottomSheet>
+
+      {/* First-run chip tour on mobile. Suppressed while a bottom sheet is
+          open — the chip is hidden behind the sheet so the spotlight has
+          nothing to point at. The tour resumes the next time the modal is
+          opened only if the user didn't finish/skip (we persist the flag
+          regardless). */}
+      {showChipTour && openSheet === null && currentUser?.id && (
+        <ChipTour
+          userId={currentUser.id}
+          tourId="activity_form_chips"
+          steps={chipTourSteps}
+          onDone={() => setShowChipTour(false)}
+        />
+      )}
     </div>
   )
 }
@@ -1252,13 +1366,18 @@ interface ChipBtnProps {
    *  away from the modal (e.g. Templates) so they stand out as a separate
    *  affordance from the in-place editors (Type / Date / etc.). */
   highlighted?: boolean
+  /** Stable id used by the onboarding ChipTour to locate this chip in the
+   *  DOM (data-tour="<key>"). Optional — only the chips that appear in the
+   *  tour need it. */
+  dataTour?: string
 }
 
-function ChipBtn({ icon, label, value, onClick, highlighted }: ChipBtnProps) {
+function ChipBtn({ icon, label, value, onClick, highlighted, dataTour }: ChipBtnProps) {
   return (
     <button
       type="button"
       onClick={onClick}
+      data-tour={dataTour}
       className={cn(
         'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs border transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
         highlighted

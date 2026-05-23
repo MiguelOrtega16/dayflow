@@ -769,6 +769,7 @@ export const messages = {
       },
       remindersHelp: 'Recibirás una notificación en cada uno de estos momentos antes de la actividad.',
       pastReminderNotice: 'Esta actividad ya pasó — los recordatorios no se dispararán y no pueden modificarse.',
+      reminderTooLate: 'Este recordatorio no se enviará — la hora de inicio está demasiado cerca.',
       addReminder: 'Añadir recordatorio',
       progressLabel: 'Progreso',
       linkGoal: 'Vincular a meta',
@@ -978,6 +979,33 @@ export const messages = {
             kpis:     'Totales, completadas, porcentaje y racha del rango seleccionado arriba.',
             breakdown:'Desglose por estado, categoría y propias vs. compartidas.',
             export:   'Exporta todo a CSV con el botón Descargar (función Pro).',
+          },
+        },
+      },
+      chipTour: {
+        skip: 'Saltar',
+        next: 'Siguiente',
+        done: 'Listo',
+        activityForm: {
+          templates: {
+            title: 'Plantillas',
+            body:  'Empieza con una plantilla rápida si no sabes qué crear — recordatorios, hábitos o eventos listos para usar.',
+          },
+          type: {
+            title: 'Tipo',
+            body:  'Cambia entre tarea, evento o recordatorio. El tipo decide cómo se ve y cuándo te avisamos.',
+          },
+          schedule: {
+            title: 'Fecha y hora',
+            body:  'Elige cuándo sucede. Aquí también configuras la hora de inicio, repetición y recordatorios.',
+          },
+          invitees: {
+            title: 'Invitados',
+            body:  'Invita a personas con quienes compartes tu calendario para que aparezca en el suyo.',
+          },
+          visibility: {
+            title: 'Visibilidad',
+            body:  'Tócalo para alternar entre privado y visible para las personas con las que compartes tu calendario.',
           },
         },
       },
@@ -1750,6 +1778,7 @@ export const messages = {
       },
       remindersHelp: 'You will be notified at each of these moments before the activity.',
       pastReminderNotice: 'This activity already passed — reminders won\'t fire and can\'t be changed.',
+      reminderTooLate: "This reminder won't fire — the start time is too close.",
       addReminder: 'Add reminder',
       progressLabel: 'Progress',
       linkGoal: 'Link to goal',
@@ -1957,6 +1986,33 @@ export const messages = {
             kpis:     'Totals, completion, streak and rate for the range you selected above.',
             breakdown:'Breakdowns by status, category, and own vs. shared activities.',
             export:   'Export your full data to CSV with the Download button (Pro feature).',
+          },
+        },
+      },
+      chipTour: {
+        skip: 'Skip',
+        next: 'Next',
+        done: 'Done',
+        activityForm: {
+          templates: {
+            title: 'Templates',
+            body:  "Start from a ready-made template if you're not sure what to create — reminders, habits, or events you can use right away.",
+          },
+          type: {
+            title: 'Type',
+            body:  'Switch between task, event, or reminder. The type decides how it looks and when we notify you.',
+          },
+          schedule: {
+            title: 'Date & time',
+            body:  'Pick when it happens. This is also where you set the start time, recurrence, and reminders.',
+          },
+          invitees: {
+            title: 'Invitees',
+            body:  'Invite people you already share your calendar with so this activity shows up on theirs too.',
+          },
+          visibility: {
+            title: 'Visibility',
+            body:  'Tap to toggle between private and visible to the people you share your calendar with.',
           },
         },
       },
