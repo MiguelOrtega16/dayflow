@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core'
 import {
   LOG_LEVEL,
   Purchases,
+  STORE_REPLACEMENT_MODE,
   type PurchasesOffering,
   type PurchasesPackage,
 } from '@revenuecat/purchases-capacitor'
@@ -95,11 +96,29 @@ function findPackage(offering: PurchasesOffering, productId: BillingProductId): 
   }) ?? null
 }
 
+export interface PurchaseProductOptions {
+  /**
+   * Google Play only. Pass the user's current active subscription product
+   * id (e.g. 'pro_monthly') when this purchase should REPLACE an existing
+   * subscription rather than stack on top of it. Without this, Play Billing
+   * creates a second, parallel subscription and the user gets billed for
+   * both — we hit this in testing when users tapped "Switch to Annual"
+   * while a Monthly sub was active. Only valid for subscription → subscription
+   * transitions (e.g. monthly → annual); ignored for one-time products
+   * like pro_lifetime since INAPP purchases can't replace a subscription
+   * on the Play Billing side.
+   */
+  replaceCurrentProductId?: BillingProductId
+}
+
 // Trigger a native purchase. Resolves when the receipt has been validated by
 // RevenueCat — by the time this returns, the RC webhook has likely already
 // fired and updated our `subscriptions` table. The useEntitlement() hook will
 // pick up the change via Supabase realtime.
-export async function purchaseProduct(productId: BillingProductId): Promise<void> {
+export async function purchaseProduct(
+  productId: BillingProductId,
+  options: PurchaseProductOptions = {},
+): Promise<void> {
   if (!isNative()) {
     throw new Error('purchaseProduct can only be called on native platforms — use Stripe Checkout on web')
   }
@@ -109,7 +128,33 @@ export async function purchaseProduct(productId: BillingProductId): Promise<void
   const pkg = findPackage(offering, productId)
   if (!pkg) throw new Error(`Package ${PACKAGE_IDENTIFIER[productId]} not found in offering`)
 
-  await Purchases.purchasePackage({ aPackage: pkg })
+  // Only attach the replacement info when moving between two subscription
+  // products. Lifetime (one-time INAPP) is not a subscription on Play, so
+  // it can't legally replace one — the caller should warn the user that
+  // their current sub keeps billing until they cancel it manually.
+  let storeProductChangeInfo: { oldProductIdentifier: string; replacementMode: STORE_REPLACEMENT_MODE } | null = null
+  if (options.replaceCurrentProductId && productId !== 'pro_lifetime') {
+    const oldPkg = findPackage(offering, options.replaceCurrentProductId)
+    if (oldPkg) {
+      // Use the package's reported product.identifier directly so we pass
+      // exactly what Play Billing wrote into the original receipt (which
+      // includes the base plan suffix on subscriptions, e.g.
+      // dayflow_pro_monthly:monthly). Falling back to the bare SKU would
+      // make Play reject the replace.
+      storeProductChangeInfo = {
+        oldProductIdentifier: oldPkg.product.identifier,
+        // WITH_TIME_PRORATION = old sub canceled immediately, remaining
+        // paid time credited toward the new sub. The most user-friendly
+        // default and matches what most apps do for an upsell.
+        replacementMode: STORE_REPLACEMENT_MODE.WITH_TIME_PRORATION,
+      }
+    }
+  }
+
+  await Purchases.purchasePackage({
+    aPackage: pkg,
+    ...(storeProductChangeInfo ? { storeProductChangeInfo } : {}),
+  })
 }
 
 export async function restorePurchases(): Promise<void> {

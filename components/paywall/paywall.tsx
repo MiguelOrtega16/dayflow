@@ -190,10 +190,15 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
 
   // Called by upgrade buttons in the Pro view (native only — web's Stripe
   // portal handles plan changes natively, so this isn't needed there).
-  // Reuses the existing native purchase plumbing so Play Billing handles
-  // the cross-grade / one-time purchase the same way it would for a brand
-  // new purchase. RC fires the appropriate webhook and the subscriptions
-  // row updates via realtime.
+  // For subscription → subscription (monthly → annual), passes the
+  // current plan as replaceCurrentProductId so Play Billing executes a
+  // proper replace and cancels the old sub. Without this, Play would
+  // create a second parallel subscription and the user would be
+  // double-billed — observed in QA.
+  // Lifetime is one-time INAPP and can't replace a sub on Play's side; the
+  // active subscription will keep billing until the user cancels it via
+  // Google Play. We show an inline warning before that button to make
+  // this explicit (see UpgradeRow rendering below).
   async function handleUpgradeTo(targetProduct: BillingProductId) {
     if (!userId) {
       setError(t('billing.paywall.errors.signIn'))
@@ -208,7 +213,11 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
       platform: 'android',
     })
     try {
-      await purchaseProduct(targetProduct)
+      const replaceCurrentProductId =
+        targetProduct !== 'pro_lifetime' && entitlement.plan && entitlement.plan !== 'pro_lifetime'
+          ? entitlement.plan
+          : undefined
+      await purchaseProduct(targetProduct, { replaceCurrentProductId })
       onClose()
     } catch (err) {
       if (isPurchaseCancelled(err)) {
@@ -330,15 +339,26 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
                   />
                 )}
                 {(!prices || prices.pro_lifetime.available) && (
-                  <UpgradeRow
-                    title={t('billing.paywall.plans.lifetime')}
-                    price={priceFor('pro_lifetime')}
-                    cadence={t('billing.paywall.plans.oneTime')}
-                    sub={t('billing.paywall.plans.lifetimeSub')}
-                    disabled={busy}
-                    onClick={() => handleUpgradeTo('pro_lifetime')}
-                    cta={t('billing.paywall.active.getLifetime')}
-                  />
+                  <>
+                    {/* Lifetime is one-time on Play and can't replace a
+                        subscription on the Billing side. If the user has
+                        an active sub when they buy Lifetime, both will be
+                        billed until they cancel the sub in Play. Make the
+                        next step obvious — most users won't think to do
+                        it without prompting. */}
+                    <div className="text-[11px] text-amber-700 dark:text-amber-400 leading-snug">
+                      {t('billing.paywall.active.lifetimeWarning')}
+                    </div>
+                    <UpgradeRow
+                      title={t('billing.paywall.plans.lifetime')}
+                      price={priceFor('pro_lifetime')}
+                      cadence={t('billing.paywall.plans.oneTime')}
+                      sub={t('billing.paywall.plans.lifetimeSub')}
+                      disabled={busy}
+                      onClick={() => handleUpgradeTo('pro_lifetime')}
+                      cta={t('billing.paywall.active.getLifetime')}
+                    />
+                  </>
                 )}
               </div>
             )}

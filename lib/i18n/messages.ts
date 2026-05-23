@@ -870,6 +870,7 @@ export const messages = {
           upgradeHeading: 'O cambia de plan',
           switchToAnnual: 'Cambiar a anual',
           getLifetime: 'Comprar de por vida',
+          lifetimeWarning: 'De por vida es un pago único en Google Play y no cancela automáticamente tu suscripción actual. Después de comprar, cancela tu suscripción desde "Gestionar suscripción" para no seguir pagándola.',
         },
         triggers: {
           generic: {
@@ -1880,6 +1881,7 @@ export const messages = {
           upgradeHeading: 'Or switch plans',
           switchToAnnual: 'Switch to Annual',
           getLifetime: 'Get Lifetime',
+          lifetimeWarning: 'Lifetime is a one-time purchase on Google Play and does NOT auto-cancel your current subscription. After buying, cancel your subscription from "Manage subscription" so you stop being billed for it.',
         },
         triggers: {
           generic: {
