@@ -639,7 +639,12 @@ function ActivityCard({
       ref={overlay ? undefined : setNodeRef}
       aria-label={overlay ? undefined : t('overview.dragHandle')}
       className={cn(
-        'group relative flex items-start gap-2.5 p-2.5 rounded-xl border transition-[opacity,box-shadow]',
+        // items-stretch so the drag handle column fills the full card
+        // height — gives the user a generous Y-axis target. The text
+        // content + status circle use self-center to sit mid-card; the
+        // category / delete column uses self-start to keep its anchored
+        // top-right position.
+        'group relative flex items-stretch gap-2.5 p-2.5 rounded-xl border transition-[opacity,box-shadow]',
         cfg.bgColor, cfg.color,
         'hover:shadow-sm',
         // Ghost the original card while it's being dragged — the DragOverlay
@@ -664,7 +669,7 @@ function ActivityCard({
           ref={setActivatorNodeRef}
           {...dragProps}
           aria-label={t('overview.dragHandle')}
-          className="touch-none mt-0.5 -ml-0.5 shrink-0 w-5 h-5 flex items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground hover:bg-background/60 cursor-grab active:cursor-grabbing transition-colors"
+          className="touch-none -ml-0.5 shrink-0 w-5 self-stretch flex items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground hover:bg-background/60 cursor-grab active:cursor-grabbing transition-colors"
         >
           <GripVertical className="w-4 h-4" />
         </span>
@@ -676,7 +681,7 @@ function ActivityCard({
         // circle stays a click target instead of being swallowed by the drag.
         onPointerDown={e => e.stopPropagation()}
         disabled={loading || overlay}
-        className={cn('mt-0.5 shrink-0 hover:opacity-70 transition-opacity', cfg.textColor)}
+        className={cn('shrink-0 self-center hover:opacity-70 transition-opacity', cfg.textColor)}
         title={t('overview.changeStatusTitle')}
       >
         {loading
@@ -684,7 +689,7 @@ function ActivityCard({
           : <Icon className="w-4 h-4" />}
       </button>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 self-center">
         <div className="flex items-start gap-1.5">
           {activity.emoji && <span className="shrink-0 leading-tight">{activity.emoji}</span>}
           <span className={cn(
@@ -736,7 +741,7 @@ function ActivityCard({
         )}
       </div>
 
-      <div className="flex flex-col items-end gap-1 shrink-0">
+      <div className="flex flex-col items-end gap-1 shrink-0 self-start">
         <span className={cn(
           'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-background/70 border border-border/40',
           catCfg.color
