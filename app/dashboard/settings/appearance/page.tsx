@@ -10,6 +10,7 @@ import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { useTheme } from '@/components/layout/theme-provider'
 import { useBackButtonRoute } from '@/lib/back-button'
+import { useSwipeBack } from '@/lib/swipe-back'
 import { THEMES, isProTheme } from '@/lib/themes'
 import { updateUserPreferences } from '@/lib/user-preferences'
 import type { Profile } from '@/types'
@@ -28,6 +29,7 @@ export default function AppearanceSettingsPage() {
   // Android hardware back routes to the main settings page instead of
   // showing the quit-app confirm dialog.
   useBackButtonRoute(() => router.push('/dashboard/settings'))
+  useSwipeBack(() => router.push('/dashboard/settings'))
 
   useEffect(() => {
     loadProfile()

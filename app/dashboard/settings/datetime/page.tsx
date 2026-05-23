@@ -6,6 +6,7 @@ import { ArrowLeft, Calendar as CalendarIcon, Clock, CalendarDays } from 'lucide
 import { createClient } from '@/lib/supabase/client'
 import { useI18n } from '@/lib/i18n'
 import { useBackButtonRoute } from '@/lib/back-button'
+import { useSwipeBack } from '@/lib/swipe-back'
 import { CustomSelect } from '@/components/ui/custom-select'
 import {
   getUserPreferences, updateUserPreferences,
@@ -20,6 +21,7 @@ export default function DateTimeSettingsPage() {
   const [error, setError] = useState<string | null>(null)
 
   useBackButtonRoute(() => router.push('/dashboard/settings'))
+  useSwipeBack(() => router.push('/dashboard/settings'))
 
   useEffect(() => {
     const supabase = createClient()

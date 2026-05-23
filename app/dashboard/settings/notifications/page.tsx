@@ -11,6 +11,7 @@ import { usePaywall } from '@/components/paywall/paywall-provider'
 import { CustomSelect } from '@/components/ui/custom-select'
 import { cn } from '@/lib/utils'
 import { useBackButtonRoute } from '@/lib/back-button'
+import { useSwipeBack } from '@/lib/swipe-back'
 import {
   getUserPreferences, updateUserPreferences,
   type UserPreferences, type ReminderType, type SnoozeMinutes, type DailySlot,
@@ -42,6 +43,7 @@ export default function NotificationsSettingsPage() {
   // Hardware back returns to the main settings page instead of the
   // quit-app confirm.
   useBackButtonRoute(() => router.push('/dashboard/settings'))
+  useSwipeBack(() => router.push('/dashboard/settings'))
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
 
@@ -172,33 +174,39 @@ export default function NotificationsSettingsPage() {
                   onChange={v => updatePref('screenlock_reminders', v)}
                 />
 
-                {/* Snooze toggle + duration */}
-                <div>
-                  <ToggleRow
-                    label={t('notifSettings.taskReminder.snoozeLabel')}
-                    sub={t('notifSettings.taskReminder.snoozeSub')}
-                    on={prefs.snooze_enabled}
-                    onChange={v => updatePref('snooze_enabled', v)}
-                  />
-                  {prefs.snooze_enabled && (
-                    <div className="mt-3 pl-1">
-                      <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                        {t('notifSettings.taskReminder.snoozeDurationLabel')}
-                      </label>
-                      <CustomSelect<string>
-                        value={String(prefs.snooze_minutes)}
-                        onChange={v => updatePref('snooze_minutes', Number(v) as SnoozeMinutes)}
-                        options={SNOOZE_OPTIONS.map(m => ({
-                          value: String(m),
-                          label: t(`notifSettings.taskReminder.snoozeMin.${m}`),
-                        }))}
-                      />
-                      <p className="text-[11px] text-muted-foreground mt-2">
-                        {t('notifSettings.taskReminder.snoozeNote')}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                {/* Snooze toggle + duration — hidden for now; not in active
+                    development. Underlying preference (snooze_enabled /
+                    snooze_minutes) is preserved so existing saved values
+                    aren't lost, and the UI can be re-enabled by removing
+                    the false guard below when the feature ships.
+                {false && (
+                  <div>
+                    <ToggleRow
+                      label={t('notifSettings.taskReminder.snoozeLabel')}
+                      sub={t('notifSettings.taskReminder.snoozeSub')}
+                      on={prefs.snooze_enabled}
+                      onChange={v => updatePref('snooze_enabled', v)}
+                    />
+                    {prefs.snooze_enabled && (
+                      <div className="mt-3 pl-1">
+                        <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                          {t('notifSettings.taskReminder.snoozeDurationLabel')}
+                        </label>
+                        <CustomSelect<string>
+                          value={String(prefs.snooze_minutes)}
+                          onChange={v => updatePref('snooze_minutes', Number(v) as SnoozeMinutes)}
+                          options={SNOOZE_OPTIONS.map(m => ({
+                            value: String(m),
+                            label: t(`notifSettings.taskReminder.snoozeMin.${m}`),
+                          }))}
+                        />
+                        <p className="text-[11px] text-muted-foreground mt-2">
+                          {t('notifSettings.taskReminder.snoozeNote')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )} */}
               </div>
             )}
 

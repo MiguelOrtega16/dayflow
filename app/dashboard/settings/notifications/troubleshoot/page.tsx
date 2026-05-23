@@ -6,6 +6,7 @@ import { ArrowLeft, Check, AlertCircle, HelpCircle } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { useI18n } from '@/lib/i18n'
+import { useSwipeBack } from '@/lib/swipe-back'
 import { SystemSettings } from '@/lib/system-settings'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +18,11 @@ export default function NotifTroubleshootPage() {
   const [isNative, setIsNative] = useState(false)
   const [permission, setPermission] = useState<PermState>('unknown')
   const [batteryIgnoring, setBatteryIgnoring] = useState<boolean | null>(null)
+
+  // Swipe-right from the left edge returns to the parent notifications
+  // page — mirrors the on-screen back arrow's router.back() call so the
+  // gesture stays consistent regardless of where the user entered from.
+  useSwipeBack(() => router.back())
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
 

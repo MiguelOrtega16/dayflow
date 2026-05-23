@@ -10,6 +10,7 @@ import { useI18n, dateFnsLocale } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { useBackButtonRoute } from '@/lib/back-button'
+import { useSwipeBack } from '@/lib/swipe-back'
 import { cn } from '@/lib/utils'
 
 // Feature matrix used by the comparison table. Kept here as data so adding a
@@ -36,12 +37,14 @@ const FEATURE_MATRIX: FeatureRow[] = [
   { labelKey: 'comments',          freeValue: true,                        proValue: true                       },
   { labelKey: 'statsDashboard',    freeValue: true,                        proValue: true                       },
   { labelKey: 'sharedCalendar',    freeValue: true,                        proValue: true                       },
+  { labelKey: 'notifications',     freeValue: true,                        proValue: true                       },
   // Quantitative differences.
   { labelKey: 'sharedCalendars',   freeValue: 'free.sharedCalendarsValue', proValue: 'pro.unlimited',           highlight: true },
   { labelKey: 'themes',            freeValue: 'free.themesValue',          proValue: 'pro.themesValue',         highlight: true },
   { labelKey: 'avatarColors',      freeValue: 'free.colorsValue',          proValue: 'pro.colorsValue' },
   { labelKey: 'widgets',           freeValue: 'free.widgetsValue',         proValue: 'pro.widgetsValue' },
   // Pure Pro perks.
+  { labelKey: 'dailyReminderTime', freeValue: false,                       proValue: true                       },
   { labelKey: 'recurrence',        freeValue: false,                       proValue: true                       },
   { labelKey: 'multiReminders',    freeValue: false,                       proValue: true                       },
   { labelKey: 'statsExport',       freeValue: false,                       proValue: true                       },
@@ -59,6 +62,7 @@ export default function BillingSettingsPage() {
   const native = Capacitor.isNativePlatform()
 
   useBackButtonRoute(() => router.push('/dashboard/settings'))
+  useSwipeBack(() => router.push('/dashboard/settings'))
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
