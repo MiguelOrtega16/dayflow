@@ -88,6 +88,11 @@ module.exports = {
           "60%":      { transform: "rotate(-6deg)" },
           "80%":      { transform: "rotate(4deg)" },
         },
+        // Direction-aware page transitions used when navigating the calendar
+        // (swipe or arrow buttons). Slightly larger offset than the generic
+        // slide-in so the motion is clearly visible on a month swap.
+        "swipe-in-from-right": { from: { opacity: "0", transform: "translateX(36px)" }, to: { opacity: "1", transform: "translateX(0)" } },
+        "swipe-in-from-left":  { from: { opacity: "0", transform: "translateX(-36px)" }, to: { opacity: "1", transform: "translateX(0)" } },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -99,6 +104,8 @@ module.exports = {
         "panel-in":  "panel-in 0.24s cubic-bezier(0.16, 1, 0.3, 1)",
         "panel-out": "panel-out 0.16s ease-in forwards",
         "bell-wiggle": "bell-wiggle 0.55s ease-in-out",
+        "swipe-in-from-right": "swipe-in-from-right 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
+        "swipe-in-from-left":  "swipe-in-from-left  0.22s cubic-bezier(0.16, 1, 0.3, 1)",
       },
     },
   },

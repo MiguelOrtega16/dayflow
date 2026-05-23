@@ -335,10 +335,30 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     return activities.filter(a => a.date === dateStr)
   }
 
+  // Animation cue for swipe/arrow navigation. The key changes on each move
+  // (forces React to remount the wrapped grid so the CSS animation re-fires)
+  // and `swipeDir` decides which side the new view slides in from. Going
+  // forward (next) slides in from the right; back slides in from the left,
+  // matching the user's intent when they swipe with their finger.
+  const [swipeAnimKey, setSwipeAnimKey] = useState(0)
+  const [swipeDir, setSwipeDir] = useState<'prev' | 'next'>('next')
+  const swipeAnimClass = swipeDir === 'next' ? 'animate-swipe-in-from-right' : 'animate-swipe-in-from-left'
+
   const navigate = (direction: 'prev' | 'next') => {
+    setSwipeDir(direction)
+    setSwipeAnimKey(k => k + 1)
     const d = direction === 'next' ? 1 : -1
     if (mode === 'month') {
-      setCurrentDate(d > 0 ? addMonths(currentDate, 1) : subMonths(currentDate, 1))
+      // Keep selectedDate aligned with the new month so the day-detail panel
+      // doesn't keep pointing at a date outside the fetched range — that
+      // mismatch is why the header used to still read "May 22" but the
+      // activities list was empty after swiping into June. Preserve the
+      // day-of-month, clamping to the new month's last day when needed
+      // (date-fns addMonths handles the clamp for us).
+      const newCurrent  = d > 0 ? addMonths(currentDate, 1)  : subMonths(currentDate, 1)
+      const newSelected = d > 0 ? addMonths(selectedDate, 1) : subMonths(selectedDate, 1)
+      setCurrentDate(newCurrent)
+      setSelectedDate(newSelected)
     } else if (mode === 'day') {
       const next = addDays(selectedDate, d)
       setSelectedDate(next); setCurrentDate(next)
@@ -346,7 +366,12 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
       const next = addDays(selectedDate, d * 7)
       setSelectedDate(next); setCurrentDate(next)
     } else {
-      setCurrentDate(d > 0 ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1))
+      // Desktop week mode: same fix as month — move selectedDate by a week
+      // so the header date and the visible week stay in agreement.
+      const newCurrent  = d > 0 ? addWeeks(currentDate, 1)  : subWeeks(currentDate, 1)
+      const newSelected = addDays(selectedDate, d * 7)
+      setCurrentDate(newCurrent)
+      setSelectedDate(newSelected)
     }
   }
 
@@ -438,15 +463,17 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          <TimeGridView
-            days={[selectedDate]}
-            activities={activities}
-            allUsers={allUsers}
-            currentUserId={currentUser?.id}
-            onEditActivity={setEditingActivity}
-            onActivityUpdated={fetchActivities}
-            onAddActivityAtTime={openAddAtTime}
-          />
+          <div key={swipeAnimKey} className={cn('h-full', swipeAnimClass)}>
+            <TimeGridView
+              days={[selectedDate]}
+              activities={activities}
+              allUsers={allUsers}
+              currentUserId={currentUser?.id}
+              onEditActivity={setEditingActivity}
+              onActivityUpdated={fetchActivities}
+              onAddActivityAtTime={openAddAtTime}
+            />
+          </div>
         </div>
 
         {/* Floating action button — anchored above the bottom nav */}
@@ -513,16 +540,18 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
               return rows >= 6 ? '28dvh' : rows >= 5 ? '25dvh' : '22dvh'
             })(),
           }}>
-            <CompactMonthGrid
-              currentDate={mode === 'week' ? (isMobileWeek ? selectedDate : currentDate) : currentDate}
-              selectedDate={selectedDate}
-              days={gridDays}
-              activities={activities}
-              holidays={holidays}
-              allUsers={allUsers}
-              activeUserIds={activeUserIds}
-              onDateSelect={d => { setSelectedDate(d); setCurrentDate(d) }}
-            />
+            <div key={swipeAnimKey} className={cn('h-full', swipeAnimClass)}>
+              <CompactMonthGrid
+                currentDate={mode === 'week' ? (isMobileWeek ? selectedDate : currentDate) : currentDate}
+                selectedDate={selectedDate}
+                days={gridDays}
+                activities={activities}
+                holidays={holidays}
+                allUsers={allUsers}
+                activeUserIds={activeUserIds}
+                onDateSelect={d => { setSelectedDate(d); setCurrentDate(d) }}
+              />
+            </div>
           </div>
         )}
 
@@ -599,15 +628,17 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             className="flex-1 overflow-hidden">
-            <TimeGridView
-              days={[selectedDate]}
-              activities={activities}
-              allUsers={allUsers}
-              currentUserId={currentUser?.id}
-              onEditActivity={setEditingActivity}
-              onActivityUpdated={fetchActivities}
-              onAddActivityAtTime={openAddAtTime}
-            />
+            <div key={swipeAnimKey} className={cn('h-full', swipeAnimClass)}>
+              <TimeGridView
+                days={[selectedDate]}
+                activities={activities}
+                allUsers={allUsers}
+                currentUserId={currentUser?.id}
+                onEditActivity={setEditingActivity}
+                onActivityUpdated={fetchActivities}
+                onAddActivityAtTime={openAddAtTime}
+              />
+            </div>
           </div>
         )}
 
@@ -630,10 +661,12 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
           {/* Days grid */}
           <div
+            key={swipeAnimKey}
             className={cn(
               'grid gap-1 sm:gap-2',
               isMobileWeek ? 'grid-cols-3' : 'grid-cols-7',
-              mode === 'week' && 'flex-1'
+              mode === 'week' && 'flex-1',
+              swipeAnimClass,
             )}
           >
             {days.map(day => {
