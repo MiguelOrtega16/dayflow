@@ -169,61 +169,13 @@ export default function SettingsPage() {
           />
         </div>
 
-        {/* Activity defaults — single inline toggle for now (the only
-            preference is default visibility). Kept as a small card rather
-            than a sub-page so users discover and flip it without an extra
-            navigation hop. Loaded async — hidden until we know the user's
-            value so the toggle doesn't flicker on/off on mount. */}
-        {defaultPublic !== null && (
-          <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
-            <div>
-              <h2 className="text-sm font-semibold">{t('settings.activityDefaultsSection')}</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {t('settings.activityDefaultsHelp')}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                defaultPublic ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground',
-              )}>
-                {defaultPublic ? <Eye className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{t('settings.defaultVisibility.label')}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {defaultPublic
-                    ? t('settings.defaultVisibility.subVisible')
-                    : t('settings.defaultVisibility.subPrivate')}
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={defaultPublic}
-                onClick={() => handleDefaultPublicChange(!defaultPublic)}
-                className={cn(
-                  'shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                  defaultPublic ? 'bg-primary' : 'bg-muted',
-                )}
-              >
-                <span
-                  className={cn(
-                    'inline-block h-5 w-5 transform rounded-full bg-background shadow transition-transform',
-                    defaultPublic ? 'translate-x-5' : 'translate-x-0.5',
-                  )}
-                />
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Customize section — navigation rows to sub-pages plus the
-            language selector (inline since it's a single dropdown, not a
-            full sub-page). Widget is native-only since the widget config
-            only does anything inside the Android app. Appearance is here
-            (not inline above) so users can deep-link to it and the
-            hardware back button has a clear "return to settings" target. */}
+            language selector and activity-default visibility toggle
+            (both inline since they're single controls, not full sub-pages).
+            Widget is native-only since the widget config only does
+            anything inside the Android app. Appearance is here (not
+            inline above) so users can deep-link to it and the hardware
+            back button has a clear "return to settings" target. */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <h2 className="text-sm font-semibold px-5 pt-5 pb-3">{t('settings.personalizeSection')}</h2>
 
@@ -256,6 +208,44 @@ export default function SettingsPage() {
             sub={t('settings.dateTimeRow.sub')}
             onClick={() => router.push('/dashboard/settings/datetime')}
           />
+
+          {/* Default activity visibility — inline toggle so users discover
+              and flip it without an extra navigation hop. Hidden until the
+              preference loads so the switch doesn't flicker on/off. */}
+          {defaultPublic !== null && (
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
+              <span className="shrink-0">
+                {defaultPublic
+                  ? <Eye  className="w-5 h-5 text-primary" />
+                  : <Lock className="w-5 h-5 text-primary" />}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-medium">{t('settings.defaultVisibility.label')}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {defaultPublic
+                    ? t('settings.defaultVisibility.subVisible')
+                    : t('settings.defaultVisibility.subPrivate')}
+                </span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={defaultPublic}
+                onClick={() => handleDefaultPublicChange(!defaultPublic)}
+                className={cn(
+                  'shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                  defaultPublic ? 'bg-primary' : 'bg-muted',
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-block h-5 w-5 transform rounded-full bg-background shadow transition-transform',
+                    defaultPublic ? 'translate-x-5' : 'translate-x-0.5',
+                  )}
+                />
+              </button>
+            </div>
+          )}
 
           {/* Language row — inline select, no chevron, no sub-page. */}
           <div className="flex items-center gap-3 px-5 py-3">

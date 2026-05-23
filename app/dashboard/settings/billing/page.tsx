@@ -132,7 +132,7 @@ export default function BillingSettingsPage() {
           </div>
         ) : entitlement.isPro ? (
           <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-5">
-            <div className="flex items-start gap-3">
+            <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-indigo-500/15 text-indigo-500 flex items-center justify-center shrink-0">
                 <Crown className="w-5 h-5" />
               </div>
@@ -156,8 +156,11 @@ export default function BillingSettingsPage() {
               </div>
             </div>
 
-            <div className="mt-4 space-y-2">
-              {entitlement.plan !== 'pro_lifetime' && (
+            {/* Lifetime users have nothing to manage or switch to, so skip
+                the entire action block — keeping the empty mt-4 wrapper
+                left a noticeable dead space at the bottom of the hero. */}
+            {entitlement.plan !== 'pro_lifetime' && (
+              <div className="mt-4 space-y-2">
                 <button
                   onClick={handleManage}
                   disabled={busy}
@@ -170,24 +173,21 @@ export default function BillingSettingsPage() {
                     </>
                   )}
                 </button>
-              )}
-              {/* Even Pro users see the paywall — that's where the "switch plan"
-                  buttons live (Switch to Annual / Get Lifetime on native).
-                  Hidden for Lifetime since there's nothing to switch to. */}
-              {entitlement.plan !== 'pro_lifetime' && (
+                {/* Paywall is where the "switch plan" buttons live
+                    (Switch to Annual / Get Lifetime on native). */}
                 <button
                   onClick={() => openPaywall('generic')}
                   className="w-full text-xs text-muted-foreground hover:text-foreground py-1"
                 >
                   {t('billing.page.switchPlan')}
                 </button>
-              )}
-              {portalError && <p className="text-xs text-destructive">{portalError}</p>}
-            </div>
+                {portalError && <p className="text-xs text-destructive">{portalError}</p>}
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex items-start gap-3">
+            <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-muted text-muted-foreground flex items-center justify-center shrink-0">
                 <Sparkles className="w-5 h-5" />
               </div>
@@ -213,7 +213,7 @@ export default function BillingSettingsPage() {
           </div>
 
           {/* Column headers */}
-          <div className="grid grid-cols-[1fr_70px_70px] sm:grid-cols-[1fr_100px_100px] gap-2 px-5 py-2 border-b border-border bg-muted/30">
+          <div className="grid grid-cols-[1fr_88px_96px] sm:grid-cols-[1fr_120px_130px] gap-2 px-4 sm:px-5 py-2 border-b border-border bg-muted/30">
             <div /> {/* spacer for the feature label column */}
             <div className="text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               {t('billing.page.colFree')}
@@ -230,17 +230,17 @@ export default function BillingSettingsPage() {
               <li
                 key={row.labelKey}
                 className={cn(
-                  'grid grid-cols-[1fr_70px_70px] sm:grid-cols-[1fr_100px_100px] gap-2 px-5 py-3 items-center',
+                  'grid grid-cols-[1fr_88px_96px] sm:grid-cols-[1fr_120px_130px] gap-2 px-4 sm:px-5 py-3 items-center',
                   row.highlight && 'bg-indigo-500/[0.04]',
                 )}
               >
-                <span className="text-sm font-medium min-w-0">
+                <span className="text-sm font-medium min-w-0 pr-1 leading-snug">
                   {t(`billing.page.features.${row.labelKey}.label`)}
                 </span>
-                <div className="text-center text-xs text-muted-foreground">
+                <div className="text-center text-[11px] leading-tight break-words text-muted-foreground">
                   <ValueCell value={row.freeValue} t={t} />
                 </div>
-                <div className="text-center text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                <div className="text-center text-[11px] leading-tight break-words font-semibold text-indigo-700 dark:text-indigo-300">
                   <ValueCell value={row.proValue} t={t} pro />
                 </div>
               </li>

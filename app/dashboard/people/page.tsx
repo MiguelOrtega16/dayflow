@@ -6,6 +6,7 @@ import { searchUsers, shareCalendar, removeCalendarShare, getSharedCalendarUsers
 import { cn, getInitials } from '@/lib/utils'
 import { Search, UserPlus, X, Check, Users, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { PageTour } from '@/components/onboarding/page-tour'
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
@@ -145,6 +146,9 @@ export default function PeoplePage() {
   const isAlreadyShared = (userId: string) =>
     myShares.some(sc => sc.shared_with_id === userId)
 
+  const prefs = (currentUser?.preferences as Record<string, unknown> | null) ?? {}
+  const showTour = !!currentUser && prefs.dismissed_tour_people !== true
+
   const STATUS_COLOR: Record<string, string> = {
     pending:  'text-amber-600 dark:text-amber-400',
     accepted: 'text-emerald-600 dark:text-emerald-400',
@@ -160,6 +164,19 @@ export default function PeoplePage() {
         </div>
         <p className="text-muted-foreground">{t('people.subtitle')}</p>
       </div>
+
+      {showTour && currentUser && (
+        <PageTour
+          tourId="people"
+          userId={currentUser.id}
+          title={t('onboarding.pageTour.people.title')}
+          bullets={[
+            t('onboarding.pageTour.people.bullets.share'),
+            t('onboarding.pageTour.people.bullets.sharedWith'),
+            t('onboarding.pageTour.people.bullets.visible'),
+          ]}
+        />
+      )}
 
       {pendingIncoming.length > 0 && (
         <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl p-5 mb-6">
