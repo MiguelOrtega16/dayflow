@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette, Clock, Crown } from 'lucide-react'
+import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette, Clock, Crown, Eye, Lock } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
-import { getInitials } from '@/lib/utils'
+import { cn, getInitials } from '@/lib/utils'
 import { useI18n, LOCALE_NAMES, LOCALES, type Locale } from '@/lib/i18n'
 import { CustomSelect } from '@/components/ui/custom-select'
+import { getUserPreferences, updateUserPreferences } from '@/lib/user-preferences'
 import type { Profile } from '@/types'
 import { useRouter } from 'next/navigation'
 import { track } from '@/lib/analytics/posthog'
@@ -23,6 +24,11 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [isNative, setIsNative] = useState(false)
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
+  // Per-user default for the "visible vs private" toggle on new activities.
+  // Loaded async after the profile fetch — initial null state distinguishes
+  // "haven't loaded yet" (hide the toggle so it doesn't flicker) from a
+  // legit boolean once preferences arrive.
+  const [defaultPublic, setDefaultPublic] = useState<boolean | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -45,6 +51,30 @@ export default function SettingsPage() {
     }
     // Palette is synced globally by ThemeProvider's auth-state listener —
     // no need to fetch it here.
+    // Load the default-visibility preference so the inline toggle below
+    // reflects the user's saved choice (defaults to visible/true).
+    try {
+      const prefs = await getUserPreferences(user.id)
+      setDefaultPublic(prefs.default_activity_public)
+    } catch {
+      setDefaultPublic(true)
+    }
+  }
+
+  // Persist the visibility default immediately on toggle. Optimistic: flip
+  // the local state first so the UI feels instant, then write. On failure
+  // we revert and surface nothing (this is a low-stakes setting; logging
+  // is enough).
+  const handleDefaultPublicChange = async (next: boolean) => {
+    if (!profile) return
+    const prev = defaultPublic
+    setDefaultPublic(next)
+    try {
+      await updateUserPreferences(profile.id, { default_activity_public: next })
+    } catch (err) {
+      console.error('[settings] default visibility save failed', err)
+      setDefaultPublic(prev)
+    }
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -138,6 +168,55 @@ export default function SettingsPage() {
             isLast
           />
         </div>
+
+        {/* Activity defaults — single inline toggle for now (the only
+            preference is default visibility). Kept as a small card rather
+            than a sub-page so users discover and flip it without an extra
+            navigation hop. Loaded async — hidden until we know the user's
+            value so the toggle doesn't flicker on/off on mount. */}
+        {defaultPublic !== null && (
+          <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold">{t('settings.activityDefaultsSection')}</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {t('settings.activityDefaultsHelp')}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={cn(
+                'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                defaultPublic ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground',
+              )}>
+                {defaultPublic ? <Eye className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{t('settings.defaultVisibility.label')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {defaultPublic
+                    ? t('settings.defaultVisibility.subVisible')
+                    : t('settings.defaultVisibility.subPrivate')}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={defaultPublic}
+                onClick={() => handleDefaultPublicChange(!defaultPublic)}
+                className={cn(
+                  'shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                  defaultPublic ? 'bg-primary' : 'bg-muted',
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-block h-5 w-5 transform rounded-full bg-background shadow transition-transform',
+                    defaultPublic ? 'translate-x-5' : 'translate-x-0.5',
+                  )}
+                />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Customize section — navigation rows to sub-pages plus the
             language selector (inline since it's a single dropdown, not a

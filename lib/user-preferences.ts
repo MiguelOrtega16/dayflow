@@ -50,6 +50,12 @@ export interface UserPreferences {
   time_format:          TimeFormat
   /** Display format for short dates. 'system' picks based on i18n locale. */
   date_format:          DateFormat
+  /** Whether new activities the user creates default to "visible" (public)
+   *  in shared calendars, or to "private" (only the owner sees them). The
+   *  schema-level default for `activities.is_public` is already true; this
+   *  preference governs the pre-selection in the new-activity form so a
+   *  user who prefers privacy doesn't have to flip the toggle every time. */
+  default_activity_public: boolean
 }
 
 const DEFAULTS: UserPreferences = {
@@ -63,6 +69,7 @@ const DEFAULTS: UserPreferences = {
   first_day_of_week:    'system',
   time_format:          '12h',
   date_format:          'system',
+  default_activity_public: true,
 }
 
 function normalizeFirstDay(v: unknown): FirstDayOfWeek {
@@ -115,6 +122,9 @@ export function normalizePreferences(raw: unknown): UserPreferences {
     first_day_of_week:    normalizeFirstDay(r.first_day_of_week),
     time_format:          normalizeTimeFormat(r.time_format),
     date_format:          normalizeDateFormat(r.date_format),
+    default_activity_public: typeof r.default_activity_public === 'boolean'
+      ? r.default_activity_public
+      : DEFAULTS.default_activity_public,
   }
 }
 

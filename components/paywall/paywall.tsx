@@ -33,7 +33,7 @@ export type PaywallTrigger =
   | 'stats_export'
   | 'generic'
 
-const FEATURE_KEYS = ['sharing', 'power', 'widgetsThemes', 'attachExport', 'noAds'] as const
+const FEATURE_KEYS = ['sharing', 'power', 'widgetsThemes', 'statsExport', 'noAds'] as const
 
 interface PaywallProps {
   userId: string | null
@@ -268,14 +268,14 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
             <X className="w-5 h-5" />
           </button>
 
-          <div className="p-6 pb-3 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
-              <Crown className="w-5 h-5" />
+          {/* Centered Crown + headline so the "you're already Pro" state
+              reads as a celebration card rather than a fresh pitch. */}
+          <div className="p-6 pb-3 flex flex-col items-center text-center">
+            <div className="w-14 h-14 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center mb-3">
+              <Crown className="w-7 h-7" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold leading-tight">{t('billing.paywall.active.title')}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{t('billing.paywall.active.subtitle')}</p>
-            </div>
+            <h2 className="text-xl font-bold leading-tight">{t('billing.paywall.active.title')}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t('billing.paywall.active.subtitle')}</p>
           </div>
 
           <div className="px-6 pb-4">

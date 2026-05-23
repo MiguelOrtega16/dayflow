@@ -25,16 +25,27 @@ interface FeatureRow {
   highlight?: boolean
 }
 
+// Ordered to read as: "the perks you keep" first (Free+Pro both green),
+// then the Pro upsells (Free crossed, Pro green). Highlighted rows are
+// the strongest differentiators visually. Attachments deliberately omitted
+// — the feature isn't shipping with this comparison.
 const FEATURE_MATRIX: FeatureRow[] = [
-  { labelKey: 'sharedCalendars', freeValue: 'free.sharedCalendarsValue', proValue: 'pro.unlimited',           highlight: true },
-  { labelKey: 'themes',          freeValue: 'free.themesValue',          proValue: 'pro.themesValue',         highlight: true },
-  { labelKey: 'avatarColors',    freeValue: 'free.colorsValue',          proValue: 'pro.colorsValue' },
-  { labelKey: 'widgets',         freeValue: 'free.widgetsValue',         proValue: 'pro.widgetsValue' },
-  { labelKey: 'recurrence',      freeValue: false,                       proValue: true                       },
-  { labelKey: 'multiReminders',  freeValue: false,                       proValue: true                       },
-  { labelKey: 'attachments',     freeValue: false,                       proValue: true                       },
-  { labelKey: 'statsExport',     freeValue: false,                       proValue: true                       },
-  { labelKey: 'ads',             freeValue: 'free.adsValue',             proValue: 'pro.adsValue' },
+  // Common floor — proves the Free tier isn't a gutted demo.
+  { labelKey: 'templates',         freeValue: true,                        proValue: true                       },
+  { labelKey: 'realtimeSync',      freeValue: true,                        proValue: true                       },
+  { labelKey: 'comments',          freeValue: true,                        proValue: true                       },
+  { labelKey: 'statsDashboard',    freeValue: true,                        proValue: true                       },
+  { labelKey: 'sharedCalendar',    freeValue: true,                        proValue: true                       },
+  // Quantitative differences.
+  { labelKey: 'sharedCalendars',   freeValue: 'free.sharedCalendarsValue', proValue: 'pro.unlimited',           highlight: true },
+  { labelKey: 'themes',            freeValue: 'free.themesValue',          proValue: 'pro.themesValue',         highlight: true },
+  { labelKey: 'avatarColors',      freeValue: 'free.colorsValue',          proValue: 'pro.colorsValue' },
+  { labelKey: 'widgets',           freeValue: 'free.widgetsValue',         proValue: 'pro.widgetsValue' },
+  // Pure Pro perks.
+  { labelKey: 'recurrence',        freeValue: false,                       proValue: true                       },
+  { labelKey: 'multiReminders',    freeValue: false,                       proValue: true                       },
+  { labelKey: 'statsExport',       freeValue: false,                       proValue: true                       },
+  { labelKey: 'ads',               freeValue: 'free.adsValue',             proValue: 'pro.adsValue' },
 ]
 
 export default function BillingSettingsPage() {

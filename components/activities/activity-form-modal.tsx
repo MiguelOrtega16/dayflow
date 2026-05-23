@@ -24,6 +24,7 @@ import {
 import { CustomSelect } from '@/components/ui/custom-select'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
+import { getUserPreferences } from '@/lib/user-preferences'
 import { syncWidgetSnapshot } from '@/lib/widget-sync'
 import { track } from '@/lib/analytics/posthog'
 import { ChipTour, type ChipTourStep } from '@/components/onboarding/chip-tour'
@@ -141,7 +142,24 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     setEndTimeError(false)
     setEndTime(val)
   }
-  const [isPublic, setIsPublic]       = useState(activity?.is_public ?? false)
+  // New activities default to "visible" so they show up in shared calendars
+  // by default (the previous false fallback caused brand-new activities to
+  // be private regardless of the schema-level true default). For edits we
+  // honor whatever the activity already has. The user's preference can flip
+  // this default to private — loaded async below.
+  const [isPublic, setIsPublic]       = useState(activity?.is_public ?? true)
+  // Read the user's default-visibility preference for NEW activities and
+  // patch the initial state once it lands. Skipped when editing because the
+  // activity's own is_public takes precedence then.
+  useEffect(() => {
+    if (isEditing) return
+    if (!currentUser?.id) return
+    let cancelled = false
+    getUserPreferences(currentUser.id)
+      .then(prefs => { if (!cancelled) setIsPublic(prefs.default_activity_public) })
+      .catch(() => { /* fall back to the true default already set above */ })
+    return () => { cancelled = true }
+  }, [isEditing, currentUser?.id])
   const [completionPct, setCompletionPct] = useState(activity?.completion_percentage || 0)
   const tagsInput = activity?.tags?.join(', ') || ''
   const existingPriority = activity?.priority || 'medium'
