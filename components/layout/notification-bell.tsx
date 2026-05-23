@@ -94,7 +94,13 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
 
   const toggleOpen = () => {
     setBellAnimKey(k => k + 1)
-    setOpen(prev => !prev)
+    setOpen(prev => {
+      const next = !prev
+      // When opening, refetch so the user sees the latest invites/shares
+      // without waiting for the 15 s poll or a Realtime event.
+      if (next) load()
+      return next
+    })
   }
 
   useEffect(() => {

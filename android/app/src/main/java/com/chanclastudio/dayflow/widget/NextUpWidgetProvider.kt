@@ -54,7 +54,16 @@ class NextUpWidgetProvider : AppWidgetProvider() {
     override fun onReceive(ctx: Context, intent: Intent) {
         super.onReceive(ctx, intent)
         if (intent.action == ACTION_TICK) {
-            renderAll(ctx)
+            // If the cached "next" activity has reached its start time, the
+            // per-minute tick alone would keep showing "Iniciando…" forever —
+            // the snapshot still lists the past activity as "next". Force a
+            // network refresh so the snapshot rolls over to the truly-next
+            // activity, then schedule the next tick.
+            if (isCachedNextPastDue(ctx)) {
+                WidgetSnapshotSync.refresh(ctx)
+            } else {
+                renderAll(ctx)
+            }
             scheduleNextTick(ctx)
         }
     }
@@ -92,6 +101,21 @@ class NextUpWidgetProvider : AppWidgetProvider() {
         private fun cancelTick(ctx: Context) {
             val am = ctx.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
             am.cancel(tickIntent(ctx))
+        }
+
+        /** True when the cached snapshot's "next" activity has already started
+         *  (start_time <= now). Drives the per-minute refresh that rolls the
+         *  widget over to the next activity instead of stalling on "Iniciando…". */
+        private fun isCachedNextPastDue(ctx: Context): Boolean {
+            val next = WidgetStore.readNextActivity(ctx) ?: return false
+            return try {
+                val df = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).apply {
+                    timeZone = TimeZone.getDefault()
+                }
+                val t = if (next.startTime.length >= 5) next.startTime.substring(0, 5) else next.startTime
+                val target = df.parse("${next.date} $t") ?: return false
+                target.time <= System.currentTimeMillis()
+            } catch (_: Throwable) { false }
         }
 
         private fun renderWidget(ctx: Context, mgr: AppWidgetManager, widgetId: Int) {

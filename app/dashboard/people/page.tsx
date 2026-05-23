@@ -104,7 +104,20 @@ export default function PeoplePage() {
   }
 
   const handleRemove = async (shareId: string) => {
-    await removeCalendarShare(shareId)
+    if (!currentUser) return
+    const share = sharedCalendars.find(sc => sc.id === shareId)
+    if (!share) return
+    if (share.owner_id === currentUser.id) {
+      // Owner revoking a share they created — fully delete the row.
+      await removeCalendarShare(shareId)
+    } else {
+      // Recipient stopping view — RLS forbids delete for non-owners, so
+      // update the share's status to 'declined'. Same end-state as the
+      // initial decline flow: the share drops out of the recipient's
+      // "Calendarios visibles" list and the owner's calendar/activities
+      // stop appearing for them. The owner sees the share marked declined.
+      await respondToCalendarShare(shareId, false, currentUser.id)
+    }
     loadData()
   }
 

@@ -84,12 +84,23 @@ export async function getActivitiesForRange(
 
     if (invitations && invitations.length > 0) {
       const ids = invitations.map(i => i.activity_id)
-      const { data: invitedActs } = await supabase
+      let invQuery = supabase
         .from('activities')
         .select(`*, profile:profiles(*), goal:goals(id, title, emoji, color)`)
         .in('id', ids)
         .gte('date', startDate)
         .lte('date', endDate)
+
+      // Respect the people-filter chips: only surface invited activities
+      // whose OWNER is in the active set. Without this, deselecting a user
+      // who invited you leaves their activities still visible on your
+      // calendar (the owned-activities query is filtered correctly above,
+      // but the invited-activities branch used to bypass `userIds` entirely).
+      if (userIds && userIds.length > 0) {
+        invQuery = invQuery.in('user_id', userIds)
+      }
+
+      const { data: invitedActs } = await invQuery
 
       if (invitedActs) {
         participantData = invitedActs.map(act => {
