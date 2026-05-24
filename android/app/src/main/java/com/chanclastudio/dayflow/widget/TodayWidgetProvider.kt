@@ -89,21 +89,6 @@ class TodayWidgetProvider : AppWidgetProvider() {
             )
             views.setPendingIntentTemplate(R.id.widget_list, rowClickPi)
 
-            // ── Header: refresh button ──
-            val refreshIntent = Intent(ctx, WidgetActionReceiver::class.java).apply {
-                action = WidgetActionReceiver.ACTION_REFRESH
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
-                data = Uri.parse("dayflow-widget://refresh/$widgetId")
-            }
-            views.setOnClickPendingIntent(
-                R.id.widget_btn_refresh,
-                PendingIntent.getBroadcast(
-                    ctx, widgetId * 100 + 1,
-                    refreshIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                )
-            )
-
             // ── Header: configure button → opens the web config page ──
             val configIntent = Intent(ctx, MainActivity::class.java).apply {
                 action = Intent.ACTION_VIEW

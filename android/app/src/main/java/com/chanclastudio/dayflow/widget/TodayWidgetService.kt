@@ -40,8 +40,13 @@ class TodayWidgetFactory(private val ctx: Context) : RemoteViewsService.RemoteVi
     override fun onDestroy() { rows = emptyList() }
 
     override fun onDataSetChanged() {
-        val today = SupabaseRest.todayStr()
-        val acts  = WidgetStore.readActivities(ctx)
+        val today    = SupabaseRest.todayStr()
+        // Cap the "Future" section at +3 days so a dense daily schedule doesn't
+        // produce hundreds of rows the user can't scroll through — three days
+        // of look-ahead matches what fits comfortably without a scroll on most
+        // home-screen widget sizes.
+        val futureMax = SupabaseRest.daysFromNow(3)
+        val acts     = WidgetStore.readActivities(ctx)
 
         data class A(val id: String, val title: String, val date: String, val time: String?, val status: String)
         val parsed = (0 until acts.length()).mapNotNull { i ->
@@ -62,7 +67,7 @@ class TodayWidgetFactory(private val ctx: Context) : RemoteViewsService.RemoteVi
         val list = mutableListOf<Row>()
 
         val todayItems  = parsed.filter { it.date == today && it.status != "done" }
-        val futureItems = parsed.filter { it.date >  today && it.status != "done" }
+        val futureItems = parsed.filter { it.date >  today && it.date <= futureMax && it.status != "done" }
         val doneToday   = parsed.filter { it.date == today && it.status == "done" }
 
         if (todayItems.isNotEmpty()) {

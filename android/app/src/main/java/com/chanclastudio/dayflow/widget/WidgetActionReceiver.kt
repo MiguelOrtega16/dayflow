@@ -9,13 +9,11 @@ import android.util.Log
 
 /**
  * Single entry point for all widget user actions. Dispatches by action string.
- *  - ACTION_REFRESH    → re-fetch activities from Supabase
  *  - ACTION_ROW_CLICK  → toggle done status of the activity in the extras
  */
 class WidgetActionReceiver : BroadcastReceiver() {
 
     companion object {
-        const val ACTION_REFRESH   = "com.chanclastudio.dayflow.widget.REFRESH"
         const val ACTION_ROW_CLICK = "com.chanclastudio.dayflow.widget.ROW_CLICK"
 
         const val EXTRA_ACTIVITY_ID    = "activity_id"
@@ -24,16 +22,8 @@ class WidgetActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(ctx: Context, intent: Intent) {
         when (intent.action) {
-            ACTION_REFRESH   -> handleRefresh(ctx)
             ACTION_ROW_CLICK -> handleRowClick(ctx, intent)
         }
-    }
-
-    private fun handleRefresh(ctx: Context) {
-        // Delegates the whole pipeline (fetch + compute stats/next + write
-        // full snapshot + render all three providers) to one place so Today,
-        // Streak, and NextUp stay in lockstep.
-        WidgetSnapshotSync.refresh(ctx)
     }
 
     private fun handleRowClick(ctx: Context, intent: Intent) {

@@ -73,7 +73,6 @@
 
         <receiver android:name=".widget.WidgetActionReceiver" android:exported="false">
             <intent-filter>
-                <action android:name="com.chanclastudio.dayflow.widget.REFRESH" />
                 <action android:name="com.chanclastudio.dayflow.widget.ROW_CLICK" />
             </intent-filter>
         </receiver>
