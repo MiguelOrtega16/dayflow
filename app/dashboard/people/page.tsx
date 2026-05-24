@@ -10,6 +10,7 @@ import { PageTour } from '@/components/onboarding/page-tour'
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
+import { useProfile } from '@/lib/profile-context'
 import type { Profile, SharedCalendar } from '@/types'
 
 // Free tier can share with this many people. Pro is unlimited.
@@ -18,7 +19,11 @@ const FREE_SHARE_LIMIT = 2
 
 export default function PeoplePage() {
   const { t } = useI18n()
-  const [currentUser, setCurrentUser]       = useState<Profile | null>(null)
+  // Profile is hydrated by the dashboard layout's server fetch via context,
+  // so this page can render its UI shell immediately and only the share
+  // list waits on its own fetch. Aliased to `currentUser` to keep the rest
+  // of the file unchanged.
+  const { profile: currentUser } = useProfile()
   const [sharedCalendars, setSharedCalendars] = useState<SharedCalendar[]>([])
   const [searchQuery, setSearchQuery]       = useState('')
   const [searchResults, setSearchResults]   = useState<Profile[]>([])
@@ -29,8 +34,10 @@ export default function PeoplePage() {
   const { entitlement } = useEntitlement(currentUser?.id ?? null)
   const { open: openPaywall } = usePaywall()
 
-  useEffect(() => { loadData() // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  useEffect(() => {
+    if (currentUser?.id) loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id])
 
   useEffect(() => {
     if (!currentUser) return
@@ -65,11 +72,8 @@ export default function PeoplePage() {
   }, [searchQuery, currentUser])
 
   const loadData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-    setCurrentUser(profile)
-    const shares = await getSharedCalendarUsers(user.id)
+    if (!currentUser?.id) return
+    const shares = await getSharedCalendarUsers(currentUser.id)
     setSharedCalendars((shares || []) as SharedCalendar[])
     setLoading(false)
   }

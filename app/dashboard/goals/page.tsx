@@ -1,17 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { parseISO } from 'date-fns'
 import { Plus, Target, ChevronDown, ChevronRight, Trash2, CheckCircle2, Circle, MoreHorizontal } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { cn } from '@/lib/utils'
 import { getGoals, createGoal, updateGoal, deleteGoal } from '@/lib/api'
 import { STATUS_CONFIG, PRIORITY_CONFIG } from '@/lib/utils'
-import type { Goal, ActivityStatus, ActivityPriority, Profile } from '@/types'
+import type { Goal, ActivityStatus, ActivityPriority } from '@/types'
 import { useI18n, useFormatDate } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
+import { useProfile } from '@/lib/profile-context'
 import { track } from '@/lib/analytics/posthog'
 
 // Free tier can have this many active goals (status not in done/skipped).
@@ -22,13 +22,13 @@ const GOAL_EMOJIS = ['🎯', '🚀', '💪', '📚', '🏃', '🌱', '💡', '�
 
 export default function GoalsPage() {
   const { t } = useI18n()
-  const [profile, setProfile] = useState<Profile | null>(null)
+  // Profile comes from the dashboard layout's server fetch via context.
+  const { profile } = useProfile()
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
-  const supabase = createClient()
 
   const [newTitle, setNewTitle] = useState('')
   const [newEmoji, setNewEmoji] = useState('🎯')
@@ -50,15 +50,14 @@ export default function GoalsPage() {
     setShowCreateForm(true)
   }
 
-  useEffect(() => { loadData() // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  useEffect(() => {
+    if (profile?.id) loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id])
 
   const loadData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-    setProfile(p)
-    const data = await getGoals(user.id)
+    if (!profile?.id) return
+    const data = await getGoals(profile.id)
     setGoals(data)
     setLoading(false)
   }

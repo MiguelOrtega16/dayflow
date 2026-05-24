@@ -1,12 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { format, subDays, parseISO } from 'date-fns'
 import { getActivitiesForRange, updateActivityStatus } from '@/lib/api'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG } from '@/lib/utils'
 import { useDateTimePrefs } from '@/lib/datetime-prefs'
-import type { Activity, ActivityStatus, ActivityCategory, Profile } from '@/types'
+import type { Activity, ActivityStatus, ActivityCategory } from '@/types'
 import {
   CheckCircle2, Circle, Play, Ban, SkipForward, Loader2,
   Search, ChevronDown, Clock, Target, Calendar as CalendarIcon, X, GripVertical,
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useI18n, useFormatDate } from '@/lib/i18n'
+import { useProfile } from '@/lib/profile-context'
 import { BillingDebugButton } from '@/components/billing-debug-button'
 import { PageTour } from '@/components/onboarding/page-tour'
 import { DeleteActivityDialog } from '@/components/activities/delete-activity-dialog'
@@ -38,7 +38,9 @@ const SECONDARY_STATUSES: ActivityStatus[] = ['blocked', 'skipped']
 export default function OverviewPage() {
   const { t } = useI18n()
   const fmt = useFormatDate()
-  const [profile, setProfile] = useState<Profile | null>(null)
+  // Profile from dashboard layout's server fetch — page renders its filters
+  // and headers immediately, only the activities list waits on its fetch.
+  const { profile } = useProfile()
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<'today' | '7days' | '30days' | '90days'>('today')
@@ -60,7 +62,6 @@ export default function OverviewPage() {
       return next
     })
   }
-  const supabase = createClient()
 
   // ── Drag & drop ──────────────────────────────────────────────────────────
   // PointerSensor with a small activation distance lets taps on the in-card
@@ -110,18 +111,19 @@ export default function OverviewPage() {
     }
   }
 
-  useEffect(() => { setLoading(true); loadData() // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range])
+  useEffect(() => {
+    if (!profile?.id) return
+    setLoading(true)
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range, profile?.id])
 
   const loadData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-    setProfile(p)
+    if (!profile?.id) return
     const today = format(new Date(), 'yyyy-MM-dd')
     const days = range === '7days' ? 6 : range === '30days' ? 29 : range === '90days' ? 89 : 0
     const start = format(subDays(new Date(), days), 'yyyy-MM-dd')
-    const data = await getActivitiesForRange(start, today, [user.id], user.id)
+    const data = await getActivitiesForRange(start, today, [profile.id], profile.id)
     setActivities(data)
     setLoading(false)
   }
