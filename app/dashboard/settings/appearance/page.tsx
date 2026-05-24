@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Crown, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -13,14 +13,16 @@ import { useBackButtonRoute } from '@/lib/back-button'
 import { useSwipeBack } from '@/lib/swipe-back'
 import { THEMES, isProTheme } from '@/lib/themes'
 import { updateUserPreferences } from '@/lib/user-preferences'
-import type { Profile } from '@/types'
+import { useProfile } from '@/lib/profile-context'
 
 export default function AppearanceSettingsPage() {
   const { t } = useI18n()
   const router = useRouter()
   const supabase = createClient()
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [color, setColor] = useState('#6366f1')
+  // Profile comes from the dashboard layout's server fetch via context —
+  // no remount fetch when navigating back into / out of this page.
+  const { profile, setProfile } = useProfile()
+  const color = profile?.color || '#6366f1'
   const [savingColor, setSavingColor] = useState(false)
   const { entitlement, loading: entitlementLoading } = useEntitlement(profile?.id ?? null)
   const { open: openPaywall } = usePaywall()
@@ -30,21 +32,6 @@ export default function AppearanceSettingsPage() {
   // showing the quit-app confirm dialog.
   useBackButtonRoute(() => router.push('/dashboard/settings'))
   const swipeRef = useSwipeBack(() => router.push('/dashboard/settings'))
-
-  useEffect(() => {
-    loadProfile()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const loadProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-    if (data) {
-      setProfile(data)
-      setColor(data.color || '#6366f1')
-    }
-  }
 
   // Profile color click. Pro colors for free users open the paywall;
   // otherwise we apply optimistically and persist immediately (no Save
@@ -58,8 +45,10 @@ export default function AppearanceSettingsPage() {
       openPaywall('locked_color')
       return
     }
-    const prev = color
-    setColor(c)
+    const prev = profile
+    // Optimistically push into the shared cache so the sidebar avatar updates
+    // immediately along with this page's swatch ring.
+    setProfile({ ...profile, color: c })
     setSavingColor(true)
     try {
       const { error } = await supabase
@@ -67,7 +56,7 @@ export default function AppearanceSettingsPage() {
         .update({ color: c })
         .eq('id', profile.id)
       if (error) {
-        setColor(prev)
+        setProfile(prev)
         const msg = String(error.message || '')
         if (error.code === '42501' || msg.includes('Pro color')) {
           openPaywall('locked_color')

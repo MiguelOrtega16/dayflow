@@ -11,6 +11,7 @@ import { PaywallProvider } from '@/components/paywall/paywall-provider'
 import { startWidgetAuthSync } from '@/lib/widget-sync'
 import { BackButtonProvider } from '@/lib/back-button'
 import { DateTimePrefsProvider } from '@/lib/datetime-prefs'
+import { ProfileProvider, useProfile } from '@/lib/profile-context'
 import { TopProgressBar } from './top-progress-bar'
 import type { Profile } from '@/types'
 
@@ -20,6 +21,18 @@ interface DashboardShellProps {
 }
 
 export function DashboardShell({ profile, children }: DashboardShellProps) {
+  return (
+    <ProfileProvider initialProfile={profile}>
+      <DashboardShellInner>{children}</DashboardShellInner>
+    </ProfileProvider>
+  )
+}
+
+// Inner shell reads the live profile from context so an in-app edit
+// (name, color, etc.) propagates to the sidebar / bottom nav without
+// a remount or refetch.
+function DashboardShellInner({ children }: { children: React.ReactNode }) {
+  const { profile } = useProfile()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {

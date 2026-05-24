@@ -3,77 +3,56 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette, Clock, Crown, Eye, Lock } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { cn, getInitials } from '@/lib/utils'
 import { useI18n, LOCALE_NAMES, LOCALES, type Locale } from '@/lib/i18n'
 import { CustomSelect } from '@/components/ui/custom-select'
-import { getUserPreferences, updateUserPreferences } from '@/lib/user-preferences'
-import type { Profile } from '@/types'
+import { normalizePreferences, updateUserPreferences } from '@/lib/user-preferences'
+import { useProfile } from '@/lib/profile-context'
 import { useRouter } from 'next/navigation'
 import { track } from '@/lib/analytics/posthog'
 
 export default function SettingsPage() {
   const { t, locale, setLocale } = useI18n()
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [fullName, setFullName] = useState('')
-  const [username, setUsername] = useState('')
-  // Color is read-only here — managed on the Appearance sub-page now.
-  // We still load it for the avatar preview at the top of this page.
-  const [color, setColor] = useState('#6366f1')
+  // Profile comes from the dashboard layout's server-side fetch via context,
+  // so back-nav from any sub-page renders instantly with the data already
+  // in hand — no remount fetch, no blank-form flash.
+  const { profile, setProfile } = useProfile()
+  const [fullName, setFullName] = useState(profile?.full_name || '')
+  const [username, setUsername] = useState(profile?.username || '')
+  const color = profile?.color || '#6366f1'
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [isNative, setIsNative] = useState(false)
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
-  // Per-user default for the "visible vs private" toggle on new activities.
-  // Loaded async after the profile fetch — initial null state distinguishes
-  // "haven't loaded yet" (hide the toggle so it doesn't flicker) from a
-  // legit boolean once preferences arrive.
-  const [defaultPublic, setDefaultPublic] = useState<boolean | null>(null)
+  // Read directly off the cached profile.preferences jsonb — no extra fetch.
+  const defaultPublic = normalizePreferences(profile?.preferences ?? null).default_activity_public
   const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
 
+  // Sync local form state if the cached profile gets replaced (e.g. another
+  // dashboard surface called refresh()). Skipped on first mount because
+  // useState already seeded the values above.
   useEffect(() => {
-    loadProfile()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    setFullName(profile?.full_name || '')
+    setUsername(profile?.username || '')
+  }, [profile?.id])
 
-  const loadProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-    if (data) {
-      setProfile(data)
-      setFullName(data.full_name || '')
-      setUsername(data.username || '')
-      setColor(data.color || '#6366f1')
-    }
-    // Palette is synced globally by ThemeProvider's auth-state listener —
-    // no need to fetch it here.
-    // Load the default-visibility preference so the inline toggle below
-    // reflects the user's saved choice (defaults to visible/true).
-    try {
-      const prefs = await getUserPreferences(user.id)
-      setDefaultPublic(prefs.default_activity_public)
-    } catch {
-      setDefaultPublic(true)
-    }
-  }
-
-  // Persist the visibility default immediately on toggle. Optimistic: flip
-  // the local state first so the UI feels instant, then write. On failure
-  // we revert and surface nothing (this is a low-stakes setting; logging
-  // is enough).
+  // Persist the visibility default immediately on toggle. Optimistic update
+  // goes through the shared profile cache so every consumer (sidebar, other
+  // pages) sees the new value without a fetch. Reverts on failure.
   const handleDefaultPublicChange = async (next: boolean) => {
     if (!profile) return
-    const prev = defaultPublic
-    setDefaultPublic(next)
+    const prevPrefs = profile.preferences as Record<string, unknown> | null
+    setProfile({ ...profile, preferences: { ...(prevPrefs ?? {}), default_activity_public: next } })
     try {
       await updateUserPreferences(profile.id, { default_activity_public: next })
     } catch (err) {
       console.error('[settings] default visibility save failed', err)
-      setDefaultPublic(prev)
+      setProfile({ ...profile, preferences: prevPrefs })
     }
   }
 
@@ -81,15 +60,19 @@ export default function SettingsPage() {
     e.preventDefault()
     if (!profile) return
     setSaving(true)
+    const nextUsername = username || null
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: fullName, username: username || null })
+      .update({ full_name: fullName, username: nextUsername })
       .eq('id', profile.id)
     setSaving(false)
     if (error) {
       console.error('[settings] save failed', error)
       return
     }
+    // Push the new identity into the shared cache so the sidebar avatar
+    // label updates without a roundtrip.
+    setProfile({ ...profile, full_name: fullName, username: nextUsername })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -164,7 +147,7 @@ export default function SettingsPage() {
             icon={<Crown className="w-5 h-5 text-indigo-500" />}
             title={t('settings.billingRow.label')}
             sub={t('settings.billingRow.sub')}
-            onClick={() => router.push('/dashboard/settings/billing')}
+            href="/dashboard/settings/billing"
             isLast
           />
         </div>
@@ -183,7 +166,7 @@ export default function SettingsPage() {
             icon={<Palette className="w-5 h-5 text-primary" />}
             title={t('settings.appearanceRow.label')}
             sub={t('settings.appearanceRow.sub')}
-            onClick={() => router.push('/dashboard/settings/appearance')}
+            href="/dashboard/settings/appearance"
           />
 
           {isNative && (
@@ -191,7 +174,7 @@ export default function SettingsPage() {
               icon={<LayoutPanelTop className="w-5 h-5 text-primary" />}
               title={t('settings.widgetRow.label')}
               sub={t('settings.widgetRow.sub')}
-              onClick={() => router.push('/dashboard/widgets')}
+              href="/dashboard/widgets"
             />
           )}
 
@@ -199,20 +182,21 @@ export default function SettingsPage() {
             icon={<Bell className="w-5 h-5 text-primary" />}
             title={t('settings.notificationsRow.label')}
             sub={t('settings.notificationsRow.sub')}
-            onClick={() => router.push('/dashboard/settings/notifications')}
+            href="/dashboard/settings/notifications"
           />
 
           <SettingsNavRow
             icon={<Clock className="w-5 h-5 text-primary" />}
             title={t('settings.dateTimeRow.label')}
             sub={t('settings.dateTimeRow.sub')}
-            onClick={() => router.push('/dashboard/settings/datetime')}
+            href="/dashboard/settings/datetime"
           />
 
           {/* Default activity visibility — inline toggle so users discover
               and flip it without an extra navigation hop. Hidden until the
-              preference loads so the switch doesn't flicker on/off. */}
-          {defaultPublic !== null && (
+              profile lands so the switch doesn't flicker on the first paint
+              of a fresh signup whose preferences row is still mid-create. */}
+          {profile && (
             <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
               <span className="shrink-0">
                 {defaultPublic
@@ -318,19 +302,22 @@ export default function SettingsPage() {
 }
 
 // ─── SettingsNavRow — list-row link to a sub-settings page ──────────────────
+// Uses next/link so the destination route is prefetched in the background
+// once the Settings page renders, eliminating the bundle-download stall on
+// the first tap into Appearance / Notifications / etc.
 function SettingsNavRow({
-  icon, title, sub, onClick, isLast,
+  icon, title, sub, href, isLast,
 }: {
   icon: React.ReactNode
   title: string
   sub: string
-  onClick: () => void
+  href: string
   isLast?: boolean
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      href={href}
+      prefetch
       className={`w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-muted/40 transition-colors ${
         isLast ? '' : 'border-b border-border'
       }`}
@@ -341,6 +328,6 @@ function SettingsNavRow({
         <span className="block text-xs text-muted-foreground truncate">{sub}</span>
       </span>
       <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-    </button>
+    </Link>
   )
 }
