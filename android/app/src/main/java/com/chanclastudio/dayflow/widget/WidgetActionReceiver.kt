@@ -9,11 +9,16 @@ import android.util.Log
 
 /**
  * Single entry point for all widget user actions. Dispatches by action string.
+ *  - ACTION_REFRESH    → re-fetch activities from Supabase (used as the
+ *                        success callback for requestPinAppWidget so a freshly
+ *                        placed widget pulls live data right after the user
+ *                        confirms the system pin dialog)
  *  - ACTION_ROW_CLICK  → toggle done status of the activity in the extras
  */
 class WidgetActionReceiver : BroadcastReceiver() {
 
     companion object {
+        const val ACTION_REFRESH   = "com.chanclastudio.dayflow.widget.REFRESH"
         const val ACTION_ROW_CLICK = "com.chanclastudio.dayflow.widget.ROW_CLICK"
 
         const val EXTRA_ACTIVITY_ID    = "activity_id"
@@ -22,6 +27,7 @@ class WidgetActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(ctx: Context, intent: Intent) {
         when (intent.action) {
+            ACTION_REFRESH   -> WidgetSnapshotSync.refresh(ctx)
             ACTION_ROW_CLICK -> handleRowClick(ctx, intent)
         }
     }
