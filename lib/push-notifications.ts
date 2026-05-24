@@ -160,7 +160,7 @@ async function initNativePush(userId: string) {
       const date = data.date ?? ''
 
       const PEOPLE_TYPES = ['calendar_share_invite', 'calendar_share_accepted', 'calendar_share_declined']
-      const CALENDAR_TYPES = ['activity_invitation', 'invitation_accepted', 'status_update', 'task_completed', 'new_activity', 'activity_reminder', 'activity_30min_reminder']
+      const CALENDAR_TYPES = ['activity_invitation', 'invitation_accepted', 'status_update', 'task_completed', 'new_activity', 'activity_reminder', 'activity_30min_reminder', 'activity_comment']
 
       if (PEOPLE_TYPES.includes(type)) {
         window.location.href = '/dashboard/people'

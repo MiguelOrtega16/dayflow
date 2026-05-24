@@ -418,7 +418,85 @@ export async function createActivityComment(activityId: string, userId: string, 
     .single()
 
   if (error) throw error
+
+  // Fan out a notification to the activity owner + accepted invitees.
+  // Fire-and-forget — never blocks the comment from appearing in the UI.
+  notifyCommentParticipants(activityId, userId, content).catch(err => {
+    console.error('[comment-notify] failed', err)
+  })
+
   return data
+}
+
+/**
+ * Notify activity owner + accepted invitees that a new comment was posted.
+ * Skips calendar-share viewers (they can read the activity but aren't
+ * active participants — keeps push noise down). Skips the commenter
+ * themselves. Matches the pattern of notifyActivityParticipants — inserts
+ * a notifications row per recipient and fires a fire-and-forget push.
+ */
+async function notifyCommentParticipants(
+  activityId: string,
+  commenterId: string,
+  content: string,
+) {
+  const supabase = createClient()
+
+  const { data: act } = await supabase
+    .from('activities')
+    .select('id, user_id, title, date, invited_from_activity_id')
+    .eq('id', activityId)
+    .single()
+  if (!act) return
+
+  // Comments on an invited copy should notify the participants of the
+  // original activity, not just the invitee who's mirroring it.
+  const origId = (act as any).invited_from_activity_id || act.id
+  let orig = act as { user_id: string; title: string; date: string }
+  if (origId !== act.id) {
+    const { data: o } = await supabase
+      .from('activities').select('user_id, title, date').eq('id', origId).single()
+    if (!o) return
+    orig = o as { user_id: string; title: string; date: string }
+  }
+
+  const { data: invs } = await supabase
+    .from('activity_invitations')
+    .select('invitee_id')
+    .eq('activity_id', origId)
+    .eq('status', 'accepted')
+
+  const recipients = new Set<string>([orig.user_id])
+  invs?.forEach(i => recipients.add(i.invitee_id))
+  recipients.delete(commenterId)
+  if (recipients.size === 0) return
+
+  const { data: commenter } = await supabase
+    .from('profiles').select('full_name, email').eq('id', commenterId).single()
+  const name = (commenter as any)?.full_name || (commenter as any)?.email || 'Alguien'
+
+  // Truncate to keep the push body legible — long comments would otherwise
+  // get cut off mid-word by the OS at varying widths.
+  const preview = content.length > 80 ? content.slice(0, 77) + '…' : content
+  const message = `${name} comentó en "${orig.title}": ${preview}`
+
+  await Promise.all([...recipients].map(async recipientId => {
+    await supabase.from('notifications').insert({
+      recipient_id: recipientId,
+      actor_id:     commenterId,
+      type:         'activity_comment',
+      activity_id:  origId,
+      message,
+    })
+    sendPushNotification({
+      recipientId,
+      title: '💬 Nuevo comentario',
+      body:  message,
+      type:  'activity_comment',
+      date:  orig.date,
+      activityId: origId,
+    })
+  }))
 }
 
 export async function deleteActivityComment(commentId: string) {

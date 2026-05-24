@@ -42,6 +42,7 @@ const TYPE_ICONS: Record<string, string> = {
   calendar_share_accepted: '🤝',
   calendar_share_declined: '🚫',
   activity_reminder:       '⏰',
+  activity_comment:        '💬',
 }
 
 const ACTION_TYPES = new Set(['activity_invitation', 'calendar_share_invite'])
