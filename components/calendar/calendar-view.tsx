@@ -145,14 +145,13 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     allUsers.push({ profile: currentUser, isOwn: true })
     seenUserIds.add(currentUser.id)
   }
+  // Chips represent calendars I can actually see — only shares where someone
+  // shared their calendar TO me. Outbound shares (owner_id === me) don't grant
+  // me visibility into their activities, so they'd be inert filters.
   liveSharedCalendars.forEach((sc: any) => {
-    let profile: Profile | null = null
-    if (sc.owner_id === currentUser?.id && sc.shared_with) {
-      profile = sc.shared_with
-    } else if (sc.shared_with_id === currentUser?.id && sc.owner) {
-      profile = sc.owner
-    }
-    if (profile && !seenUserIds.has(profile.id)) {
+    if (sc.shared_with_id !== currentUser?.id || !sc.owner) return
+    const profile: Profile = sc.owner
+    if (!seenUserIds.has(profile.id)) {
       allUsers.push({ profile, isOwn: false })
       seenUserIds.add(profile.id)
     }
