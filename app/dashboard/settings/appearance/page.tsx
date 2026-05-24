@@ -29,7 +29,7 @@ export default function AppearanceSettingsPage() {
   // Android hardware back routes to the main settings page instead of
   // showing the quit-app confirm dialog.
   useBackButtonRoute(() => router.push('/dashboard/settings'))
-  useSwipeBack(() => router.push('/dashboard/settings'))
+  const swipeRef = useSwipeBack(() => router.push('/dashboard/settings'))
 
   useEffect(() => {
     loadProfile()
@@ -104,7 +104,7 @@ export default function AppearanceSettingsPage() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-background">
+    <div ref={swipeRef} className="flex flex-col h-full overflow-y-auto bg-background">
       <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border px-4 h-14 flex items-center gap-3 shrink-0">
         <button
           onClick={() => router.push('/dashboard/settings')}
