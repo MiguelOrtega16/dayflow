@@ -72,11 +72,11 @@ export default function WidgetConfigPage() {
     return () => { cancelled = true }
   }, [widgetId])
 
-  const isProWidget = widgetKind === 'streak' || widgetKind === 'nextup'
-  // Only consider locked once both the kind AND the entitlement are known
-  // so we don't flash a Pro-gated screen at an active Pro user during the
-  // brief subscriptions fetch.
-  const locked = kindResolved && !entLoading && isProWidget && !entitlement.isPro
+  // Customization (color + opacity) is Pro across all three widget kinds —
+  // the widgets themselves are now free to pin, so the only Pro lever left
+  // is the per-widget styling. Wait for the entitlement fetch before
+  // showing the lock so an active Pro user doesn't see a Pro-gated flash.
+  const locked = kindResolved && !entLoading && !entitlement.isPro
 
   const handleSave = async () => {
     if (Number.isNaN(widgetId)) return

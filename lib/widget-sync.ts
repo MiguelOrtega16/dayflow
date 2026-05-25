@@ -1,8 +1,6 @@
 import { format, addDays, subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import { WidgetBridge, isWidgetSupported } from '@/lib/widget-bridge'
-import { computeEntitlement } from '@/lib/billing/entitlement'
-import type { Subscription } from '@/types'
 
 /**
  * Push the current widget data into native SharedPreferences.
@@ -34,31 +32,23 @@ export async function syncWidgetSnapshot(currentUserId: string) {
   const sinceStr = format(subDays(new Date(), 60), 'yyyy-MM-dd')
 
   const supabase = createClient()
-  // Run the activities query alongside the entitlement check — both are
-  // needed, and parallelizing them keeps the snapshot fast. The Pro-only
-  // streak / NextUp widgets get their data zeroed when isPro is false so
-  // the native widget surface visibly stops updating after downgrade,
-  // matching the soft-revert applied elsewhere in-app. The free Today
-  // widget keeps full data either way.
-  const [activitiesRes, subsRes] = await Promise.all([
-    supabase
-      .from('activities')
-      .select('id, title, emoji, date, start_time, status, user_id')
-      .eq('user_id', currentUserId)
-      .gte('date', sinceStr)
-      .lte('date', untilStr),
-    supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', currentUserId),
-  ])
+  // All three widgets (Today, Streak, NextUp) are free — every user gets
+  // populated data for each. The Pro split moved to the per-widget
+  // customization screen (color / opacity); the widget data itself is
+  // always available so users have something useful to look at out of
+  // the box.
+  const { data: rowsRaw, error } = await supabase
+    .from('activities')
+    .select('id, title, emoji, date, start_time, status, user_id')
+    .eq('user_id', currentUserId)
+    .gte('date', sinceStr)
+    .lte('date', untilStr)
 
-  if (activitiesRes.error) {
-    console.warn('[widget-sync] fetch failed:', activitiesRes.error)
+  if (error) {
+    console.warn('[widget-sync] fetch failed:', error)
     return
   }
-  const rows = activitiesRes.data ?? []
-  const isPro = computeEntitlement((subsRes.data ?? []) as Subscription[]).isPro
+  const rows = rowsRaw ?? []
 
   // ── Today + 30 days forward for the Today widget list ────────────────────
   const slim = rows
@@ -90,10 +80,7 @@ export async function syncWidgetSnapshot(currentUserId: string) {
       return (a.start_time || '').localeCompare(b.start_time || '')
     })[0]
 
-  // NextUp is a Pro widget — withhold the payload when the user isn't Pro
-  // so the home-screen widget visibly stops updating on downgrade (the
-  // native renderer treats null as "no upcoming activity").
-  const nextPayload = isPro && next ? {
+  const nextPayload = next ? {
     id:         next.id,
     title:      next.title,
     emoji:      next.emoji,
@@ -111,12 +98,8 @@ export async function syncWidgetSnapshot(currentUserId: string) {
     walking = subDays(walking, 1)
   }
   const todayItems = rows.filter(a => a.date === todayStr)
-  // streak_days powers the Pro Streak widget — zero it out for free users
-  // so the widget doesn't keep boasting a streak after the subscription
-  // ended. today_done / today_total stay populated for the free Today
-  // widget regardless of tier.
   const stats = {
-    streak_days: isPro ? streak : 0,
+    streak_days: streak,
     today_done:  todayItems.filter(a => a.status === 'done').length,
     today_total: todayItems.length,
   }

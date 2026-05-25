@@ -96,7 +96,7 @@ export default function WidgetsPage() {
     },
     {
       kind: 'streak',
-      pro: true,
+      pro: false,
       name: t('widgets.streakName'),
       size: `${t('widgets.sizeLabel')} 2 × 1`,
       bullets: [t('widgets.streakSubtitle')],
@@ -104,7 +104,7 @@ export default function WidgetsPage() {
     },
     {
       kind: 'nextup',
-      pro: true,
+      pro: false,
       name: t('widgets.nextupName'),
       size: `${t('widgets.sizeLabel')} 4 × 1`,
       bullets: [t('widgets.nextupSubtitle')],
