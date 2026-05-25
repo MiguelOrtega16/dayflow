@@ -8,7 +8,7 @@ import { initPushNotifications } from '@/lib/push-notifications'
 import { initVersionCheck } from '@/lib/version-check'
 import { initRevenueCat } from '@/lib/billing/revenuecat'
 import { PaywallProvider } from '@/components/paywall/paywall-provider'
-import { startWidgetAuthSync } from '@/lib/widget-sync'
+import { startWidgetAuthSync, syncWidgetSnapshot } from '@/lib/widget-sync'
 import { BackButtonProvider } from '@/lib/back-button'
 import { DateTimePrefsProvider } from '@/lib/datetime-prefs'
 import { ProfileProvider, useProfile } from '@/lib/profile-context'
@@ -53,6 +53,25 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   // the auth stays in sync regardless of which dashboard sub-page the user
   // is on (previously only the calendar view ran this).
   useEffect(() => startWidgetAuthSync(), [])
+
+  // Sync the widget snapshot whenever the app goes to background. Catches
+  // the case where the modal-side sync silently failed (network blip during
+  // create) or the user created activities and bounced before any in-app
+  // refresh ran. Android's automatic widget update tick is ~30 min, which
+  // testers found too slow — a tester saw 22 min of stale data before
+  // having to open the app + return to refresh. Doing this on hidden
+  // means the widget gets fresh data the moment the user leaves the app.
+  useEffect(() => {
+    if (!profile?.id) return
+    const uid = profile.id
+    const onVisChange = () => {
+      if (document.visibilityState === 'hidden') {
+        syncWidgetSnapshot(uid).catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', onVisChange)
+    return () => document.removeEventListener('visibilitychange', onVisChange)
+  }, [profile?.id])
 
   // NOTE: pull-to-refresh used to live here. It was removed because the
   // touch listeners attached to the outer <main> were interfering with
