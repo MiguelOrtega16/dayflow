@@ -12,7 +12,8 @@
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android",
     "cap:dev": "cross-env CAPACITOR_ENV=development npx cap sync && npx cap open android",
-    "cap:prod": "cross-env CAPACITOR_ENV=production npx cap sync && npx cap open android"
+    "cap:prod": "cross-env CAPACITOR_ENV=production npx cap sync && npx cap open android",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.0.0",
@@ -67,6 +68,7 @@
     "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.19",
     "cross-env": "^10.1.0",
+    "patch-package": "^8.0.1",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"

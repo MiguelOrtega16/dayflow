@@ -59,6 +59,11 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
   const [modalInitialTime, setModalInitialTime] = useState<{ start: string; end: string } | null>(null)
+  // Category pre-selection for newly-opened create modals — driven by the
+  // ?type= query param the daily-summary notification's action buttons set
+  // (+ Task → 'task', + Reminder → 'reminder'). Cleared on modal close so a
+  // subsequent FAB tap doesn't keep the previous pre-selection.
+  const [modalInitialCategory, setModalInitialCategory] = useState<'task' | 'reminder' | undefined>(undefined)
   const [activeUserIds, setActiveUserIds] = useState<string[]>([])
   // Pending deep-link target set by the notification bell when the user
   // clicks a comment / status / new-activity notification. Once consumed by
@@ -307,8 +312,10 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     return () => window.removeEventListener('dayflow:navigate', onNavigate)
   }, [])
 
-  // ?create=YYYY-MM-DD (or 'today') from the morning-notification action button:
-  // jump to that date and open the create modal immediately.
+  // ?create=YYYY-MM-DD (or 'today') from the morning-notification action button
+  // and the daily-summary tray entry's + Task / + Reminder buttons: jump to
+  // that date and open the create modal. Optional ?type=task|reminder pre-
+  // selects the category so the modal opens already on the right tab.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
@@ -318,15 +325,23 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     if (isNaN(target.getTime())) return
     setCurrentDate(target)
     setSelectedDate(target)
+    const type = params.get('type')
+    if (type === 'task' || type === 'reminder') {
+      setModalInitialCategory(type)
+    }
     setShowAddModal(true)
     // Clean the URL so a refresh doesn't reopen the modal
     const next = new URL(window.location.href)
     next.searchParams.delete('create')
+    next.searchParams.delete('type')
     window.history.replaceState(null, '', next.pathname + next.search)
   }, [])
 
-  // ?date=YYYY-MM-DD from the NextUp widget tap: jump to that date without
-  // opening the create modal (the user is navigating to view, not author).
+  // ?date=YYYY-MM-DD from a widget tap: jump to that date. The optional
+  //   ?view=day  switch — sent by the Day / Agenda widgets — also flips
+  // the calendar into day mode so the user lands on the time-grid view of
+  // the activity they tapped. The optional ?activity=<id> queues an open-
+  // and-scroll for that activity once the day's data has loaded.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
@@ -336,8 +351,13 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     if (isNaN(target.getTime())) return
     setCurrentDate(target)
     setSelectedDate(target)
+    if (params.get('view') === 'day') setMode('day')
+    const activityId = params.get('activity')
+    if (activityId) setPendingOpen({ activityId, openComments: false })
     const next = new URL(window.location.href)
     next.searchParams.delete('date')
+    next.searchParams.delete('view')
+    next.searchParams.delete('activity')
     window.history.replaceState(null, '', next.pathname + next.search)
   }, [])
 
@@ -463,7 +483,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     if (Math.abs(dx) < 60 || Math.abs(dx) <= Math.abs(dy) * 1.3) return
     navigate(dx > 0 ? 'next' : 'prev')
   }
-  const closeModal = () => { setShowAddModal(false); setEditingActivity(null); setModalInitialTime(null) }
+  const closeModal = () => { setShowAddModal(false); setEditingActivity(null); setModalInitialTime(null); setModalInitialCategory(undefined) }
 
   // ── Shared day-detail panel props ────────────────────────────────────────────
   const detailProps = {
@@ -539,6 +559,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
             onSaved={() => { closeModal(); fetchActivities() }}
             initialStartTime={modalInitialTime?.start}
             initialEndTime={modalInitialTime?.end}
+            initialCategory={modalInitialCategory}
           />
         )}
       </div>
@@ -634,6 +655,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
             onSaved={() => { closeModal(); fetchActivities() }}
             initialStartTime={modalInitialTime?.start}
             initialEndTime={modalInitialTime?.end}
+            initialCategory={modalInitialCategory}
           />
         )}
       </div>
@@ -777,8 +799,9 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           currentUser={currentUser}
           initialStartTime={modalInitialTime?.start}
           initialEndTime={modalInitialTime?.end}
-          onClose={() => { setShowAddModal(false); setEditingActivity(null) }}
-          onSaved={() => { setShowAddModal(false); setEditingActivity(null); fetchActivities() }}
+          initialCategory={modalInitialCategory}
+          onClose={closeModal}
+          onSaved={() => { closeModal(); fetchActivities() }}
         />
       )}
     </div>

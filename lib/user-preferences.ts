@@ -69,6 +69,10 @@ export interface UserPreferences {
    *  Stored hex must match #rrggbb — the normalizer drops anything else,
    *  so old/garbage data can't poison the inline-style render. */
   category_color_overrides: Partial<Record<ActivityCategory, string>>
+  /** Whether the always-pinned "today summary" notification (with + Task /
+   *  + Reminder shortcuts) is shown in the system tray. Posted on app launch
+   *  and after data changes; never auto-dismisses. Android-only. */
+  daily_summary_notification: boolean
 }
 
 const DEFAULTS: UserPreferences = {
@@ -85,6 +89,7 @@ const DEFAULTS: UserPreferences = {
   default_activity_public: true,
   day_view_color_by:    'profile',
   category_color_overrides: {},
+  daily_summary_notification: true,
 }
 
 function normalizeFirstDay(v: unknown): FirstDayOfWeek {
@@ -156,6 +161,9 @@ export function normalizePreferences(raw: unknown): UserPreferences {
       : DEFAULTS.default_activity_public,
     day_view_color_by: r.day_view_color_by === 'category' ? 'category' : DEFAULTS.day_view_color_by,
     category_color_overrides: normalizeCategoryOverrides(r.category_color_overrides),
+    daily_summary_notification: typeof r.daily_summary_notification === 'boolean'
+      ? r.daily_summary_notification
+      : DEFAULTS.daily_summary_notification,
   }
 }
 

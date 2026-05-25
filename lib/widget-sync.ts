@@ -1,6 +1,7 @@
 import { format, addDays, subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import { WidgetBridge, isWidgetSupported } from '@/lib/widget-bridge'
+import { DailySummary } from '@/lib/daily-summary'
 
 /**
  * Push the current widget data into native SharedPreferences.
@@ -39,7 +40,7 @@ export async function syncWidgetSnapshot(currentUserId: string) {
   // the box.
   const { data: rowsRaw, error } = await supabase
     .from('activities')
-    .select('id, title, emoji, date, start_time, status, user_id')
+    .select('id, title, emoji, date, start_time, end_time, status, category, user_id')
     .eq('user_id', currentUserId)
     .gte('date', sinceStr)
     .lte('date', untilStr)
@@ -51,6 +52,10 @@ export async function syncWidgetSnapshot(currentUserId: string) {
   const rows = rowsRaw ?? []
 
   // ── Today + 30 days forward for the Today widget list ────────────────────
+  // end_time and category are kept here (not used by Today/Streak/NextUp)
+  // because the Day and Agenda widgets format times as "HH:mm - HH:mm" and
+  // pick an accent colour by category. Stripping them would force a second
+  // query at widget-render time.
   const slim = rows
     .filter(a => a.date >= todayStr)
     .map(a => ({
@@ -59,7 +64,9 @@ export async function syncWidgetSnapshot(currentUserId: string) {
       emoji:      a.emoji,
       date:       a.date,
       start_time: a.start_time,
+      end_time:   (a as { end_time?: string | null }).end_time ?? null,
       status:     a.status,
+      category:   (a as { category?: string | null }).category ?? null,
     }))
 
   // ── Next-upcoming activity ────────────────────────────────────────────────
@@ -109,6 +116,12 @@ export async function syncWidgetSnapshot(currentUserId: string) {
     stats,
     next: nextPayload,
   }))
+
+  // Refresh the always-pinned daily-summary tray entry too — it reads from
+  // the snapshot we just wrote, so the count and date stay in sync with
+  // every widget update without a separate refresh call from each caller.
+  // No-ops when the user has the tray entry disabled, or on web/iOS.
+  DailySummary.refresh().catch(() => {})
 }
 
 /**

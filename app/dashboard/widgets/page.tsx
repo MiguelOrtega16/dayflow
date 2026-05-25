@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Plus, Settings, RefreshCcw, Crown, Lock } from 'lucide-react'
+import { ArrowLeft, Plus, Settings, RefreshCcw, Crown, Lock, Info } from 'lucide-react'
 import { WidgetBridge, isWidgetSupported, type WidgetKind } from '@/lib/widget-bridge'
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { useBackButtonRoute } from '@/lib/back-button'
 import { createClient } from '@/lib/supabase/client'
+import { SystemSettings } from '@/lib/system-settings'
 
 interface WidgetCardConfig {
   kind:           WidgetKind
@@ -25,7 +26,7 @@ export default function WidgetsPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const { entitlement } = useEntitlement(userId)
   const { open: openPaywall } = usePaywall()
-  const [installedByKind, setInstalledByKind] = useState<Record<WidgetKind, number[]>>({ today: [], streak: [], nextup: [] })
+  const [installedByKind, setInstalledByKind] = useState<Record<WidgetKind, number[]>>({ today: [], streak: [], nextup: [], day: [], agenda: [] })
   const [pinningKind, setPinningKind] = useState<WidgetKind | null>(null)
   const [statusMsg, setStatusMsg] = useState<{ title: string; body: string } | null>(null)
   const supported = isWidgetSupported()
@@ -43,12 +44,14 @@ export default function WidgetsPage() {
     setStatusMsg({ title, body: description ?? '' })
 
   const refreshIds = async () => {
-    const [today, streak, nextup] = await Promise.all([
+    const [today, streak, nextup, day, agenda] = await Promise.all([
       WidgetBridge.listWidgetIds('today'),
       WidgetBridge.listWidgetIds('streak'),
       WidgetBridge.listWidgetIds('nextup'),
+      WidgetBridge.listWidgetIds('day'),
+      WidgetBridge.listWidgetIds('agenda'),
     ])
-    setInstalledByKind({ today, streak, nextup })
+    setInstalledByKind({ today, streak, nextup, day, agenda })
   }
 
   useEffect(() => { refreshIds() }, [])
@@ -110,6 +113,30 @@ export default function WidgetsPage() {
       bullets: [t('widgets.nextupSubtitle')],
       Preview: NextUpPreview,
     },
+    {
+      kind: 'day',
+      pro: false,
+      name: t('widgets.dayName'),
+      size: `${t('widgets.sizeLabel')} 4 × 2`,
+      bullets: [
+        t('widgets.bullets.dayBigDate'),
+        t('widgets.bullets.dayEventList'),
+        t('widgets.bullets.dayOpensDayView'),
+      ],
+      Preview: DayPreview,
+    },
+    {
+      kind: 'agenda',
+      pro: false,
+      name: t('widgets.agendaName'),
+      size: `${t('widgets.sizeLabel')} 4 × 4`,
+      bullets: [
+        t('widgets.bullets.agendaThreeDays'),
+        t('widgets.bullets.agendaTimeLine'),
+        t('widgets.bullets.agendaOpensDayView'),
+      ],
+      Preview: AgendaPreview,
+    },
   ]
 
   const bannerText = t('widgets.banner', { add: t('widgets.bannerAddBold') })
@@ -120,6 +147,8 @@ export default function WidgetsPage() {
     ...installedByKind.today.map(id => ({ id, kind: 'today' as const })),
     ...installedByKind.streak.map(id => ({ id, kind: 'streak' as const })),
     ...installedByKind.nextup.map(id => ({ id, kind: 'nextup' as const })),
+    ...installedByKind.day.map(id => ({ id, kind: 'day' as const })),
+    ...installedByKind.agenda.map(id => ({ id, kind: 'agenda' as const })),
   ]
 
   return (
@@ -140,6 +169,25 @@ export default function WidgetsPage() {
         <span className="font-semibold">{t('widgets.bannerAddBold')}</span>
         {bannerParts[1] ?? ''}
       </div>
+
+      {/* Troubleshoot row — mirrors the notifications page so users have a
+          discoverable place to fix the "widget shows stale data" case, which
+          is the same OS-sleep restriction that breaks reminder delivery. */}
+      {supported && (
+        <div className="mx-3 mt-3 rounded-2xl border border-border bg-card overflow-hidden">
+          <button
+            type="button"
+            onClick={() => { SystemSettings.openAutoStartSettings().catch(() => {}) }}
+            className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-muted/40 transition-colors"
+          >
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-medium">{t('widgets.troubleshoot.rowLabel')}</span>
+              <span className="block text-xs text-muted-foreground">{t('widgets.troubleshoot.rowSub')}</span>
+            </span>
+            <Info className="w-4 h-4 text-muted-foreground shrink-0" />
+          </button>
+        </div>
+      )}
 
       {statusMsg && (
         <div className="mx-3 mt-3 rounded-xl bg-card border border-border text-sm px-4 py-3 flex items-start justify-between gap-3">
@@ -212,11 +260,12 @@ export default function WidgetsPage() {
           </h3>
           <div className="rounded-xl border border-border bg-card divide-y divide-border">
             {activeEntries.map(({ id, kind }) => {
-              const kindLabel = kind === 'streak'
-                ? t('widgets.streakName')
-                : kind === 'nextup'
-                  ? t('widgets.nextupName')
-                  : t('widgets.todayName')
+              const kindLabel =
+                kind === 'streak' ? t('widgets.streakName') :
+                kind === 'nextup' ? t('widgets.nextupName') :
+                kind === 'day'    ? t('widgets.dayName')    :
+                kind === 'agenda' ? t('widgets.agendaName') :
+                                    t('widgets.todayName')
               // Soft-revert: a Pro widget installed during an active
               // subscription stays on the home screen after downgrade
               // (native widgets can't be uninstalled remotely), but the
@@ -319,6 +368,99 @@ function NextUpPreview() {
       <div className="text-[10px] font-bold tracking-widest opacity-80">{t('widgets.previewLabels.nextupKicker')}</div>
       <div className="text-base font-bold mt-1 truncate">📅 {t('widgets.previewLabels.nextupSample')}</div>
       <div className="text-xs opacity-80 mt-0.5">{t('widgets.previewLabels.nextupCountdown')}</div>
+    </div>
+  )
+}
+
+// ─── Day widget preview ─────────────────────────────────────────────────────
+// Mirrors the native 4×2 layout (see layout/day_widget.xml): big date cluster
+// on the left, vertical accent line, then up to 3-4 activities with a coloured
+// bullet, title and a small time/sublabel.
+function DayPreview() {
+  const { t } = useI18n()
+  return (
+    <div className="rounded-2xl overflow-hidden border border-border/60 bg-[#171818] text-white shadow-sm px-4 py-3 flex items-stretch gap-3">
+      <div className="flex flex-col items-center justify-center w-16 shrink-0">
+        <div className="text-3xl font-bold leading-none">{t('widgets.previewLabels.dayBigDay')}</div>
+        <div className="text-[10px] text-muted-foreground/80 mt-1 opacity-80">{t('widgets.previewLabels.dayBigMonth')}</div>
+      </div>
+      <div className="w-px bg-white/15" />
+      <div className="flex-1 min-w-0 space-y-1.5 py-0.5">
+        <DayPreviewRow color="#22c55e" title={t('widgets.previewLabels.daySample1')} sub={t('widgets.previewLabels.daySample1Sub')} />
+        <DayPreviewRow color="#f59e0b" title={t('widgets.previewLabels.daySample2')} sub={t('widgets.previewLabels.daySample2Sub')} />
+        <DayPreviewRow color="#a855f7" title={t('widgets.previewLabels.daySample3')} sub={t('widgets.previewLabels.daySample3Sub')} />
+      </div>
+    </div>
+  )
+}
+
+function DayPreviewRow({ color, title, sub }: { color: string; title: string; sub: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: color }} />
+      <div className="min-w-0">
+        <div className="text-xs font-semibold truncate leading-tight">{title}</div>
+        <div className="text-[10px] opacity-60 truncate">{sub}</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Agenda widget preview ──────────────────────────────────────────────────
+// Mirrors the native 4×4 layout (see layout/agenda_widget.xml): a month
+// header, then today + next 2 days as date columns with colour-coded event
+// blocks beside them.
+function AgendaPreview() {
+  const { t } = useI18n()
+  return (
+    <div className="rounded-2xl overflow-hidden border border-border/60 bg-[#0f0f10] text-white shadow-sm px-4 py-3">
+      <div className="flex items-baseline justify-between mb-2">
+        <span className="text-sm font-semibold">{t('widgets.previewLabels.agendaMonth')}</span>
+      </div>
+      <AgendaPreviewDay
+        dayLabel={t('widgets.previewLabels.agendaThu')}
+        dayNum={7}
+        events={[
+          { color: '#22c55e', title: t('widgets.previewLabels.agendaSample1'), time: t('widgets.previewLabels.agendaSample1Time') },
+          { color: '#0ea5e9', title: t('widgets.previewLabels.agendaSample2'), time: t('widgets.previewLabels.agendaSample2Time') },
+        ]}
+      />
+      <AgendaPreviewDay
+        dayLabel={t('widgets.previewLabels.agendaFri')}
+        dayNum={8}
+        events={[
+          { color: '#f59e0b', title: t('widgets.previewLabels.agendaSample3'), time: t('widgets.previewLabels.agendaSample3Time') },
+        ]}
+      />
+    </div>
+  )
+}
+
+function AgendaPreviewDay({
+  dayLabel, dayNum, events,
+}: {
+  dayLabel: string
+  dayNum: number
+  events: Array<{ color: string; title: string; time: string }>
+}) {
+  return (
+    <div className="flex items-stretch gap-3 py-1.5">
+      <div className="w-9 shrink-0 text-center">
+        <div className="text-[10px] uppercase tracking-wide text-[#3b82f6]">{dayLabel}</div>
+        <div className="text-lg font-bold leading-tight text-[#3b82f6]">{dayNum}</div>
+      </div>
+      <div className="flex-1 min-w-0 space-y-1">
+        {events.map((e, i) => (
+          <div
+            key={i}
+            className="rounded-md px-2 py-1 border-l-4"
+            style={{ borderLeftColor: e.color, backgroundColor: e.color + '22' }}
+          >
+            <div className="text-xs font-semibold truncate leading-tight" style={{ color: e.color }}>{e.title}</div>
+            <div className="text-[10px] opacity-70 truncate">{e.time}</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

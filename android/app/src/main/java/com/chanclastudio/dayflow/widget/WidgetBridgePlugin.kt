@@ -34,10 +34,12 @@ class WidgetBridgePlugin : Plugin() {
             call.reject("Missing json"); return
         }
         WidgetStore.writeSnapshot(context, json)
-        // All three widget types pull from the same snapshot — re-render each.
+        // All widget types pull from the same snapshot — re-render each.
         TodayWidgetProvider.renderAll(context)
         StreakWidgetProvider.renderAll(context)
         NextUpWidgetProvider.renderAll(context)
+        DayWidgetProvider.renderAll(context)
+        AgendaWidgetProvider.renderAll(context)
         call.resolve()
     }
 
@@ -85,12 +87,14 @@ class WidgetBridgePlugin : Plugin() {
         val color    = call.getString("color")  ?: "#7C6FE3"
         val opacity  = call.getInt("opacity")   ?: 95
         WidgetStore.writeConfig(context, widgetId, color, opacity)
-        // We don't know which provider owns this id, so re-render all three.
-        // Each one's renderAll iterates its own getAppWidgetIds set, so the
+        // We don't know which provider owns this id, so re-render all of
+        // them. Each renderAll iterates its own getAppWidgetIds set, so the
         // updated widget gets refreshed and the others are cheap no-ops.
         TodayWidgetProvider.renderAll(context)
         StreakWidgetProvider.renderAll(context)
         NextUpWidgetProvider.renderAll(context)
+        DayWidgetProvider.renderAll(context)
+        AgendaWidgetProvider.renderAll(context)
         call.resolve()
     }
 
@@ -104,12 +108,14 @@ class WidgetBridgePlugin : Plugin() {
         call.resolve(result)
     }
 
-    /** Resolves a "kind" string ("today" / "streak" / "nextup") to its provider
-     *  class. Defaults to Today for backwards compatibility with older callers
-     *  that omit the parameter. */
+    /** Resolves a "kind" string to its provider class. Defaults to Today
+     *  for backwards compatibility with older callers that omit the
+     *  parameter. */
     private fun providerFor(kind: String?): Class<*> = when (kind) {
         "streak" -> StreakWidgetProvider::class.java
         "nextup" -> NextUpWidgetProvider::class.java
+        "day"    -> DayWidgetProvider::class.java
+        "agenda" -> AgendaWidgetProvider::class.java
         else     -> TodayWidgetProvider::class.java
     }
 

@@ -16,4 +16,21 @@
     <string name="streak_widget_description">Tu racha actual y el progreso de hoy a la vista.</string>
     <string name="nextup_widget_label">DayFlow — Próxima</string>
     <string name="nextup_widget_description">Tu próxima actividad y cuánto falta para empezar.</string>
+    <string name="day_widget_label">DayFlow — Día</string>
+    <string name="day_widget_description">El día actual con sus actividades a un vistazo.</string>
+    <string name="agenda_widget_label">DayFlow — Agenda</string>
+    <string name="agenda_widget_description">Hoy y los próximos 2 días en un solo widget.</string>
+    <!--
+      Daily-summary tray notification strings. Default (values/) is English
+      so the user-pasted reference screenshot's tone matches what most
+      English-speaking users see; values-es/ overrides for Spanish locales.
+    -->
+    <string name="daily_summary_channel_name">Daily summary</string>
+    <string name="daily_summary_channel_description">Always-pinned summary of today\'s activities</string>
+    <string name="daily_summary_body_zero">No event today</string>
+    <string name="daily_summary_body_one">1 event today</string>
+    <!-- Plural-N case; %1$d is the count. -->
+    <string name="daily_summary_body_many">%1$d events today</string>
+    <string name="daily_summary_action_task">+ Task</string>
+    <string name="daily_summary_action_reminder">+ Reminder</string>
 </resources>

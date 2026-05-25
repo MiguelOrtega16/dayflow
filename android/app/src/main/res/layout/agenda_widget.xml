@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Agenda widget — 4×4 tile showing today and the next 2 days as a scrollable
+  list. Rows alternate between day-header rows (e.g. "Thu 07") and event
+  rows (colour-coded title + time). Same Samsung-One-UI-safe constraints as
+  the other widgets — no ImageView, no theme attrs, no shape drawables, no
+  vector drawables.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/agenda_bg"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0F0F10">
+
+    <!-- Header bar -->
+    <LinearLayout
+        android:id="@+id/agenda_header"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="6dp"
+        android:background="#171818">
+
+        <TextView
+            android:id="@+id/agenda_month"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Agosto"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/agenda_btn_add"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:gravity="center"
+            android:text="+"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:contentDescription="Nueva actividad" />
+    </LinearLayout>
+
+    <!-- Activity list grouped by day -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ListView
+            android:id="@+id/agenda_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:scrollbars="none" />
+
+        <TextView
+            android:id="@+id/agenda_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:padding="16dp"
+            android:textColor="#9CA3AF"
+            android:textSize="14sp"
+            android:text="Sin actividades en los próximos días"
+            android:visibility="gone" />
+    </FrameLayout>
+</LinearLayout>

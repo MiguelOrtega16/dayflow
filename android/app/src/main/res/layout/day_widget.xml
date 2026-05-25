@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Day widget — 4×2 tile showing the current day's number and a vertical
+  list of up to 4 activities. Same Samsung-One-UI-safe constraints as the
+  other widgets (no ImageView, no theme attrs, no shape drawables, no
+  vector drawables in src). The provider fills in setBackgroundColor on
+  day_bg / day_header so per-widget tinting still applies.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/day_bg"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:padding="14dp"
+    android:background="#171818">
+
+    <!-- Left column: big day number + sub-label (month, weekday) -->
+    <LinearLayout
+        android:id="@+id/day_header"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingStart="2dp"
+        android:paddingEnd="10dp">
+
+        <TextView
+            android:id="@+id/day_big_num"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="20"
+            android:textColor="#FFFFFF"
+            android:textSize="34sp"
+            android:textStyle="bold"
+            android:includeFontPadding="false" />
+
+        <TextView
+            android:id="@+id/day_big_sub"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Ago, Mié"
+            android:textColor="#BFBFBF"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Vertical divider line (inline background instead of shape drawable) -->
+    <View
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:layout_marginEnd="10dp"
+        android:background="#33FFFFFF" />
+
+    <!-- Right column: up to 4 activity rows. The provider fills each
+         row's title/sub TextViews and toggles visibility based on the
+         day's actual activity count. -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- Row 1 -->
+        <LinearLayout
+            android:id="@+id/day_row_1"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <View
+                android:id="@+id/day_row_1_dot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:background="#22C55E" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/day_row_1_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/day_row_1_sub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#9CA3AF"
+                    android:textSize="11sp"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Row 2 -->
+        <LinearLayout
+            android:id="@+id/day_row_2"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <View
+                android:id="@+id/day_row_2_dot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:background="#F59E0B" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/day_row_2_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/day_row_2_sub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#9CA3AF"
+                    android:textSize="11sp"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Row 3 -->
+        <LinearLayout
+            android:id="@+id/day_row_3"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <View
+                android:id="@+id/day_row_3_dot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:background="#A855F7" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/day_row_3_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/day_row_3_sub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#9CA3AF"
+                    android:textSize="11sp"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Row 4 -->
+        <LinearLayout
+            android:id="@+id/day_row_4"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <View
+                android:id="@+id/day_row_4_dot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:background="#0EA5E9" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/day_row_4_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/day_row_4_sub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#9CA3AF"
+                    android:textSize="11sp"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Empty-state message, shown when the day has no activities. -->
+        <TextView
+            android:id="@+id/day_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="Sin actividades para hoy"
+            android:textColor="#9CA3AF"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </LinearLayout>
+</LinearLayout>

@@ -59,6 +59,8 @@ object WidgetSnapshotSync {
                     TodayWidgetProvider.renderAll(ctx)
                     StreakWidgetProvider.renderAll(ctx)
                     NextUpWidgetProvider.renderAll(ctx)
+                    DayWidgetProvider.renderAll(ctx)
+                    AgendaWidgetProvider.renderAll(ctx)
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "snapshot refresh failed", t)
@@ -95,7 +97,11 @@ object WidgetSnapshotSync {
                 put("emoji",      o.opt("emoji"))
                 put("date",       date)
                 put("start_time", o.opt("start_time"))
+                // Day + Agenda widgets need end_time and category. Today /
+                // Streak / NextUp ignore them; the extra fields are tiny.
+                put("end_time",   o.opt("end_time"))
                 put("status",     o.optString("status"))
+                put("category",   o.opt("category"))
             }
             slim.put(slimRow)
         }

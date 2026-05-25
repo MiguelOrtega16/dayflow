@@ -62,10 +62,14 @@ export default function WidgetConfigPage() {
       WidgetBridge.listWidgetIds('today'),
       WidgetBridge.listWidgetIds('streak'),
       WidgetBridge.listWidgetIds('nextup'),
-    ]).then(([today, streak, nextup]) => {
+      WidgetBridge.listWidgetIds('day'),
+      WidgetBridge.listWidgetIds('agenda'),
+    ]).then(([today, streak, nextup, day, agenda]) => {
       if (cancelled) return
       if      (streak.includes(widgetId)) setWidgetKind('streak')
       else if (nextup.includes(widgetId)) setWidgetKind('nextup')
+      else if (day.includes(widgetId))    setWidgetKind('day')
+      else if (agenda.includes(widgetId)) setWidgetKind('agenda')
       else if (today.includes(widgetId))  setWidgetKind('today')
       setKindResolved(true)
     })

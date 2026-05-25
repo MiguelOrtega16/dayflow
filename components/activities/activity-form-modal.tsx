@@ -102,10 +102,15 @@ interface ActivityFormModalProps {
   onSaved: () => void
   initialStartTime?: string
   initialEndTime?: string
+  /** Pre-selects the category for NEW activities only. Used by the
+   *  daily-summary notification's + Task / + Reminder action buttons so
+   *  the modal opens already on the right tab. Ignored when editing
+   *  (the existing activity's category wins). */
+  initialCategory?: ActivityCategory
 }
 
 
-export function ActivityFormModal({ date, activity, currentUser, onClose, onSaved, initialStartTime, initialEndTime }: ActivityFormModalProps) {
+export function ActivityFormModal({ date, activity, currentUser, onClose, onSaved, initialStartTime, initialEndTime, initialCategory }: ActivityFormModalProps) {
   const { t, locale } = useI18n()
   const isEditing = !!activity
   const router = useRouter()
@@ -117,7 +122,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const [description, setDescription] = useState(activity?.description || '')
   const [selectedDate, setSelectedDate] = useState(activity?.date || format(date, 'yyyy-MM-dd'))
   const [status, setStatus]           = useState<ActivityStatus>(activity?.status || 'todo')
-  const [category, setCategory]       = useState<ActivityCategory>(activity?.category || 'task')
+  const [category, setCategory]       = useState<ActivityCategory>(activity?.category || initialCategory || 'task')
   const [goalId, setGoalId]           = useState<string>(activity?.goal_id || '')
   const [emoji, setEmoji]             = useState(activity?.emoji || '')
   const defaultStart = !isEditing && !initialStartTime ? nextHalfHour() : (activity?.start_time || initialStartTime || '')
@@ -524,6 +529,8 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
       // Refresh the home-screen widget snapshot. Calendar-view also re-syncs
       // after its refetch, but the modal can be opened from pages that don't
       // (overview, tasks list, etc.) — so we call it here too, fire-and-forget.
+      // syncWidgetSnapshot also refreshes the daily-summary tray entry as
+      // its last step, so the count there reflects the just-saved activity.
       syncWidgetSnapshot(currentUser.id).catch(() => {})
 
       onSaved()

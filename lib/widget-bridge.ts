@@ -18,7 +18,7 @@ export interface WidgetConfig {
  * Which widget provider is being targeted. Defaults to 'today' for backwards
  * compatibility with calls that don't pass a kind explicitly.
  */
-export type WidgetKind = 'today' | 'streak' | 'nextup'
+export type WidgetKind = 'today' | 'streak' | 'nextup' | 'day' | 'agenda'
 
 interface WidgetBridgePlugin {
   writeSnapshot(opts: { json: string }): Promise<void>

@@ -82,10 +82,33 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/nextup_widget_info" />
         </receiver>
 
+        <receiver android:name=".widget.DayWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/day_widget_info" />
+        </receiver>
+
+        <receiver android:name=".widget.AgendaWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/agenda_widget_info" />
+        </receiver>
+
         <receiver android:name=".widget.WidgetActionReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="com.chanclastudio.dayflow.widget.REFRESH" />
                 <action android:name="com.chanclastudio.dayflow.widget.ROW_CLICK" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Daily summary tray entry — re-posted on boot (so it survives a
+             reboot) and on midnight (so the date label rolls over). -->
+        <receiver android:name=".summary.DailySummaryReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="com.chanclastudio.dayflow.SUMMARY_MIDNIGHT" />
             </intent-filter>
         </receiver>
 
@@ -98,6 +121,11 @@
         -->
         <service
             android:name=".widget.TodayWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="true"
+        />
+        <service
+            android:name=".widget.AgendaWidgetService"
             android:permission="android.permission.BIND_REMOTEVIEWS"
             android:exported="true"
         />

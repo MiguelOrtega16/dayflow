@@ -16,6 +16,7 @@ import {
   getUserPreferences, updateUserPreferences,
   type UserPreferences, type ReminderType, type SnoozeMinutes, type DailySlot,
 } from '@/lib/user-preferences'
+import { DailySummary, isDailySummarySupported } from '@/lib/daily-summary'
 
 const SNOOZE_OPTIONS: SnoozeMinutes[] = [5, 15, 30]
 // Morning hours pickable on the Pro custom-time mode. 5 AM .. 11 AM.
@@ -207,6 +208,29 @@ export default function NotificationsSettingsPage() {
                     )}
                   </div>
                 )} */}
+              </div>
+            )}
+
+            {/* Always-pinned tray entry — Android-only. Wraps the standard
+                ToggleRow so flipping the switch also calls the native plugin
+                to post / cancel the tray entry immediately. */}
+            {isDailySummarySupported() && (
+              <div className="bg-card border border-border rounded-2xl p-5 space-y-5">
+                <h2 className="text-sm font-semibold">{t('notifSettings.dailySummary.sectionHeading')}</h2>
+                <ToggleRow
+                  label={t('notifSettings.dailySummary.toggleLabel')}
+                  sub={t('notifSettings.dailySummary.toggleSub')}
+                  on={prefs.daily_summary_notification}
+                  onChange={v => {
+                    // Optimistic pref update + immediate native effect. If
+                    // the save fails the updatePref helper rolls the local
+                    // state back; in that case we re-mirror the previous
+                    // value into the native plugin so the tray doesn't get
+                    // stuck out of sync with what the user sees.
+                    updatePref('daily_summary_notification', v)
+                    DailySummary.setEnabled(v).catch(() => {})
+                  }}
+                />
               </div>
             )}
 

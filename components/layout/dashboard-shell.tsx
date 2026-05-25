@@ -9,6 +9,8 @@ import { initVersionCheck } from '@/lib/version-check'
 import { initRevenueCat } from '@/lib/billing/revenuecat'
 import { PaywallProvider } from '@/components/paywall/paywall-provider'
 import { startWidgetAuthSync, syncWidgetSnapshot } from '@/lib/widget-sync'
+import { DailySummary } from '@/lib/daily-summary'
+import { getUserPreferences } from '@/lib/user-preferences'
 import { BackButtonProvider } from '@/lib/back-button'
 import { DateTimePrefsProvider } from '@/lib/datetime-prefs'
 import { ProfileProvider, useProfile } from '@/lib/profile-context'
@@ -77,6 +79,25 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     }
     document.addEventListener('visibilitychange', onVisChange)
     return () => document.removeEventListener('visibilitychange', onVisChange)
+  }, [profile?.id])
+
+  // Daily summary tray entry: mirror the user's stored preference into the
+  // native plugin's local toggle (a brand-new device install starts with
+  // "on" anyway, but an existing user who turned it off on another device
+  // should see that respected when they sign in here), then post a fresh
+  // summary so the tray reflects today's data immediately.
+  useEffect(() => {
+    if (!profile?.id) return
+    let cancelled = false
+    getUserPreferences(profile.id).then(prefs => {
+      if (cancelled) return
+      DailySummary.setEnabled(prefs.daily_summary_notification).catch(() => {})
+    }).catch(() => {
+      // If we can't read prefs (e.g. offline), fall back to a refresh so
+      // an already-enabled summary at least updates today's count.
+      DailySummary.refresh().catch(() => {})
+    })
+    return () => { cancelled = true }
   }, [profile?.id])
 
   // NOTE: pull-to-refresh used to live here. It was removed because the

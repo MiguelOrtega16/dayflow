@@ -89,6 +89,14 @@ class SystemSettingsPlugin : Plugin() {
         val ctx = context
         val candidates = listOf(
             // (package, class)
+            // Samsung's "Never sleeping apps" screen — preferred entry on
+            // Samsung devices so the user lands directly on the add-to-list
+            // surface instead of the generic Battery overview. Activity class
+            // names differ slightly across One UI versions, so try the known
+            // variants top-down.
+            "com.samsung.android.lool"         to "com.samsung.android.sm.battery.ui.NeverSleepingAppsActivity",
+            "com.samsung.android.lool"         to "com.samsung.android.sm.battery.ui.BackgroundUsageLimitsActivity",
+            "com.samsung.android.lool"         to "com.samsung.android.sm.ui.battery.BatteryActivity",
             "com.miui.securitycenter"          to "com.miui.permcenter.autostart.AutoStartManagementActivity",
             "com.letv.android.letvsafe"        to "com.letv.android.letvsafe.AutobootManageActivity",
             "com.huawei.systemmanager"         to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
@@ -98,7 +106,6 @@ class SystemSettingsPlugin : Plugin() {
             "com.iqoo.secure"                  to "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity",
             "com.vivo.permissionmanager"       to "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
             "com.asus.mobilemanager"           to "com.asus.mobilemanager.entry.FunctionActivity",
-            "com.samsung.android.lool"         to "com.samsung.android.sm.ui.battery.BatteryActivity",
             "com.oneplus.security"             to "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity",
         )
         for ((pkg, cls) in candidates) {

@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+  Spanish (es) overrides. Only entries that should differ from the
+  default values/strings.xml live here — anything not redefined falls
+  back to the English defaults.
+-->
+<resources>
+    <string name="daily_summary_channel_name">Resumen del día</string>
+    <string name="daily_summary_channel_description">Resumen siempre fijo con las actividades de hoy</string>
+    <string name="daily_summary_body_zero">Sin eventos hoy</string>
+    <string name="daily_summary_body_one">1 evento hoy</string>
+    <string name="daily_summary_body_many">%1$d eventos hoy</string>
+    <string name="daily_summary_action_task">+ Tarea</string>
+    <string name="daily_summary_action_reminder">+ Recordatorio</string>
+</resources>

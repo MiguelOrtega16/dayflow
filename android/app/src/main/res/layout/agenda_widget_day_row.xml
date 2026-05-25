@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Single agenda row: a small date column on the left (weekday + day number)
+  and a colour-coded event block on the right. The colour comes from the
+  activity's category (mapped in AgendaWidgetService); the dateLabel column
+  is only rendered for the first event of a given day (blank for the rest).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="top"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
+
+    <LinearLayout
+        android:layout_width="40dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingTop="6dp">
+
+        <TextView
+            android:id="@+id/agenda_row_dow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#3B82F6"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/agenda_row_dom"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#3B82F6"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:includeFontPadding="false" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/agenda_row_block"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:background="#220EA5E9">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/agenda_row_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#0EA5E9"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/agenda_row_time"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#9CA3AF"
+                android:textSize="11sp"
+                android:singleLine="true"
+                android:ellipsize="end" />
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>
