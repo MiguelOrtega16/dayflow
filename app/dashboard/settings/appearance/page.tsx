@@ -249,24 +249,48 @@ export default function AppearanceSettingsPage() {
             {/* Per-category color picker: only meaningful when the toggle is
                 on (otherwise the override never feeds into activityColor()),
                 so we hide it entirely in 'profile' mode rather than show
-                inert rows. Pro is already enforced by the toggle gate above. */}
+                inert rows. Pro is already enforced by the toggle gate above.
+
+                Layout: each category is its own mini-card with a header row
+                (emoji + label + current-color chip + reset link) and a tidy
+                grid of swatches below. Mobile gets 6 columns; >=sm gets the
+                full 12 swatches in one row. This was rebuilt after the
+                inline flex-wrap version produced ragged 3-line swatch blocks
+                on narrow phones that didn't align with the category labels. */}
             {colorByCategory && entitlement.isPro && (
               <div className="mt-3 space-y-2 rounded-xl border border-border bg-background/40 p-3">
-                <p className="text-[11px] text-muted-foreground">{t('settings.categoryColorsHelp')}</p>
+                <p className="text-[11px] text-muted-foreground mb-1">{t('settings.categoryColorsHelp')}</p>
                 {PICKER_CATEGORIES.map(cat => {
                   const current = categoryOverrides[cat] ?? CATEGORY_CONFIG[cat].hex
                   const isOverridden = !!categoryOverrides[cat]
                   return (
-                    <div key={cat} className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base shrink-0">{CATEGORY_CONFIG[cat].emoji}</span>
-                      <span className="text-xs font-medium w-16 shrink-0">{categoryLabel(cat, locale)}</span>
-                      <div className="flex flex-wrap gap-1 flex-1 min-w-0">
+                    <div key={cat} className="rounded-lg border border-border/60 bg-card p-2.5 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base shrink-0">{CATEGORY_CONFIG[cat].emoji}</span>
+                        <span className="text-sm font-medium flex-1 min-w-0 truncate">
+                          {categoryLabel(cat, locale)}
+                        </span>
+                        <span
+                          className="w-4 h-4 rounded-full shrink-0 border border-black/10"
+                          style={{ backgroundColor: current }}
+                          aria-hidden="true"
+                        />
+                        {isOverridden && (
+                          <button type="button"
+                            onClick={() => handleCategoryColor(cat, null)}
+                            className="text-[10px] text-muted-foreground hover:text-foreground shrink-0 underline-offset-2 hover:underline"
+                          >
+                            {t('settings.resetCategoryColor')}
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
                         {USER_COLORS.map(c => (
                           <button key={c}
                             type="button"
                             aria-label={c}
                             onClick={() => handleCategoryColor(cat, c)}
-                            className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
+                            className="aspect-square w-full rounded-full border-2 transition-transform hover:scale-110"
                             style={{
                               backgroundColor: c,
                               borderColor: current === c ? 'white' : c,
@@ -276,14 +300,6 @@ export default function AppearanceSettingsPage() {
                           />
                         ))}
                       </div>
-                      {isOverridden && (
-                        <button type="button"
-                          onClick={() => handleCategoryColor(cat, null)}
-                          className="text-[10px] text-muted-foreground hover:text-foreground shrink-0 underline-offset-2 hover:underline"
-                        >
-                          {t('settings.resetCategoryColor')}
-                        </button>
-                      )}
                     </div>
                   )
                 })}
