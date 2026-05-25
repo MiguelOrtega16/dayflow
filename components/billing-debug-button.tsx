@@ -15,6 +15,12 @@ import type { Subscription } from '@/types'
 import { ChevronDown, RefreshCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+// Only this account sees the debug panel. Keeps the launch-time TODO honest
+// while still leaving us a way to exercise the paywall/entitlement flow in
+// production against a real Supabase user. UI gating only — the underlying
+// /api/debug/billing/set-state route is independently protected.
+const ALLOWED_DEBUG_EMAIL = 'miguel.mantilla1607@gmail.com'
+
 const TRIGGERS: Array<{ label: string; trigger: PaywallTrigger }> = [
   { label: 'Generic',       trigger: 'generic' },
   { label: 'Sharing limit', trigger: 'sharing_limit' },
@@ -41,6 +47,10 @@ export function BillingDebugButton() {
   const { open } = usePaywall()
   const [platform, setPlatform] = useState<string>('?')
   const [userId, setUserId] = useState<string | null>(null)
+  // null while we're still resolving the auth session; true/false once
+  // resolved. Rendering returns null until we know — avoids a flash of the
+  // debug panel for non-allowlisted accounts on first paint.
+  const [allowed, setAllowed] = useState<boolean | null>(null)
   // Rows are stored loose so we can also surface fields the typed
   // Subscription interface omits — currently `raw.data.object.customer`,
   // which the portal route depends on. Useful for diagnosing
@@ -63,7 +73,10 @@ export function BillingDebugButton() {
 
   useEffect(() => {
     setPlatform(Capacitor.isNativePlatform() ? 'native' : 'web')
-    createClient().auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
+    createClient().auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null)
+      setAllowed(data.user?.email === ALLOWED_DEBUG_EMAIL)
+    })
   }, [])
 
   // Pull the raw subscription rows alongside the computed entitlement so
@@ -112,6 +125,12 @@ export function BillingDebugButton() {
   }
 
   const fmtTime = (v: string | null) => v ? format(new Date(v), 'yyyy-MM-dd HH:mm') : '—'
+
+  // Gate the entire panel by email after all hooks have run (early-return
+  // before hooks would break React's hook ordering). The useEffects above
+  // still fire for every user, but they're cheap reads — the actual debug
+  // UI and its mutating buttons never render for non-allowlisted accounts.
+  if (allowed !== true) return null
 
   return (
     <div className="mb-4 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5">
