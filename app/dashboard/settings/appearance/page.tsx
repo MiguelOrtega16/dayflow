@@ -12,8 +12,9 @@ import { useTheme } from '@/components/layout/theme-provider'
 import { useBackButtonRoute } from '@/lib/back-button'
 import { useSwipeBack } from '@/lib/swipe-back'
 import { THEMES, isProTheme } from '@/lib/themes'
-import { updateUserPreferences } from '@/lib/user-preferences'
+import { normalizePreferences, updateUserPreferences } from '@/lib/user-preferences'
 import { useProfile } from '@/lib/profile-context'
+import { cn } from '@/lib/utils'
 
 export default function AppearanceSettingsPage() {
   const { t } = useI18n()
@@ -66,6 +67,28 @@ export default function AppearanceSettingsPage() {
       }
     } finally {
       setSavingColor(false)
+    }
+  }
+
+  // Pro toggle: "color my activities by category" — flips day_view_color_by
+  // through the shared profile cache so day-detail-panel + time-grid pick up
+  // the change instantly. Reverts on save failure.
+  const prefs = normalizePreferences(profile?.preferences ?? null)
+  const colorByCategory = prefs.day_view_color_by === 'category'
+  const handleColorModeToggle = async () => {
+    if (!profile) return
+    if (!colorByCategory && !entitlement.isPro) {
+      openPaywall('locked_color_mode')
+      return
+    }
+    const nextMode = colorByCategory ? 'profile' : 'category'
+    const prevPrefs = profile.preferences as Record<string, unknown> | null
+    setProfile({ ...profile, preferences: { ...(prevPrefs ?? {}), day_view_color_by: nextMode } })
+    try {
+      await updateUserPreferences(profile.id, { day_view_color_by: nextMode })
+    } catch (err) {
+      console.error('[appearance] color-mode save failed', err)
+      setProfile({ ...profile, preferences: prevPrefs })
     }
   }
 
@@ -160,9 +183,49 @@ export default function AppearanceSettingsPage() {
             </div>
           </div>
 
+          {/* Pro: color activities by category instead of by owner. Pairs with
+              the per-category hex map in CATEGORY_CONFIG; activity cards in
+              the Day list + time-grid blocks pick up the change in real time
+              via the shared profile cache. Free users see a Crown + paywall. */}
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">{t('settings.colorModeLabel')}</label>
+            <p className="text-[11px] text-muted-foreground/80 mb-2">{t('settings.colorModeHelp')}</p>
+            <div className="flex items-center gap-3 rounded-xl border border-border p-3">
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-medium">{t('settings.colorModeOptionLabel')}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {colorByCategory ? t('settings.colorModeOnHint') : t('settings.colorModeOffHint')}
+                </span>
+              </span>
+              {!entitlement.isPro && !entitlementLoading && (
+                <Crown className="w-4 h-4 text-indigo-500 shrink-0" />
+              )}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={colorByCategory}
+                onClick={handleColorModeToggle}
+                className={cn(
+                  'shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                  colorByCategory ? 'bg-primary' : 'bg-muted',
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-block h-5 w-5 transform rounded-full bg-background shadow transition-transform',
+                    colorByCategory ? 'translate-x-5' : 'translate-x-0.5',
+                  )}
+                />
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-2">{t('settings.themeLabel')}</label>
-            <div className="grid grid-cols-3 gap-2">
+            {/* Drop to 2 columns on narrow phones so the theme name doesn't get
+                truncated next to the swatch + check icon. Three columns is fine
+                from `sm` upwards (>=640px). */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {THEMES.map(p => {
                 const locked   = !p.free && !!profile && !entitlementLoading && !entitlement.isPro
                 const selected = palette === p.id

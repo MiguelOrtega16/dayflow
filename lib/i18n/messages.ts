@@ -427,6 +427,11 @@ export const messages = {
       },
       profileColorLabel: 'Color de perfil',
       profileColorHelp: 'Aparece en tu avatar y en tus actividades de la vista diaria del calendario.',
+      colorModeLabel: 'Color de actividades',
+      colorModeHelp: 'Decide qué color usan las tarjetas de actividad y los bloques de la vista semanal o diaria.',
+      colorModeOptionLabel: 'Colorear por categoría',
+      colorModeOnHint: 'Cada actividad usa el color de su categoría (tareas, hábitos, eventos, notas, recordatorios).',
+      colorModeOffHint: 'Cada actividad usa el color del perfil de su dueño.',
       themeLabel: 'Tema de la app',
       themePalettes: {
         default:  'Predeterminado',
@@ -1515,6 +1520,11 @@ export const messages = {
       },
       profileColorLabel: 'Profile color',
       profileColorHelp: 'Shows on your avatar and your activities in the calendar daily view.',
+      colorModeLabel: 'Activity coloring',
+      colorModeHelp: 'Choose which color the activity cards and week / day blocks use.',
+      colorModeOptionLabel: 'Color by category',
+      colorModeOnHint: 'Each activity uses its category color (tasks, habits, events, notes, reminders).',
+      colorModeOffHint: 'Each activity uses its owner\'s profile color.',
       themeLabel: 'App theme',
       themePalettes: {
         default:  'Default',

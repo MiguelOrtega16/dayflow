@@ -58,15 +58,46 @@ export const PRIORITY_CONFIG: Record<ActivityPriority, {
   critical: { color: 'text-red-600', icon: '⬆' },
 }
 
+// `color` is the Tailwind text class used by glyph / label renderings.
+// `hex` mirrors the same hue as a literal RGB value so calendar surfaces
+// (which apply colors via inline `style={{ borderLeftColor }}` / backgrounds)
+// can opt-in to "color by category" without having to round-trip through
+// computed Tailwind classes. Keep the two in lockstep.
 export const CATEGORY_CONFIG: Record<ActivityCategory, {
   emoji: string
   color: string
+  hex:   string
 }> = {
-  task:     { emoji: '✓',  color: 'text-blue-600'   },
-  habit:    { emoji: '🔄', color: 'text-green-600'  },
-  event:    { emoji: '📅', color: 'text-orange-600' },
-  note:     { emoji: '📝', color: 'text-gray-600'   },
-  reminder: { emoji: '🔔', color: 'text-purple-600' },
+  task:     { emoji: '✓',  color: 'text-blue-600',   hex: '#2563eb' },
+  habit:    { emoji: '🔄', color: 'text-green-600',  hex: '#16a34a' },
+  event:    { emoji: '📅', color: 'text-orange-600', hex: '#ea580c' },
+  note:     { emoji: '📝', color: 'text-gray-600',   hex: '#4b5563' },
+  reminder: { emoji: '🔔', color: 'text-purple-600', hex: '#9333ea' },
+}
+
+export type ActivityColorMode = 'profile' | 'category'
+
+/**
+ * Resolves the accent color used to render an activity on calendar surfaces.
+ *
+ *   - 'profile' (default): owner's profile color — the long-standing behavior.
+ *   - 'category': the activity's category color. Pro-only toggle from the
+ *     Appearance settings; lets users colorize by activity type instead of
+ *     by who owns the activity.
+ *
+ * Falls back to the owner color if the category isn't recognized (defensive
+ * — could happen with a future category that hasn't shipped yet on this
+ * client).
+ */
+export function activityColor(
+  activity: { category?: ActivityCategory | null },
+  ownerColor: string,
+  mode: ActivityColorMode,
+): string {
+  if (mode === 'category' && activity.category) {
+    return CATEGORY_CONFIG[activity.category]?.hex ?? ownerColor
+  }
+  return ownerColor
 }
 
 export function statusLabel(s: ActivityStatus, locale: Locale = DEFAULT_LOCALE) {

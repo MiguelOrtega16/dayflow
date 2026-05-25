@@ -1,12 +1,15 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { format, isToday } from 'date-fns'
-import { cn, STATUS_CONFIG, statusLabel } from '@/lib/utils'
+import { cn, STATUS_CONFIG, statusLabel, activityColor } from '@/lib/utils'
 import { updateActivityStatus } from '@/lib/api'
 import type { Activity, ActivityStatus } from '@/types'
 import { useI18n, dateFnsLocale } from '@/lib/i18n'
 import { DeleteActivityDialog } from '@/components/activities/delete-activity-dialog'
+import { useProfile } from '@/lib/profile-context'
+import { normalizePreferences } from '@/lib/user-preferences'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
 
 const HOUR_HEIGHT = 56
 
@@ -98,6 +101,16 @@ export function TimeGridView({
   const userColor = (userId: string) =>
     allUsers.find(u => u.profile.id === userId)?.profile.color ?? '#6366f1'
 
+  // Pro-gated "color by category" toggle from Appearance settings. Defensive
+  // entitlement check so a downgraded account with a stale 'category' value
+  // still renders the legacy owner-color blocks.
+  const { profile: currentProfile } = useProfile()
+  const { entitlement } = useEntitlement(currentProfile?.id ?? null)
+  const colorMode = useMemo(() => {
+    const raw = normalizePreferences(currentProfile?.preferences ?? null).day_view_color_by
+    return raw === 'category' && entitlement.isPro ? 'category' as const : 'profile' as const
+  }, [currentProfile?.preferences, entitlement.isPro])
+
   const openCtx = (e: React.MouseEvent, activity: Activity) => {
     e.preventDefault()
     e.stopPropagation()
@@ -163,7 +176,7 @@ export function TimeGridView({
             {rows.map(({ day, events }) => (
               <div key={format(day, 'yyyy-MM-dd')} className="flex-1 p-0.5 border-l border-border/40 first:border-l-0 min-h-[22px]">
                 {events.map(a => {
-                  const c = userColor(a.user_id)
+                  const c = activityColor(a, userColor(a.user_id), colorMode)
                   const interactive = canInteract(a)
                   return (
                     <button key={a.id} data-event
@@ -226,7 +239,10 @@ export function TimeGridView({
                   const endMin      = !isReminder && a.end_time ? timeToMin(a.end_time) : startMin + (isReminder ? 0 : 60)
                   const top         = (startMin / 60) * HOUR_HEIGHT
                   const height      = isReminder ? 20 : Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22)
-                  const c           = isReminder ? '#9333ea' : userColor(a.user_id)
+                  // Reminders always render in the dashed-purple style regardless
+                  // of mode (it's the visual signal that they're zero-duration nudges,
+                  // not regular events). Other activities honor the colorMode toggle.
+                  const c           = isReminder ? '#9333ea' : activityColor(a, userColor(a.user_id), colorMode)
                   const interactive = canInteract(a)
                   const leftPct     = col / numCols * 100
                   const widthPct    = 1  / numCols * 100

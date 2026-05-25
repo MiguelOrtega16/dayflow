@@ -56,6 +56,13 @@ export interface UserPreferences {
    *  preference governs the pre-selection in the new-activity form so a
    *  user who prefers privacy doesn't have to flip the toggle every time. */
   default_activity_public: boolean
+  /** Calendar coloring source for activity cards and time-grid event blocks:
+   *   - 'profile'  (default): owner's profile color — the long-standing UX.
+   *   - 'category': the activity's category color, so the calendar reads
+   *                 as "what kind of thing" at a glance.
+   *  Pro feature; the Appearance toggle gates and the renderer is defensive
+   *  if a free user ever ends up with 'category' set. */
+  day_view_color_by: 'profile' | 'category'
 }
 
 const DEFAULTS: UserPreferences = {
@@ -70,6 +77,7 @@ const DEFAULTS: UserPreferences = {
   time_format:          '12h',
   date_format:          'system',
   default_activity_public: true,
+  day_view_color_by:    'profile',
 }
 
 function normalizeFirstDay(v: unknown): FirstDayOfWeek {
@@ -125,6 +133,7 @@ export function normalizePreferences(raw: unknown): UserPreferences {
     default_activity_public: typeof r.default_activity_public === 'boolean'
       ? r.default_activity_public
       : DEFAULTS.default_activity_public,
+    day_view_color_by: r.day_view_color_by === 'category' ? 'category' : DEFAULTS.day_view_color_by,
   }
 }
 

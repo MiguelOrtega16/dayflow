@@ -3,12 +3,15 @@
 import { format, isToday } from 'date-fns'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2, ChevronDown, Loader2, Pencil } from 'lucide-react'
-import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, getInitials, formatRelativeTime, statusLabel, categoryLabel, priorityLabel } from '@/lib/utils'
+import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, getInitials, formatRelativeTime, statusLabel, categoryLabel, priorityLabel, activityColor } from '@/lib/utils'
 import { useDateTimePrefs } from '@/lib/datetime-prefs'
+import { useProfile } from '@/lib/profile-context'
+import { normalizePreferences } from '@/lib/user-preferences'
+import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { updateActivityStatus, getActivityComments, createActivityComment, deleteActivityComment } from '@/lib/api'
 import { DeleteActivityDialog } from '@/components/activities/delete-activity-dialog'
 import type { Activity, ActivityStatus, Profile, ActivityComment } from '@/types'
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useI18n, useFormatDate, dateFnsLocale } from '@/lib/i18n'
 
@@ -180,6 +183,16 @@ export function DayDetailPanel({
 
   const myProfile = allUsers.find(u => u.isOwn)?.profile
 
+  // Resolve the current user's preferred card-color source. The Appearance
+  // toggle is Pro-gated; the entitlement check here is defensive so a stale
+  // 'category' on a downgraded account still renders correctly.
+  const { profile: currentProfile } = useProfile()
+  const { entitlement } = useEntitlement(currentProfile?.id ?? null)
+  const colorMode = useMemo(() => {
+    const raw = normalizePreferences(currentProfile?.preferences ?? null).day_view_color_by
+    return raw === 'category' && entitlement.isPro ? 'category' as const : 'profile' as const
+  }, [currentProfile?.preferences, entitlement.isPro])
+
   const done = activities.filter(a => a.status === 'done').length
   const total = activities.length
   const isSharedView = allUsers.length > 1
@@ -285,7 +298,11 @@ export function DayDetailPanel({
     } catch {}
   }
 
-  const renderActivityCard = (activity: Activity, borderColor: string) => {
+  const renderActivityCard = (activity: Activity, ownerColor: string) => {
+    // 'profile' (default) keeps the legacy owner-color border. 'category'
+    // (Pro) substitutes the activity's category color so the day-list
+    // re-reads as "what kind of thing" at a glance.
+    const borderColor = activityColor(activity, ownerColor, colorMode)
     const isParticipant = !!activity.invitation_id
     const statusCfg = STATUS_CONFIG[activity.status]
     const StatusIcon = STATUS_ICON[activity.status]

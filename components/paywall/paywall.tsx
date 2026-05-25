@@ -27,6 +27,7 @@ export type PaywallTrigger =
   | 'locked_widget'
   | 'locked_theme'
   | 'locked_color'
+  | 'locked_color_mode'
   | 'custom_reminders'
   | 'evidence_limit'
   | 'attachments'
