@@ -9,7 +9,7 @@ export function buildEmailHtml(title: string, message: string, ctaText?: string,
 <body style="margin:0;padding:0;background:#0f0f12;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:480px;margin:40px auto;background:#1a1a24;border-radius:16px;overflow:hidden;border:1px solid #2a2a3a">
     <div style="background:linear-gradient(135deg,#6366f1,#7c3aed);padding:28px 32px;display:flex;align-items:center;gap:12px">
-      <div style="width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px">📅</div>
+      <div style="width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:700;line-height:1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">D</div>
       <span style="color:#fff;font-size:20px;font-weight:700">DayFlow</span>
     </div>
     <div style="padding:32px">
