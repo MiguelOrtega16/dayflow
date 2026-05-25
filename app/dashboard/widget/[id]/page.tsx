@@ -72,11 +72,13 @@ export default function WidgetConfigPage() {
     return () => { cancelled = true }
   }, [widgetId])
 
-  // Customization (color + opacity) is Pro across all three widget kinds —
-  // the widgets themselves are now free to pin, so the only Pro lever left
-  // is the per-widget styling. Wait for the entitlement fetch before
-  // showing the lock so an active Pro user doesn't see a Pro-gated flash.
-  const locked = kindResolved && !entLoading && !entitlement.isPro
+  // Streak + NextUp customization is Pro; Today stays free to customize
+  // (long-standing UX — the Today widget has always shipped with full
+  // color + opacity control as the entry-point widget). Wait for the
+  // entitlement fetch before showing the lock so an active Pro user
+  // doesn't see a Pro-gated flash.
+  const isProWidget = widgetKind === 'streak' || widgetKind === 'nextup'
+  const locked = kindResolved && !entLoading && isProWidget && !entitlement.isPro
 
   const handleSave = async () => {
     if (Number.isNaN(widgetId)) return

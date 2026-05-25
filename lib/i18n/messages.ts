@@ -901,7 +901,7 @@ export const messages = {
         features: {
           sharing: 'Calendarios y metas compartidas ilimitados',
           power: 'Recurrencia personalizada y múltiples recordatorios',
-          widgetsThemes: 'Todos los widgets y temas',
+          widgetsThemes: 'Personalización de widgets y temas',
           statsExport: 'Exportación completa de estadísticas',
           noAds: 'Sin anuncios',
         },
@@ -968,8 +968,8 @@ export const messages = {
             subtitle: 'Varios recordatorios por actividad, posponer y alertas progresivas.',
           },
           locked_widget: {
-            title: 'Todos los widgets desbloqueados',
-            subtitle: 'Cuenta regresiva, vista semanal, progreso de metas, racha y calendario compartido.',
+            title: 'Personaliza tus widgets',
+            subtitle: 'Cambia el color y la opacidad de los widgets de Racha y Próxima actividad para que combinen con tu pantalla de inicio.',
           },
           locked_theme: {
             title: 'Más temas para la app',
@@ -1994,7 +1994,7 @@ export const messages = {
         features: {
           sharing: 'Unlimited shared calendars and goals',
           power: 'Custom recurrence and multi-reminders',
-          widgetsThemes: 'All widgets and themes',
+          widgetsThemes: 'Widget customization & themes',
           statsExport: 'Full stats export',
           noAds: 'Ad-free',
         },
@@ -2061,8 +2061,8 @@ export const messages = {
             subtitle: 'Multiple reminders per activity, snooze, and escalating alerts.',
           },
           locked_widget: {
-            title: 'Every widget unlocked',
-            subtitle: 'Countdown, week-grid, goal progress, streak, shared calendar.',
+            title: 'Customize your widgets',
+            subtitle: 'Change the color and opacity of the Streak and Next-up widgets to match your home screen.',
           },
           locked_theme: {
             title: 'More themes for your app',
