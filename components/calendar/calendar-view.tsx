@@ -457,6 +457,16 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           onJumpToDate={jumpToDate}
           userId={currentUser?.id}
         />
+        {/* Filter chips — mobile day view used to skip this row, leaving no
+            way to hide a co-sharer's activities from the time grid. The bar
+            self-hides when allUsers.length <= 1 (solo user), so adding it
+            here is a no-op for non-sharing accounts. */}
+        <UserFilterBar
+          users={allUsers} activeUserIds={activeUserIds}
+          onToggleUser={id => setActiveUserIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+          )}
+        />
         <div
           className="flex-1 overflow-hidden"
           onTouchStart={handleTouchStart}
