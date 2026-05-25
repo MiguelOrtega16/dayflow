@@ -620,7 +620,7 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
     return (
       <div className="grid grid-cols-2 gap-2">
         {(Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
-          .filter(c => c !== 'habit' && c !== 'note')
+          .filter(c => c !== 'note')
           .map(cat => {
             const isSel = category === cat
             return (
