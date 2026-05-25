@@ -781,10 +781,18 @@ begin
     notif_message := actor_name || ' actualizó "' || new.title || '" a ' || replace(new.status, '_', ' ');
   end if;
 
+  -- Per-share mute filter. The recipient (shared_with_id) can mute notification
+  -- types for this owner's share via shared_calendars.notification_mutes. We
+  -- only emit the three mutable types here (new_activity / status_update /
+  -- task_completed), so the array-contains check is sufficient. task_completed
+  -- isn't in the mute UI today, but if the recipient added it via the API
+  -- we still respect it.
   for shared_user in
     select shared_with_id
     from public.shared_calendars
-    where owner_id = new.user_id and status = 'accepted'
+    where owner_id = new.user_id
+      and status = 'accepted'
+      and not (notif_type = any(coalesce(notification_mutes, '{}'::text[])))
   loop
     insert into public.notifications (recipient_id, actor_id, type, activity_id, goal_id, message)
     values (shared_user.shared_with_id, new.user_id, notif_type, new.id, new.goal_id, notif_message);

@@ -178,9 +178,11 @@ export interface SharedCalendar {
   status: 'pending' | 'accepted' | 'declined'
   created_at: string
   /** Notification types the *recipient* (shared_with_id) has muted for this
-   *  share. See ShareMutableNotificationType for the four types the UI
-   *  surfaces. Empty array = receive everything. */
-  notification_mutes: ShareMutableNotificationType[]
+   *  share. The UI exposes the toggles listed in ShareMutableNotificationType,
+   *  but the array can also hold related types we silence on the user's
+   *  behalf (e.g. `task_completed` is muted under the same toggle as
+   *  `status_update`). Empty array = receive everything. */
+  notification_mutes: NotificationType[]
   owner?: Profile
   shared_with?: Profile
 }

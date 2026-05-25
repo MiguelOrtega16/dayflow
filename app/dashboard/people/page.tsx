@@ -11,7 +11,7 @@ import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { useProfile } from '@/lib/profile-context'
-import type { Profile, SharedCalendar, ShareMutableNotificationType } from '@/types'
+import type { Profile, SharedCalendar, ShareMutableNotificationType, NotificationType } from '@/types'
 
 const SHARE_NOTIF_TYPES: ShareMutableNotificationType[] = [
   'activity_comment',
@@ -134,6 +134,14 @@ export default function PeoplePage() {
     loadData()
   }
 
+  // Some UI toggles cover more than one underlying notification type so the
+  // user's mental model ("Status changes") matches every variant we emit.
+  // `status_update` and `task_completed` are both emitted by the Postgres
+  // trigger depending on whether status === 'done'; users expect a single
+  // "status changes" toggle to silence both.
+  const toggleTypes = (type: ShareMutableNotificationType): NotificationType[] =>
+    type === 'status_update' ? ['status_update', 'task_completed'] : [type]
+
   // Optimistic toggle of a single notification type on/off for a given
   // incoming share. We patch the local state first so the switch animation
   // is instant; rollback on error keeps the UI in sync with the server.
@@ -145,9 +153,10 @@ export default function PeoplePage() {
     const current = sharedCalendars.find(sc => sc.id === shareId)
     if (!current) return
     const currentMutes = current.notification_mutes ?? []
+    const affected = toggleTypes(type)
     const nextMutes = nextEnabled
-      ? currentMutes.filter(m => m !== type)        // enabling → remove from mutes
-      : Array.from(new Set([...currentMutes, type])) // disabling → add to mutes
+      ? currentMutes.filter(m => !affected.includes(m))           // enabling → remove all variants
+      : Array.from(new Set([...currentMutes, ...affected]))       // disabling → add all variants
 
     setSharedCalendars(prev => prev.map(sc =>
       sc.id === shareId ? { ...sc, notification_mutes: nextMutes } : sc
