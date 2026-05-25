@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette, Clock, Crown, Eye, Lock } from 'lucide-react'
+import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette, Clock, Crown, Eye, Lock, Sun, Moon } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -10,6 +10,7 @@ import { useI18n, LOCALE_NAMES, LOCALES, type Locale } from '@/lib/i18n'
 import { CustomSelect } from '@/components/ui/custom-select'
 import { normalizePreferences, updateUserPreferences } from '@/lib/user-preferences'
 import { useProfile } from '@/lib/profile-context'
+import { useTheme } from '@/components/layout/theme-provider'
 import { useRouter } from 'next/navigation'
 import { track } from '@/lib/analytics/posthog'
 
@@ -19,6 +20,7 @@ export default function SettingsPage() {
   // so back-nav from any sub-page renders instantly with the data already
   // in hand — no remount fetch, no blank-form flash.
   const { profile, setProfile } = useProfile()
+  const { theme, setTheme } = useTheme()
   const [fullName, setFullName] = useState(profile?.full_name || '')
   const [username, setUsername] = useState(profile?.username || '')
   const color = profile?.color || '#6366f1'
@@ -191,6 +193,40 @@ export default function SettingsPage() {
             sub={t('settings.dateTimeRow.sub')}
             href="/dashboard/settings/datetime"
           />
+
+          {/* Dark mode toggle — moved here from the sidebar (where it lived
+              next to Settings + Support). A frequently-flipped preference
+              that pairs naturally with the rest of the personalize section. */}
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
+            <span className="shrink-0">
+              {theme === 'dark'
+                ? <Moon className="w-5 h-5 text-primary" />
+                : <Sun  className="w-5 h-5 text-primary" />}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-medium">{t('settings.darkModeLabel')}</span>
+              <span className="block text-xs text-muted-foreground">
+                {theme === 'dark' ? t('nav.themeDark') : t('nav.themeLight')}
+              </span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={theme === 'dark'}
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className={cn(
+                'shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                theme === 'dark' ? 'bg-primary' : 'bg-muted',
+              )}
+            >
+              <span
+                className={cn(
+                  'inline-block h-5 w-5 transform rounded-full bg-background shadow transition-transform',
+                  theme === 'dark' ? 'translate-x-5' : 'translate-x-0.5',
+                )}
+              />
+            </button>
+          </div>
 
           {/* Default activity visibility — inline toggle so users discover
               and flip it without an extra navigation hop. Hidden until the

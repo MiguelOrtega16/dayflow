@@ -6,14 +6,13 @@ import { useState, useEffect, useTransition } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { cn, getInitials } from '@/lib/utils'
-import { useTheme } from './theme-provider'
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { track } from '@/lib/analytics/posthog'
 import type { Profile } from '@/types'
 import {
   ListChecks, Users, Settings,
-  LogOut, Sun, Moon, ChevronLeft, ChevronRight,
+  LogOut, ChevronLeft, ChevronRight,
   BarChart2, CalendarDays, LayoutPanelTop, ClipboardList,
   LifeBuoy,
 } from 'lucide-react'
@@ -40,7 +39,6 @@ const NATIVE_NAV_KEYS = [
 export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; onNavClick?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { theme, setTheme } = useTheme()
   const { t } = useI18n()
   const [collapsed, setCollapsed] = useState(false)
   const [isNative, setIsNative]   = useState(false)
@@ -127,22 +125,6 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
 
       {/* Bottom actions */}
       <div className="p-2 border-t border-border space-y-0.5">
-        {/* Theme toggle */}
-        <button
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className={cn(
-            'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
-            collapsed && 'justify-center px-0'
-          )}
-          title={collapsed ? t('nav.themeToggle') : undefined}
-        >
-          {theme === 'dark'
-            ? <Sun className="w-4 h-4 shrink-0" />
-            : <Moon className="w-4 h-4 shrink-0" />
-          }
-          {!collapsed && <span>{theme === 'dark' ? t('nav.themeLight') : t('nav.themeDark')}</span>}
-        </button>
-
         {/* Settings */}
         <Link
           href="/dashboard/settings"

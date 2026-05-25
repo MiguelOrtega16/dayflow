@@ -403,6 +403,7 @@ export const messages = {
         subVisible: 'Las actividades nuevas serán visibles en calendarios compartidos.',
         subPrivate: 'Las actividades nuevas serán privadas — solo tú las verás.',
       },
+      darkModeLabel: 'Modo oscuro',
       appearanceBack: 'Volver',
       dateTimeRow: {
         label: 'Fecha y hora',
@@ -1498,6 +1499,7 @@ export const messages = {
         subVisible: 'New activities will be visible in shared calendars.',
         subPrivate: 'New activities will be private — only you will see them.',
       },
+      darkModeLabel: 'Dark mode',
       appearanceBack: 'Back',
       dateTimeRow: {
         label: 'Date & time',
