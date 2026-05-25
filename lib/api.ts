@@ -367,6 +367,10 @@ export async function deleteGoal(id: string) {
 export async function getSharedCalendarUsers(userId: string) {
   const supabase = createClient()
 
+  // Order by created_at so the list has a stable position per row. Without
+  // this Postgres returns heap order, which shifts whenever a row is
+  // UPDATEd (e.g. toggling notification_mutes) — the People page would
+  // visibly reorder after every interaction.
   const { data, error } = await supabase
     .from('shared_calendars')
     .select(`
@@ -375,6 +379,7 @@ export async function getSharedCalendarUsers(userId: string) {
       shared_with:profiles!shared_calendars_shared_with_id_fkey(*)
     `)
     .or(`owner_id.eq.${userId},shared_with_id.eq.${userId}`)
+    .order('created_at', { ascending: true })
 
   if (error) throw error
   return data

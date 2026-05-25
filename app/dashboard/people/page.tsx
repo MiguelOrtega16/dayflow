@@ -49,16 +49,46 @@ export default function PeoplePage() {
 
   useEffect(() => {
     if (!currentUser) return
+    // UPDATEs (e.g. toggling notification_mutes) are patched in place from
+    // the realtime payload — refetching here caused two regressions: a brief
+    // flicker where the SELECT raced with the just-committed UPDATE and
+    // returned stale data, and a row-reorder because Postgres returns heap
+    // order for the unordered scan. Patching preserves array index and
+    // skips the round-trip entirely. INSERT / DELETE still go through
+    // loadData() so the member list reflects new or removed shares.
+    const patchFromPayload = (payload: any) => {
+      const next = payload?.new
+      if (!next?.id) return
+      setSharedCalendars(prev => prev.map(sc =>
+        sc.id === next.id ? { ...sc, ...next } : sc
+      ))
+    }
     const channel = supabase
       .channel(`people-${currentUser.id}`)
       .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'shared_calendars',
+        event: 'INSERT', schema: 'public', table: 'shared_calendars',
         filter: `owner_id=eq.${currentUser.id}`,
       }, () => loadData())
       .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'shared_calendars',
+        event: 'DELETE', schema: 'public', table: 'shared_calendars',
+        filter: `owner_id=eq.${currentUser.id}`,
+      }, () => loadData())
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'shared_calendars',
+        filter: `owner_id=eq.${currentUser.id}`,
+      }, patchFromPayload)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'shared_calendars',
         filter: `shared_with_id=eq.${currentUser.id}`,
       }, () => loadData())
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public', table: 'shared_calendars',
+        filter: `shared_with_id=eq.${currentUser.id}`,
+      }, () => loadData())
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'shared_calendars',
+        filter: `shared_with_id=eq.${currentUser.id}`,
+      }, patchFromPayload)
       .subscribe()
     return () => { supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -375,7 +405,6 @@ export default function PeoplePage() {
               const owner = sc.owner as Profile
               const mutes = sc.notification_mutes ?? []
               const hasAnyMute   = mutes.length > 0
-              const allMuted     = mutes.length === SHARE_NOTIF_TYPES.length
               const isPanelOpen  = openNotifPanelId === sc.id
               return (
                 <div key={sc.id} className="border-b border-border/40 last:border-b-0">
@@ -397,13 +426,14 @@ export default function PeoplePage() {
                         isPanelOpen
                           ? 'border-primary/40 bg-primary/5 text-primary'
                           : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted',
-                        // Subtle visual cue when notifications are partially or fully muted
-                        hasAnyMute && !isPanelOpen && 'text-amber-600 dark:text-amber-400'
                       )}
                       title={t('people.notifSettingsTitle')}
                       aria-expanded={isPanelOpen}
                     >
-                      {allMuted ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                      {/* Two states only: Bell (no mutes) vs BellOff (any mute).
+                          Color is driven entirely by panel-open state so it
+                          never competes with the theme's accent color. */}
+                      {hasAnyMute ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
                     </button>
                     <button
                       onClick={() => handleRemove(sc.id)}
