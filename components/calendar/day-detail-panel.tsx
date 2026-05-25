@@ -324,6 +324,13 @@ export function DayDetailPanel({
       const isDone    = activity.status === 'done'
       const isSkipped = activity.status === 'skipped'
       const isUpdating = updatingIds.has(activity.id)
+      // Border tracks the picker when in 'category' mode; 'profile' mode keeps
+      // the legacy purple. Background / icon stay Tailwind purple — the colored
+      // border alone is enough to signal the override without losing the
+      // "this is a reminder" treatment.
+      const reminderBorder = colorMode === 'category'
+        ? (colorOverrides?.reminder ?? '#9333ea')
+        : '#9333ea'
       // Reminders don't cycle through the full 5-state STATUS_CYCLE — most
       // users just want to mark "remembered" vs. "didn't yet". Tap toggles
       // between todo and done; the dropdown still covers other transitions.
@@ -346,7 +353,7 @@ export function DayDetailPanel({
             isDone    && 'opacity-60',
             isSkipped && 'opacity-40',
           )}
-          style={{ borderLeftColor: '#9333ea' }}
+          style={{ borderLeftColor: reminderBorder }}
         >
           <div className="flex items-center gap-2.5 px-3 py-2.5">
             <button

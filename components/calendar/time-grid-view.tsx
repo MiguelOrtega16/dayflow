@@ -242,10 +242,14 @@ export function TimeGridView({
                   const endMin      = !isReminder && a.end_time ? timeToMin(a.end_time) : startMin + (isReminder ? 0 : 60)
                   const top         = (startMin / 60) * HOUR_HEIGHT
                   const height      = isReminder ? 20 : Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22)
-                  // Reminders always render in the dashed-purple style regardless
-                  // of mode (it's the visual signal that they're zero-duration nudges,
-                  // not regular events). Other activities honor the colorMode toggle.
-                  const c           = isReminder ? '#9333ea' : activityColor(a, userColor(a.user_id), colorMode, colorOverrides)
+                  // Reminders keep the dashed visual treatment (signals "zero-
+                  // duration nudge"), but the color itself follows the picker
+                  // when in 'category' mode so a user who set Reminder=red sees
+                  // a dashed red reminder. 'profile' mode keeps the legacy purple.
+                  const reminderHex = colorMode === 'category'
+                    ? (colorOverrides?.reminder ?? '#9333ea')
+                    : '#9333ea'
+                  const c           = isReminder ? reminderHex : activityColor(a, userColor(a.user_id), colorMode, colorOverrides)
                   const interactive = canInteract(a)
                   const leftPct     = col / numCols * 100
                   const widthPct    = 1  / numCols * 100
@@ -258,7 +262,6 @@ export function TimeGridView({
                       className={cn(
                         'absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden z-10 transition-opacity',
                         interactive ? 'cursor-pointer hover:brightness-95' : 'cursor-default',
-                        isReminder && 'border border-dashed border-purple-400 dark:border-purple-500',
                         isDone    && 'opacity-60',
                         isSkipped && 'opacity-40',
                       )}
@@ -266,8 +269,12 @@ export function TimeGridView({
                         top, height,
                         left:  `calc(${leftPct}% + 2px)`,
                         width: `calc(${widthPct}% - 4px)`,
-                        backgroundColor: isReminder ? '#9333ea18' : c + '28',
-                        borderLeft: isReminder ? '3px dashed #9333ea' : `3px solid ${c}`,
+                        backgroundColor: isReminder ? `${c}18` : c + '28',
+                        // Reminders get a thin dashed all-around border + a thicker
+                        // dashed left edge so all four sides track the picker color.
+                        // Non-reminders only get the left accent — no surrounding border.
+                        border:     isReminder ? `1px dashed ${c}` : undefined,
+                        borderLeft: isReminder ? `3px dashed ${c}` : `3px solid ${c}`,
                       }}
                     >
                       <p
