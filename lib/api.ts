@@ -269,7 +269,11 @@ async function notifyActivityParticipants(
     ? `Estado de "${orig.title}" cambiado a: ${statusLabels[updates.status] ?? updates.status}`
     : `"${orig.title}" fue actualizada`
 
-  await Promise.all([...participants].map(async recipientId => {
+  // Drop recipients who have muted this notification type for the activity
+  // owner. The owner themselves is always kept (no self-mute).
+  const filtered = await filterRecipientsByMute([...participants], orig.user_id, type)
+
+  await Promise.all(filtered.map(async recipientId => {
     await supabase.from('notifications').insert({
       recipient_id: recipientId,
       actor_id:     updaterId,
@@ -382,6 +386,52 @@ export async function removeCalendarShare(shareId: string) {
   if (error) throw error
 }
 
+/**
+ * Set the per-share `notification_mutes` array for an accepted incoming share.
+ * The recipient owns this preference; the existing UPDATE policy on
+ * `shared_calendars` allows the shared_with_id to write the row.
+ */
+export async function updateShareNotificationMutes(shareId: string, mutes: string[]) {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('shared_calendars')
+    .update({ notification_mutes: mutes })
+    .eq('id', shareId)
+  if (error) throw error
+}
+
+/**
+ * Filter a list of recipient ids down to those who have NOT muted `type` from
+ * `ownerId`'s share. Used at notification-creation time so that bell, push,
+ * and history all stay consistent — a muted notification is never written.
+ *
+ * Special cases:
+ *   - The activity owner is always notified (they own the activity; mutes
+ *     don't apply to oneself, and there's no share where someone shares with
+ *     themselves anyway).
+ *   - No share row → no mute possible, so the recipient is kept.
+ */
+async function filterRecipientsByMute(
+  recipientIds: string[],
+  ownerId: string,
+  type: string,
+): Promise<string[]> {
+  const supabase = createClient()
+  // Self-notifications (when ownerId is in the recipient list) pass through
+  // even though no share exists — handled by the IN filter below not matching.
+  const { data } = await supabase
+    .from('shared_calendars')
+    .select('shared_with_id, notification_mutes')
+    .eq('owner_id', ownerId)
+    .in('shared_with_id', recipientIds)
+  const muted = new Set(
+    (data || [])
+      .filter((r: any) => Array.isArray(r.notification_mutes) && r.notification_mutes.includes(type))
+      .map((r: any) => r.shared_with_id as string),
+  )
+  return recipientIds.filter(id => !muted.has(id))
+}
+
 export async function searchUsers(query: string, excludeId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -480,7 +530,12 @@ async function notifyCommentParticipants(
   const preview = content.length > 80 ? content.slice(0, 77) + '…' : content
   const message = `${name} comentó en "${orig.title}": ${preview}`
 
-  await Promise.all([...recipients].map(async recipientId => {
+  // Drop recipients who have muted comment notifications for this activity
+  // owner's share. The owner is in the recipients set and has no share with
+  // themselves, so they always pass through.
+  const filtered = await filterRecipientsByMute([...recipients], orig.user_id, 'activity_comment')
+
+  await Promise.all(filtered.map(async recipientId => {
     await supabase.from('notifications').insert({
       recipient_id: recipientId,
       actor_id:     commenterId,

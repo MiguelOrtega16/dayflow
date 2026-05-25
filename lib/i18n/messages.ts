@@ -37,6 +37,9 @@ export const messages = {
       quitBody: '¿Estás seguro que quieres salir de la aplicación?',
       cancel: 'Cancelar',
       quit: 'Salir',
+      forceUpdateTitle: 'Actualización requerida',
+      forceUpdateBody: 'Esta versión de DayFlow ya no es compatible. Actualiza la app para continuar.',
+      forceUpdateButton: 'Actualizar ahora',
     },
     nav: {
       calendar: 'Calendario',
@@ -358,6 +361,13 @@ export const messages = {
       visibleHeading: 'Calendarios visibles para mí',
       stopViewing: 'Dejar de ver',
       stopViewingTitle: 'Dejar de ver este calendario',
+      notifSettingsTitle: 'Notificaciones',
+      notifSettingsHelp: 'Elige qué te avisamos de las actividades de esta persona',
+      notifType: {
+        activity_comment: 'Comentarios',
+        status_update:    'Cambios de estado',
+        new_activity:     'Nuevas actividades',
+      },
     },
     settings: {
       title: 'Configuración',
@@ -1133,6 +1143,9 @@ export const messages = {
       quitBody: 'Are you sure you want to leave the app?',
       cancel: 'Cancel',
       quit: 'Quit',
+      forceUpdateTitle: 'Update required',
+      forceUpdateBody: 'This version of DayFlow is no longer supported. Please update the app to continue.',
+      forceUpdateButton: 'Update now',
     },
     nav: {
       calendar: 'Calendar',
@@ -1454,6 +1467,13 @@ export const messages = {
       visibleHeading: 'Calendars visible to me',
       stopViewing: 'Stop viewing',
       stopViewingTitle: 'Stop viewing this calendar',
+      notifSettingsTitle: 'Notifications',
+      notifSettingsHelp: 'Choose what to be notified about for this person’s activity',
+      notifType: {
+        activity_comment: 'Comments',
+        status_update:    'Status changes',
+        new_activity:     'New activities',
+      },
     },
     settings: {
       title: 'Settings',

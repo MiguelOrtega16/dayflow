@@ -62,6 +62,7 @@ export type NotificationType =
   | 'calendar_share_accepted'
   | 'calendar_share_declined'
   | 'activity_reminder'
+  | 'activity_comment'
 
 export interface Profile {
   id: string
@@ -176,9 +177,23 @@ export interface SharedCalendar {
   can_edit: boolean
   status: 'pending' | 'accepted' | 'declined'
   created_at: string
+  /** Notification types the *recipient* (shared_with_id) has muted for this
+   *  share. See ShareMutableNotificationType for the four types the UI
+   *  surfaces. Empty array = receive everything. */
+  notification_mutes: ShareMutableNotificationType[]
   owner?: Profile
   shared_with?: Profile
 }
+
+/** Notification types that the per-share mute UI exposes. Limited to the
+ *  three types we actually emit for shared activity (see notifyActivityParticipants
+ *  and notifyCommentParticipants in lib/api.ts). Invitations, share invites,
+ *  and reminders are intentionally excluded — they're reciprocal or
+ *  unrelated to the share relationship and always fire. */
+export type ShareMutableNotificationType =
+  | 'activity_comment'
+  | 'status_update'
+  | 'new_activity'
 
 export interface Notification {
   id: string

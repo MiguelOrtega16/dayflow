@@ -13,6 +13,7 @@ import { BackButtonProvider } from '@/lib/back-button'
 import { DateTimePrefsProvider } from '@/lib/datetime-prefs'
 import { ProfileProvider, useProfile } from '@/lib/profile-context'
 import { TopProgressBar } from './top-progress-bar'
+import { ForceUpdateGate } from './force-update-gate'
 import type { Profile } from '@/types'
 
 interface DashboardShellProps {
@@ -90,6 +91,11 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           instant visual feedback that their tap registered, masking the
           page-rendering latency that otherwise reads as "lag". */}
       <TopProgressBar />
+
+      {/* Forced-update gate — full-screen blocking modal for users on an
+          unsupported Android versionCode. No-op on web/iOS and on supported
+          builds. Mounted at z-[100] so it sits above every other surface. */}
+      <ForceUpdateGate />
 
       {/* Mobile backdrop */}
       {sidebarOpen && (

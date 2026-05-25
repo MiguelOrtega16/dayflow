@@ -2,16 +2,22 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { searchUsers, shareCalendar, removeCalendarShare, getSharedCalendarUsers, respondToCalendarShare, markCalendarShareNotificationRead } from '@/lib/api'
+import { searchUsers, shareCalendar, removeCalendarShare, getSharedCalendarUsers, respondToCalendarShare, markCalendarShareNotificationRead, updateShareNotificationMutes } from '@/lib/api'
 import { cn, getInitials } from '@/lib/utils'
-import { Search, UserPlus, X, Check, Users, Clock, CheckCircle2, XCircle } from 'lucide-react'
+import { Search, UserPlus, X, Check, Users, Clock, CheckCircle2, XCircle, Bell, BellOff } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { PageTour } from '@/components/onboarding/page-tour'
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { useProfile } from '@/lib/profile-context'
-import type { Profile, SharedCalendar } from '@/types'
+import type { Profile, SharedCalendar, ShareMutableNotificationType } from '@/types'
+
+const SHARE_NOTIF_TYPES: ShareMutableNotificationType[] = [
+  'activity_comment',
+  'status_update',
+  'new_activity',
+]
 
 // Free tier can share with this many people. Pro is unlimited.
 // Keep in sync with the RLS subquery in schema.sql.
@@ -30,6 +36,8 @@ export default function PeoplePage() {
   const [searching, setSearching]           = useState(false)
   const [, setLoading]                      = useState(true)
   const [responding, setResponding]         = useState<string | null>(null)
+  // Which "visible to me" share row has its notifications panel expanded.
+  const [openNotifPanelId, setOpenNotifPanelId] = useState<string | null>(null)
   const supabase = createClient()
   const { entitlement } = useEntitlement(currentUser?.id ?? null)
   const { open: openPaywall } = usePaywall()
@@ -124,6 +132,35 @@ export default function PeoplePage() {
       await respondToCalendarShare(shareId, false, currentUser.id)
     }
     loadData()
+  }
+
+  // Optimistic toggle of a single notification type on/off for a given
+  // incoming share. We patch the local state first so the switch animation
+  // is instant; rollback on error keeps the UI in sync with the server.
+  const toggleShareMute = async (
+    shareId: string,
+    type: ShareMutableNotificationType,
+    nextEnabled: boolean,
+  ) => {
+    const current = sharedCalendars.find(sc => sc.id === shareId)
+    if (!current) return
+    const currentMutes = current.notification_mutes ?? []
+    const nextMutes = nextEnabled
+      ? currentMutes.filter(m => m !== type)        // enabling → remove from mutes
+      : Array.from(new Set([...currentMutes, type])) // disabling → add to mutes
+
+    setSharedCalendars(prev => prev.map(sc =>
+      sc.id === shareId ? { ...sc, notification_mutes: nextMutes } : sc
+    ))
+    try {
+      await updateShareNotificationMutes(shareId, nextMutes)
+    } catch (err) {
+      console.error('[people] toggleShareMute failed', err)
+      // Roll back to the previous mutes array
+      setSharedCalendars(prev => prev.map(sc =>
+        sc.id === shareId ? { ...sc, notification_mutes: currentMutes } : sc
+      ))
+    }
   }
 
   const handleRespond = async (shareId: string, accept: boolean) => {
@@ -327,25 +364,77 @@ export default function PeoplePage() {
           <div className="space-y-2">
             {acceptedIncoming.map(sc => {
               const owner = sc.owner as Profile
+              const mutes = sc.notification_mutes ?? []
+              const hasAnyMute   = mutes.length > 0
+              const allMuted     = mutes.length === SHARE_NOTIF_TYPES.length
+              const isPanelOpen  = openNotifPanelId === sc.id
               return (
-                <div key={sc.id} className="flex items-center gap-3 py-2">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                    style={{ backgroundColor: owner?.color || '#6366f1' }}>
-                    {owner?.avatar_url
-                      ? <img src={owner.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
-                      : getInitials(owner?.full_name, owner?.email)}
+                <div key={sc.id} className="border-b border-border/40 last:border-b-0">
+                  <div className="flex items-center gap-3 py-2">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                      style={{ backgroundColor: owner?.color || '#6366f1' }}>
+                      {owner?.avatar_url
+                        ? <img src={owner.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+                        : getInitials(owner?.full_name, owner?.email)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{owner?.full_name || owner?.username || t('common.unknown')}</p>
+                      <p className="text-xs text-muted-foreground truncate">{owner?.email}</p>
+                    </div>
+                    <button
+                      onClick={() => setOpenNotifPanelId(isPanelOpen ? null : sc.id)}
+                      className={cn(
+                        'shrink-0 w-8 h-8 flex items-center justify-center rounded-lg border transition-colors',
+                        isPanelOpen
+                          ? 'border-primary/40 bg-primary/5 text-primary'
+                          : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted',
+                        // Subtle visual cue when notifications are partially or fully muted
+                        hasAnyMute && !isPanelOpen && 'text-amber-600 dark:text-amber-400'
+                      )}
+                      title={t('people.notifSettingsTitle')}
+                      aria-expanded={isPanelOpen}
+                    >
+                      {allMuted ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={() => handleRemove(sc.id)}
+                      className="shrink-0 text-xs text-muted-foreground hover:text-destructive border border-border hover:border-destructive/40 px-2.5 py-1 rounded-lg transition-colors"
+                      title={t('people.stopViewingTitle')}
+                    >
+                      {t('people.stopViewing')}
+                    </button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{owner?.full_name || owner?.username || t('common.unknown')}</p>
-                    <p className="text-xs text-muted-foreground truncate">{owner?.email}</p>
-                  </div>
-                  <button
-                    onClick={() => handleRemove(sc.id)}
-                    className="shrink-0 text-xs text-muted-foreground hover:text-destructive border border-border hover:border-destructive/40 px-2.5 py-1 rounded-lg transition-colors"
-                    title={t('people.stopViewingTitle')}
-                  >
-                    {t('people.stopViewing')}
-                  </button>
+
+                  {isPanelOpen && (
+                    <div className="pl-12 pr-1 pb-3 space-y-2.5">
+                      <p className="text-xs text-muted-foreground">{t('people.notifSettingsHelp')}</p>
+                      {SHARE_NOTIF_TYPES.map(type => {
+                        const enabled = !mutes.includes(type)
+                        return (
+                          <div key={type} className="flex items-center gap-3">
+                            <span className="flex-1 text-sm">{t(`people.notifType.${type}`)}</span>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={enabled}
+                              onClick={() => toggleShareMute(sc.id, type, !enabled)}
+                              className={cn(
+                                'shrink-0 inline-flex h-5 w-9 items-center rounded-full transition-colors',
+                                enabled ? 'bg-primary' : 'bg-muted',
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  'inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform',
+                                  enabled ? 'translate-x-4' : 'translate-x-0.5',
+                                )}
+                              />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )
             })}

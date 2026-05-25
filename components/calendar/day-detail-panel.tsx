@@ -33,6 +33,12 @@ interface DayDetailPanelProps {
    *  compact month grid so the keyboard-driven layout doesn't make the
    *  send button or the panel header collide with other UI. */
   onComposingChange?: (composing: boolean) => void
+  /** Notification-bell deep link: scroll this activity into view and (when
+   *  openActivityComments is true) auto-expand its comment thread. Cleared
+   *  by the parent via onOpenActivityConsumed once we've acted on it. */
+  openActivityId?: string | null
+  openActivityComments?: boolean
+  onOpenActivityConsumed?: () => void
 }
 
 const STATUS_CYCLE: ActivityStatus[] = ['todo', 'in_progress', 'done', 'blocked', 'skipped']
@@ -70,6 +76,7 @@ export function DayDetailPanel({
   date, activities, currentUserId, currentUserColor,
   allUsers, onAddActivity, onEditActivity, onActivityUpdated, loading = false,
   onComposingChange,
+  openActivityId = null, openActivityComments = false, onOpenActivityConsumed,
 }: DayDetailPanelProps) {
   const { formatTime } = useDateTimePrefs()
   const [openCommentId, setOpenCommentId] = useState<string | null>(null)
@@ -77,6 +84,7 @@ export function DayDetailPanel({
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
   const [newCommentText, setNewCommentText] = useState<Record<string, string>>({})
   const [commentLoading, setCommentLoading] = useState<Record<string, boolean>>({})
+  const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({})
   const [collapsedUsers, setCollapsedUsers] = useState<Set<string>>(new Set())
   const [transitioning, setTransitioning] = useState(false)
   const [updatingIds, setUpdatingIds]     = useState<Set<string>>(new Set())
@@ -87,6 +95,10 @@ export function DayDetailPanel({
   // Ref so the Realtime callback always reads the current openCommentId without stale closure
   const openCommentIdRef = useRef<string | null>(null)
   const prevDateStr = useRef(format(date, 'yyyy-MM-dd'))
+  // Per-activity card refs for scroll-into-view when a notification deep
+  // link targets that activity. Stored in a Map so we can attach via ref
+  // callback inside the card renderer without re-allocating on every render.
+  const activityCardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   // Brief fade when switching days
   useEffect(() => {
@@ -97,6 +109,28 @@ export function DayDetailPanel({
     const t = setTimeout(() => setTransitioning(false), 220)
     return () => clearTimeout(t)
   }, [date])
+
+  // Deep-link consumer: when the notification bell hands us an openActivityId
+  // (and optionally openActivityComments), find the matching card, scroll it
+  // into view, and pop its comment thread when requested. We wait until the
+  // activity actually exists in `activities` (parent fetches per-date are
+  // async) before consuming, so a tap that pre-empts the fetch still works.
+  useEffect(() => {
+    if (!openActivityId) return
+    const exists = activities.some(a => a.id === openActivityId)
+    if (!exists) return
+
+    // Defer a tick so the DOM has the card mounted before we measure.
+    const raf = requestAnimationFrame(() => {
+      const node = activityCardRefs.current.get(openActivityId)
+      node?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (openActivityComments && openCommentId !== openActivityId) {
+        handleToggleComments(openActivityId)
+      }
+      onOpenActivityConsumed?.()
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [openActivityId, openActivityComments, activities])
 
   const toggleUserCollapse = (userId: string) => {
     setCollapsedUsers(prev => {
@@ -282,14 +316,18 @@ export function DayDetailPanel({
   }, [openCommentId, commentsMap])
 
   const handleAddComment = async (activityId: string) => {
+    if (commentSubmitting[activityId]) return
     const text = newCommentText[activityId]?.trim()
     if (!text) return
+    setCommentSubmitting(prev => ({ ...prev, [activityId]: true }))
     try {
       const comment = await createActivityComment(activityId, currentUserId, text)
       setCommentsMap(prev => ({ ...prev, [activityId]: [...(prev[activityId] || []), comment] }))
       setCommentCounts(prev => ({ ...prev, [activityId]: (prev[activityId] || 0) + 1 }))
       setNewCommentText(prev => ({ ...prev, [activityId]: '' }))
-    } catch {}
+    } catch {} finally {
+      setCommentSubmitting(prev => ({ ...prev, [activityId]: false }))
+    }
   }
 
   const handleDeleteComment = async (activityId: string, commentId: string) => {
@@ -300,6 +338,14 @@ export function DayDetailPanel({
         [activityId]: (prev[activityId] || []).filter(c => c.id !== commentId)
       }))
     } catch {}
+  }
+
+  // Ref-callback factory: attaches each activity card's root <div> into the
+  // map so deep-link scrolling can find it by id. Returns void to keep React
+  // happy (a refCallback that returns the element confuses StrictMode).
+  const setActivityCardRef = (activityId: string) => (el: HTMLDivElement | null) => {
+    if (el) activityCardRefs.current.set(activityId, el)
+    else activityCardRefs.current.delete(activityId)
   }
 
   const renderActivityCard = (activity: Activity, ownerColor: string) => {
@@ -348,6 +394,7 @@ export function DayDetailPanel({
       return (
         <div
           key={activity.id}
+          ref={setActivityCardRef(activity.id)}
           className={cn(
             'rounded-xl border border-l-2 bg-purple-50/50 dark:bg-purple-500/5 transition-opacity',
             isDone    && 'opacity-60',
@@ -424,7 +471,12 @@ export function DayDetailPanel({
     }
 
     return (
-      <div key={activity.id} className={cn('rounded-xl border border-l-2', statusCfg.bgColor)} style={{ borderLeftColor: borderColor }}>
+      <div
+        key={activity.id}
+        ref={setActivityCardRef(activity.id)}
+        className={cn('rounded-xl border border-l-2', statusCfg.bgColor)}
+        style={{ borderLeftColor: borderColor }}
+      >
 
         {/* ── Time header ── */}
         {activity.start_time && (
@@ -722,14 +774,18 @@ export function DayDetailPanel({
                     onBlur={() => onComposingChange?.(false)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(activity.id) } }}
                     placeholder={t('calendar.writeComment')}
-                    className="flex-1 text-xs bg-background rounded-lg border border-input px-2 py-1.5 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                    disabled={commentSubmitting[activity.id]}
+                    className="flex-1 text-xs bg-background rounded-lg border border-input px-2 py-1.5 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50 disabled:opacity-60"
                   />
                   <button
                     onClick={() => handleAddComment(activity.id)}
-                    disabled={!newCommentText[activity.id]?.trim()}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
+                    disabled={!newCommentText[activity.id]?.trim() || !!commentSubmitting[activity.id]}
+                    aria-busy={!!commentSubmitting[activity.id]}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-all active:scale-90 shrink-0"
                   >
-                    <Send className="w-3 h-3" />
+                    {commentSubmitting[activity.id]
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Send className="w-3 h-3" />}
                   </button>
                 </div>
               </>

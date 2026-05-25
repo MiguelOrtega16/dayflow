@@ -102,6 +102,15 @@ exception when duplicate_object then null; end $$;
 alter table public.shared_calendars
   add column if not exists status text not null default 'accepted';
 
+-- Per-share notification mutes. text[] of NotificationType values that the
+-- recipient (shared_with_id) has *muted* for activity from this owner. Empty
+-- array (default) means "receive everything". The recipient owns this
+-- preference — only types they explicitly silence are listed. Applied at
+-- notification-creation time on the server side; we don't write rows that
+-- match a mute, so the bell, push, and history all stay consistent.
+alter table public.shared_calendars
+  add column if not exists notification_mutes text[] not null default '{}'::text[];
+
 alter table public.shared_calendars enable row level security;
 
 drop policy if exists "Users can view their shared calendars" on public.shared_calendars;

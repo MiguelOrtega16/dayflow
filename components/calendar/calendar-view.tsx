@@ -60,6 +60,11 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
   const [modalInitialTime, setModalInitialTime] = useState<{ start: string; end: string } | null>(null)
   const [activeUserIds, setActiveUserIds] = useState<string[]>([])
+  // Pending deep-link target set by the notification bell when the user
+  // clicks a comment / status / new-activity notification. Once consumed by
+  // DayDetailPanel (scroll + open thread), we clear it so subsequent renders
+  // don't re-trigger.
+  const [pendingOpen, setPendingOpen] = useState<{ activityId: string; openComments: boolean } | null>(null)
   // Detected client-side after hydration; starts false (SSR-safe)
   const [isMobile, setIsMobile]   = useState(false)
   // Tablet: 768–1279 px — uses bottom panel instead of right-side panel
@@ -271,6 +276,35 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     const d = new Date(gotoDate + 'T12:00:00')
     setCurrentDate(d)
     setSelectedDate(d)
+
+    // Notification-bell deep link: open & scroll to a specific activity, and
+    // optionally pop the comment thread. Read here (same tick as the date)
+    // so DayDetailPanel sees both props in the same render that re-keys it
+    // to the new date.
+    const openActivityId = sessionStorage.getItem('dayflow:openActivityId')
+    if (openActivityId) {
+      const openComments = sessionStorage.getItem('dayflow:openActivityComments') === '1'
+      sessionStorage.removeItem('dayflow:openActivityId')
+      sessionStorage.removeItem('dayflow:openActivityComments')
+      setPendingOpen({ activityId: openActivityId, openComments })
+    }
+  }, [])
+
+  // Also react to in-session dayflow:navigate dispatches that carry a deep
+  // link (notification bell tap while the dashboard is already mounted —
+  // no full-page reload, so the sessionStorage-on-mount effect above
+  // doesn't fire).
+  useEffect(() => {
+    const onNavigate = () => {
+      const openActivityId = sessionStorage.getItem('dayflow:openActivityId')
+      if (!openActivityId) return
+      const openComments = sessionStorage.getItem('dayflow:openActivityComments') === '1'
+      sessionStorage.removeItem('dayflow:openActivityId')
+      sessionStorage.removeItem('dayflow:openActivityComments')
+      setPendingOpen({ activityId: openActivityId, openComments })
+    }
+    window.addEventListener('dayflow:navigate', onNavigate)
+    return () => window.removeEventListener('dayflow:navigate', onNavigate)
   }, [])
 
   // ?create=YYYY-MM-DD (or 'today') from the morning-notification action button:
@@ -442,6 +476,9 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     onEditActivity:   setEditingActivity,
     onActivityUpdated: fetchActivities,
     loading,
+    openActivityId:       pendingOpen?.activityId ?? null,
+    openActivityComments: pendingOpen?.openComments ?? false,
+    onOpenActivityConsumed: () => setPendingOpen(null),
   }
 
   // ── Mobile day view (time grid, full screen) ──────────────────────────────
@@ -719,16 +756,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           // almost entirely consumed by the panel header + progress bar,
           // hiding the activities the user came to see.
           <div className="shrink-0 border-t border-border overflow-hidden" style={{ height: '50dvh' }}>
-            <DayDetailPanel
-              date={selectedDate}
-              activities={getActivitiesForDate(selectedDate)}
-              currentUserId={currentUser?.id || ''}
-              currentUserColor={currentUser?.color || '#6366f1'}
-              allUsers={allUsers}
-              onAddActivity={() => setShowAddModal(true)}
-              onEditActivity={setEditingActivity}
-              onActivityUpdated={fetchActivities}
-            />
+            <DayDetailPanel {...detailProps} />
           </div>
         ) : (
           // Right-side panel — used on desktop AND on landscape phones /
@@ -736,16 +764,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           // list. Width steps down on narrower viewports so the calendar
           // grid still has room (w-64 on mobile landscape, w-80 from md+).
           <div className="flex w-64 md:w-80 shrink-0 border-l border-border">
-            <DayDetailPanel
-              date={selectedDate}
-              activities={getActivitiesForDate(selectedDate)}
-              currentUserId={currentUser?.id || ''}
-              currentUserColor={currentUser?.color || '#6366f1'}
-              allUsers={allUsers}
-              onAddActivity={() => setShowAddModal(true)}
-              onEditActivity={setEditingActivity}
-              onActivityUpdated={fetchActivities}
-            />
+            <DayDetailPanel {...detailProps} />
           </div>
         )
       )}

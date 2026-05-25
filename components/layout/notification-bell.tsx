@@ -47,6 +47,18 @@ const TYPE_ICONS: Record<string, string> = {
 
 const ACTION_TYPES = new Set(['activity_invitation', 'calendar_share_invite'])
 
+// Notification types that, when clicked, should deep-link to the related
+// activity inside the calendar view. The `openComments` set further narrows
+// to types where we also auto-open the comment thread (so a comment ping
+// drops the user straight on the conversation, not just the activity card).
+const ACTIVITY_NAV_TYPES = new Set([
+  'activity_comment',
+  'status_update',
+  'task_completed',
+  'new_activity',
+])
+const COMMENT_NAV_TYPES = new Set(['activity_comment'])
+
 function playNotificationSound() {
   const ctx = getAudioCtx()
   // Skip silently if the context isn't running — happens when no user gesture has occurred yet
@@ -189,6 +201,41 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
     await markNotificationRead(n.id)
     setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x))
     setUnreadCount(prev => Math.max(0, prev - 1))
+  }
+
+  // Click → mark read + (for activity-linked types) deep-link to the
+  // calendar day that hosts the activity, optionally opening its comment
+  // thread. The destination is the calendar route — the calendar reads the
+  // sessionStorage keys we set here, then DayDetailPanel picks up the
+  // openActivityId / openActivityComments hint and scrolls + expands the
+  // matching card.
+  const handleNotificationClick = async (n: Notification) => {
+    // Always mark read so the bell badge updates even if navigation fails.
+    handleMarkRead(n).catch(() => {})
+
+    if (!ACTIVITY_NAV_TYPES.has(n.type) || !n.activity_id) return
+
+    try {
+      const { data: act } = await supabase
+        .from('activities')
+        .select('date')
+        .eq('id', n.activity_id)
+        .maybeSingle()
+
+      const date = (act as { date?: string } | null)?.date
+      if (!date) return
+
+      sessionStorage.setItem('dayflow:gotoDate', date)
+      sessionStorage.setItem('dayflow:openActivityId', n.activity_id)
+      if (COMMENT_NAV_TYPES.has(n.type)) {
+        sessionStorage.setItem('dayflow:openActivityComments', '1')
+      }
+      window.dispatchEvent(new CustomEvent('dayflow:navigate', { detail: { date } }))
+      setOpen(false)
+      router.push('/dashboard')
+    } catch (err) {
+      console.error('[NotificationBell] activity nav failed:', err)
+    }
   }
 
   const handleMarkAllRead = async () => {
@@ -359,7 +406,7 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
                       !n.is_read && 'bg-primary/5',
                       !isAction && 'hover:bg-muted/50 cursor-pointer'
                     )}
-                    onClick={!isAction ? () => handleMarkRead(n) : undefined}
+                    onClick={!isAction ? () => handleNotificationClick(n) : undefined}
                   >
                     <div className="flex items-start gap-3">
                       {/* Actor avatar */}
