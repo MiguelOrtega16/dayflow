@@ -75,19 +75,18 @@ export function useSwipeBack<T extends HTMLElement = HTMLDivElement>(
       dragging = false
       setIsDragging(false)
       if (andThen) {
-        const cleanup = () => {
-          el.removeEventListener('transitionend', cleanup)
-          // Clear inline styles so the next mount starts fresh.
-          el.style.transition = ''
-          el.style.boxShadow  = ''
-          el.style.transform  = ''
-          andThen()
-        }
-        el.addEventListener('transitionend', cleanup)
-        // Safety net — transitionend can be skipped if the element is removed.
-        setTimeout(cleanup, 280)
+        // Kick off the navigation immediately. The destination (the parent
+        // settings route) is normally in the Next.js prefetch cache, so it
+        // mounts in parallel with the slide-out animation — no perceived
+        // lag, and crucially no post-animation flicker. Previously we
+        // waited for transitionend, then cleared styles, THEN navigated,
+        // which made the page briefly snap back to its origin position
+        // before the route swap landed. The unmount handles style cleanup
+        // for us; no explicit clear needed.
+        andThen()
       } else {
-        // Clear shadow after the snap completes.
+        // Snap-back: clear shadow after the transition completes so the
+        // page doesn't keep the layered look once it's home.
         setTimeout(() => {
           if (!dragging) {
             el.style.boxShadow = ''
