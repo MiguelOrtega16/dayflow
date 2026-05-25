@@ -26,6 +26,17 @@
             android:value="activity-reminders"
         />
 
+        <!-- Google AdMob — required for the SDK to initialize without crashing
+             the app on launch. The value below is Google's official sample
+             "test app" ID; REPLACE it with the real AdMob App ID from
+             https://apps.admob.com/ before the next Play Store release. The
+             corresponding banner ad-unit id lives in NEXT_PUBLIC_ADMOB_BANNER_AD_ID.
+             See https://developers.google.com/admob/android/quick-start. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3058570787981966~5234559112"
+        />
+
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"

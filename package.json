@@ -15,6 +15,7 @@
     "cap:prod": "cross-env CAPACITOR_ENV=production npx cap sync && npx cap open android"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^8.0.0",
     "@capacitor/android": "^8.3.1",
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.3.1",
@@ -40,6 +41,7 @@
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@revenuecat/purchases-capacitor": "^13.1.1",
+    "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.49.2",
     "class-variance-authority": "^0.7.1",

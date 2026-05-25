@@ -1,3 +1,6 @@
+const { withSentryConfig } = require('@sentry/nextjs')
+const pkg = require('./package.json')
+
 const isCapacitorBuild = process.env.CAPACITOR_BUILD === 'true'
 
 /** @type {import('next').NextConfig} */
@@ -39,4 +42,24 @@ const nextConfig = {
   }),
 }
 
-module.exports = nextConfig
+// Wrap with Sentry config so source maps upload on Vercel builds and the
+// Sentry build-time instrumentation gets injected. Source map upload only
+// happens when SENTRY_AUTH_TOKEN is present (Vercel env), so local dev
+// builds still pass cleanly without it. Capacitor static exports also skip
+// the upload step — we'd rather ship without maps than fail the export.
+module.exports = withSentryConfig(nextConfig, {
+  org:     process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: !process.env.CI,
+  // Tag every event with the app's semver so we can filter "errors since
+  // 1.13.1" in the Sentry UI.
+  release: { name: `dayflow@${pkg.version}` },
+  // Don't try to upload source maps when we're producing a static export
+  // for Capacitor — there's no Vercel build step to hand them off to.
+  sourcemaps: { disable: isCapacitorBuild },
+  // Hide auth-token-related errors during local dev where the token isn't set.
+  disableLogger: true,
+  // Auto-instrument Vercel cron jobs as Sentry monitors so we get alerted
+  // if activity-30min-reminders / activity-reminders stops running.
+  automaticVercelMonitors: true,
+})

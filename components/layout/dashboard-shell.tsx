@@ -49,6 +49,11 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   // otherwise a soft flexible update. Web / iOS are no-ops.
   useEffect(() => { initVersionCheck() }, [])
 
+  // AdMob init intentionally NOT called yet — banners stay dormant until
+  // the app is published to Google Play production. Firing initAdMob here
+  // would surface the UMP consent sheet to EU users for ads we're not
+  // serving. See memory/project_ads_pending.md for the re-enable checklist.
+
   // Mirror the Supabase session into native storage so the home-screen widget
   // can refresh / toggle-done on its own. Hoisted to the dashboard shell so
   // the auth stays in sync regardless of which dashboard sub-page the user
