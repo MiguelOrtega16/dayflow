@@ -90,6 +90,11 @@ firebase-adminsdk*.json
 service-account*.json
 google-services-account*.json
 
+# ── Play Store assets / listing scratch ───────────────────────────────────────
+# Generated screenshots, feature graphics, and the listing-copy generator
+# script — local-only artefacts uploaded to Play Console directly.
+play-store/
+
 # ── Backup / scratch files ────────────────────────────────────────────────────
 *.bak
 *.bak.*
