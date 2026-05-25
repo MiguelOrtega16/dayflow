@@ -101,14 +101,17 @@ export function TimeGridView({
   const userColor = (userId: string) =>
     allUsers.find(u => u.profile.id === userId)?.profile.color ?? '#6366f1'
 
-  // Pro-gated "color by category" toggle from Appearance settings. Defensive
-  // entitlement check so a downgraded account with a stale 'category' value
-  // still renders the legacy owner-color blocks.
+  // Pro-gated "color by category" toggle + per-category overrides from
+  // Appearance settings. Defensive entitlement check so a downgraded account
+  // with a stale 'category' value still renders the legacy owner-color blocks.
   const { profile: currentProfile } = useProfile()
   const { entitlement } = useEntitlement(currentProfile?.id ?? null)
-  const colorMode = useMemo(() => {
-    const raw = normalizePreferences(currentProfile?.preferences ?? null).day_view_color_by
-    return raw === 'category' && entitlement.isPro ? 'category' as const : 'profile' as const
+  const { colorMode, colorOverrides } = useMemo(() => {
+    const prefs = normalizePreferences(currentProfile?.preferences ?? null)
+    const mode = prefs.day_view_color_by === 'category' && entitlement.isPro
+      ? 'category' as const
+      : 'profile' as const
+    return { colorMode: mode, colorOverrides: prefs.category_color_overrides }
   }, [currentProfile?.preferences, entitlement.isPro])
 
   const openCtx = (e: React.MouseEvent, activity: Activity) => {
@@ -176,7 +179,7 @@ export function TimeGridView({
             {rows.map(({ day, events }) => (
               <div key={format(day, 'yyyy-MM-dd')} className="flex-1 p-0.5 border-l border-border/40 first:border-l-0 min-h-[22px]">
                 {events.map(a => {
-                  const c = activityColor(a, userColor(a.user_id), colorMode)
+                  const c = activityColor(a, userColor(a.user_id), colorMode, colorOverrides)
                   const interactive = canInteract(a)
                   return (
                     <button key={a.id} data-event
@@ -242,7 +245,7 @@ export function TimeGridView({
                   // Reminders always render in the dashed-purple style regardless
                   // of mode (it's the visual signal that they're zero-duration nudges,
                   // not regular events). Other activities honor the colorMode toggle.
-                  const c           = isReminder ? '#9333ea' : activityColor(a, userColor(a.user_id), colorMode)
+                  const c           = isReminder ? '#9333ea' : activityColor(a, userColor(a.user_id), colorMode, colorOverrides)
                   const interactive = canInteract(a)
                   const leftPct     = col / numCols * 100
                   const widthPct    = 1  / numCols * 100

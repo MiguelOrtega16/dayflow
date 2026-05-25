@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Crown, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { USER_COLORS, isProColor, getInitials } from '@/lib/utils'
+import { USER_COLORS, isProColor, getInitials, CATEGORY_CONFIG, categoryLabel } from '@/lib/utils'
+import type { ActivityCategory } from '@/types'
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
@@ -16,8 +17,14 @@ import { normalizePreferences, updateUserPreferences } from '@/lib/user-preferen
 import { useProfile } from '@/lib/profile-context'
 import { cn } from '@/lib/utils'
 
+// Categories shown in the per-category color picker — matches what users
+// can pick in the activity-form type chooser. 'note' is filtered out of
+// creation, so we don't expose customization for it either (any existing
+// note activities keep the CATEGORY_CONFIG.note default).
+const PICKER_CATEGORIES: readonly ActivityCategory[] = ['task', 'habit', 'event', 'reminder']
+
 export default function AppearanceSettingsPage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const router = useRouter()
   const supabase = createClient()
   // Profile comes from the dashboard layout's server fetch via context —
@@ -75,6 +82,7 @@ export default function AppearanceSettingsPage() {
   // the change instantly. Reverts on save failure.
   const prefs = normalizePreferences(profile?.preferences ?? null)
   const colorByCategory = prefs.day_view_color_by === 'category'
+  const categoryOverrides = prefs.category_color_overrides
   const handleColorModeToggle = async () => {
     if (!profile) return
     if (!colorByCategory && !entitlement.isPro) {
@@ -88,6 +96,25 @@ export default function AppearanceSettingsPage() {
       await updateUserPreferences(profile.id, { day_view_color_by: nextMode })
     } catch (err) {
       console.error('[appearance] color-mode save failed', err)
+      setProfile({ ...profile, preferences: prevPrefs })
+    }
+  }
+
+  // Per-category override write. `hex === null` means "reset to the
+  // CATEGORY_CONFIG default" — implemented by dropping the key from the
+  // overrides object so future renders fall through the resolver's chain.
+  // Same optimistic-update + rollback pattern as the toggle.
+  const handleCategoryColor = async (cat: ActivityCategory, hex: string | null) => {
+    if (!profile) return
+    const prevPrefs = profile.preferences as Record<string, unknown> | null
+    const nextOverrides: Partial<Record<ActivityCategory, string>> = { ...categoryOverrides }
+    if (hex === null) delete nextOverrides[cat]
+    else nextOverrides[cat] = hex
+    setProfile({ ...profile, preferences: { ...(prevPrefs ?? {}), category_color_overrides: nextOverrides } })
+    try {
+      await updateUserPreferences(profile.id, { category_color_overrides: nextOverrides })
+    } catch (err) {
+      console.error('[appearance] category-color save failed', err)
       setProfile({ ...profile, preferences: prevPrefs })
     }
   }
@@ -218,6 +245,50 @@ export default function AppearanceSettingsPage() {
                 />
               </button>
             </div>
+
+            {/* Per-category color picker: only meaningful when the toggle is
+                on (otherwise the override never feeds into activityColor()),
+                so we hide it entirely in 'profile' mode rather than show
+                inert rows. Pro is already enforced by the toggle gate above. */}
+            {colorByCategory && entitlement.isPro && (
+              <div className="mt-3 space-y-2 rounded-xl border border-border bg-background/40 p-3">
+                <p className="text-[11px] text-muted-foreground">{t('settings.categoryColorsHelp')}</p>
+                {PICKER_CATEGORIES.map(cat => {
+                  const current = categoryOverrides[cat] ?? CATEGORY_CONFIG[cat].hex
+                  const isOverridden = !!categoryOverrides[cat]
+                  return (
+                    <div key={cat} className="flex items-center gap-2 flex-wrap">
+                      <span className="text-base shrink-0">{CATEGORY_CONFIG[cat].emoji}</span>
+                      <span className="text-xs font-medium w-16 shrink-0">{categoryLabel(cat, locale)}</span>
+                      <div className="flex flex-wrap gap-1 flex-1 min-w-0">
+                        {USER_COLORS.map(c => (
+                          <button key={c}
+                            type="button"
+                            aria-label={c}
+                            onClick={() => handleCategoryColor(cat, c)}
+                            className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
+                            style={{
+                              backgroundColor: c,
+                              borderColor: current === c ? 'white' : c,
+                              outline: current === c ? `2px solid ${c}` : 'none',
+                              outlineOffset: '1px',
+                            }}
+                          />
+                        ))}
+                      </div>
+                      {isOverridden && (
+                        <button type="button"
+                          onClick={() => handleCategoryColor(cat, null)}
+                          className="text-[10px] text-muted-foreground hover:text-foreground shrink-0 underline-offset-2 hover:underline"
+                        >
+                          {t('settings.resetCategoryColor')}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           <div>

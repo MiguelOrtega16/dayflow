@@ -10,6 +10,7 @@
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { THEMES, DEFAULT_THEME_ID } from '@/lib/themes'
+import type { ActivityCategory } from '@/types'
 
 export type ReminderType   = 'notification' | 'alarm'
 export type SnoozeMinutes  = 5 | 15 | 30
@@ -63,6 +64,11 @@ export interface UserPreferences {
    *  Pro feature; the Appearance toggle gates and the renderer is defensive
    *  if a free user ever ends up with 'category' set. */
   day_view_color_by: 'profile' | 'category'
+  /** Pro: per-category color overrides applied when day_view_color_by is
+   *  'category'. Missing keys fall back to the CATEGORY_CONFIG default hex.
+   *  Stored hex must match #rrggbb — the normalizer drops anything else,
+   *  so old/garbage data can't poison the inline-style render. */
+  category_color_overrides: Partial<Record<ActivityCategory, string>>
 }
 
 const DEFAULTS: UserPreferences = {
@@ -78,6 +84,7 @@ const DEFAULTS: UserPreferences = {
   date_format:          'system',
   default_activity_public: true,
   day_view_color_by:    'profile',
+  category_color_overrides: {},
 }
 
 function normalizeFirstDay(v: unknown): FirstDayOfWeek {
@@ -110,6 +117,20 @@ function normalizeSnoozeMinutes(v: unknown): SnoozeMinutes {
   return DEFAULTS.snooze_minutes
 }
 
+const VALID_CATEGORIES: readonly ActivityCategory[] = ['task', 'habit', 'event', 'note', 'reminder']
+const HEX_RE = /^#[0-9a-f]{6}$/i
+
+function normalizeCategoryOverrides(v: unknown): Partial<Record<ActivityCategory, string>> {
+  if (!v || typeof v !== 'object') return {}
+  const r = v as Record<string, unknown>
+  const out: Partial<Record<ActivityCategory, string>> = {}
+  for (const cat of VALID_CATEGORIES) {
+    const val = r[cat]
+    if (typeof val === 'string' && HEX_RE.test(val)) out[cat] = val
+  }
+  return out
+}
+
 /** Coerce a raw jsonb value (any shape) into a typed UserPreferences.
  *  Unknown keys (e.g. an older `ringtone` field from a previous version of
  *  the settings page) are silently dropped from the typed view, but the
@@ -134,6 +155,7 @@ export function normalizePreferences(raw: unknown): UserPreferences {
       ? r.default_activity_public
       : DEFAULTS.default_activity_public,
     day_view_color_by: r.day_view_color_by === 'category' ? 'category' : DEFAULTS.day_view_color_by,
+    category_color_overrides: normalizeCategoryOverrides(r.category_color_overrides),
   }
 }
 

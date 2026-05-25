@@ -81,21 +81,25 @@ export type ActivityColorMode = 'profile' | 'category'
  * Resolves the accent color used to render an activity on calendar surfaces.
  *
  *   - 'profile' (default): owner's profile color — the long-standing behavior.
- *   - 'category': the activity's category color. Pro-only toggle from the
- *     Appearance settings; lets users colorize by activity type instead of
- *     by who owns the activity.
+ *   - 'category': activity's category color, optionally overridden by the
+ *     user's per-category picker. Pro-only toggle + picker live in the
+ *     Appearance settings.
  *
- * Falls back to the owner color if the category isn't recognized (defensive
- * — could happen with a future category that hasn't shipped yet on this
- * client).
+ * Resolution order when mode === 'category':
+ *   1. overrides[category]  (user-picked)
+ *   2. CATEGORY_CONFIG[category].hex  (built-in default)
+ *   3. ownerColor  (fallback if neither — should not normally happen)
  */
 export function activityColor(
   activity: { category?: ActivityCategory | null },
   ownerColor: string,
   mode: ActivityColorMode,
+  overrides?: Partial<Record<ActivityCategory, string>>,
 ): string {
   if (mode === 'category' && activity.category) {
-    return CATEGORY_CONFIG[activity.category]?.hex ?? ownerColor
+    return overrides?.[activity.category]
+      ?? CATEGORY_CONFIG[activity.category]?.hex
+      ?? ownerColor
   }
   return ownerColor
 }

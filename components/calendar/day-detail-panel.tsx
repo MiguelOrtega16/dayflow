@@ -183,14 +183,18 @@ export function DayDetailPanel({
 
   const myProfile = allUsers.find(u => u.isOwn)?.profile
 
-  // Resolve the current user's preferred card-color source. The Appearance
-  // toggle is Pro-gated; the entitlement check here is defensive so a stale
-  // 'category' on a downgraded account still renders correctly.
+  // Resolve the current user's preferred card-color source + per-category
+  // overrides. The Appearance toggle and picker are Pro-gated; the
+  // entitlement check here is defensive so a stale 'category' on a
+  // downgraded account still renders correctly.
   const { profile: currentProfile } = useProfile()
   const { entitlement } = useEntitlement(currentProfile?.id ?? null)
-  const colorMode = useMemo(() => {
-    const raw = normalizePreferences(currentProfile?.preferences ?? null).day_view_color_by
-    return raw === 'category' && entitlement.isPro ? 'category' as const : 'profile' as const
+  const { colorMode, colorOverrides } = useMemo(() => {
+    const prefs = normalizePreferences(currentProfile?.preferences ?? null)
+    const mode = prefs.day_view_color_by === 'category' && entitlement.isPro
+      ? 'category' as const
+      : 'profile' as const
+    return { colorMode: mode, colorOverrides: prefs.category_color_overrides }
   }, [currentProfile?.preferences, entitlement.isPro])
 
   const done = activities.filter(a => a.status === 'done').length
@@ -300,9 +304,9 @@ export function DayDetailPanel({
 
   const renderActivityCard = (activity: Activity, ownerColor: string) => {
     // 'profile' (default) keeps the legacy owner-color border. 'category'
-    // (Pro) substitutes the activity's category color so the day-list
-    // re-reads as "what kind of thing" at a glance.
-    const borderColor = activityColor(activity, ownerColor, colorMode)
+    // (Pro) substitutes the activity's category color (with user overrides)
+    // so the day-list re-reads as "what kind of thing" at a glance.
+    const borderColor = activityColor(activity, ownerColor, colorMode, colorOverrides)
     const isParticipant = !!activity.invitation_id
     const statusCfg = STATUS_CONFIG[activity.status]
     const StatusIcon = STATUS_ICON[activity.status]

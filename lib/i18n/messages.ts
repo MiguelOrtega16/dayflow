@@ -432,6 +432,8 @@ export const messages = {
       colorModeOptionLabel: 'Colorear por categoría',
       colorModeOnHint: 'Cada actividad usa el color de su categoría (tareas, hábitos, eventos, notas, recordatorios).',
       colorModeOffHint: 'Cada actividad usa el color del perfil de su dueño.',
+      categoryColorsHelp: 'Personaliza el color de cada categoría. Toca un color para aplicarlo.',
+      resetCategoryColor: 'Restablecer',
       themeLabel: 'Tema de la app',
       themePalettes: {
         default:  'Predeterminado',
@@ -1525,6 +1527,8 @@ export const messages = {
       colorModeOptionLabel: 'Color by category',
       colorModeOnHint: 'Each activity uses its category color (tasks, habits, events, notes, reminders).',
       colorModeOffHint: 'Each activity uses its owner\'s profile color.',
+      categoryColorsHelp: 'Customize each category\'s color. Tap a swatch to apply.',
+      resetCategoryColor: 'Reset',
       themeLabel: 'App theme',
       themePalettes: {
         default:  'Default',
