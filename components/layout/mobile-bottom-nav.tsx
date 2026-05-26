@@ -7,10 +7,12 @@ import { Menu, CalendarDays, ListChecks, BarChart2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n'
 import { NotificationBell } from './notification-bell'
+import { DiscoveryDot } from '@/components/onboarding/discovery-dot'
 
 interface MobileBottomNavProps {
   userId?: string
   onMenuClick: () => void
+  showMenuDot?: boolean
 }
 
 const TABS = [
@@ -19,7 +21,7 @@ const TABS = [
   { href: '/dashboard/stats',    icon: BarChart2,    key: 'stats'    },
 ] as const
 
-export function MobileBottomNav({ userId, onMenuClick }: MobileBottomNavProps) {
+export function MobileBottomNav({ userId, onMenuClick, showMenuDot = false }: MobileBottomNavProps) {
   const pathname = usePathname()
   const router   = useRouter()
   const { t }    = useI18n()
@@ -46,7 +48,9 @@ export function MobileBottomNav({ userId, onMenuClick }: MobileBottomNavProps) {
           className="flex-1 flex flex-col items-center justify-center gap-0.5 text-muted-foreground hover:text-foreground transition-colors"
           aria-label={t('nav.openMenu')}
         >
-          <Menu className="w-5 h-5" />
+          <DiscoveryDot show={showMenuDot}>
+            <Menu className="w-5 h-5" />
+          </DiscoveryDot>
           <span className="text-[10px] font-medium">{t('nav.menu')}</span>
         </button>
         {TABS.map(tab => {

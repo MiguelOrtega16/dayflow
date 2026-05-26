@@ -17,6 +17,7 @@ import { DateTimePrefsProvider } from '@/lib/datetime-prefs'
 import { ProfileProvider, useProfile } from '@/lib/profile-context'
 import { TopProgressBar } from './top-progress-bar'
 import { ForceUpdateGate } from './force-update-gate'
+import { getDiscoveryDots, markDiscoverySeen } from '@/lib/onboarding/discovery-dots'
 import type { Profile } from '@/types'
 
 interface DashboardShellProps {
@@ -36,8 +37,16 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
 // (name, color, etc.) propagates to the sidebar / bottom nav without
 // a remount or refetch.
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
-  const { profile } = useProfile()
+  const { profile, setProfile } = useProfile()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // First-run discovery dots — only render for accounts created after the
+  // release cutoff (see lib/onboarding/discovery-dots.ts).
+  const dots = getDiscoveryDots(profile)
+  const handleMenuOpen = () => {
+    setSidebarOpen(true)
+    if (dots.menu) markDiscoverySeen(profile, setProfile, 'menu')
+  }
 
   useEffect(() => {
     if (profile?.id) initPushNotifications(profile.id)
@@ -163,7 +172,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* ── Bottom navigation — mobile only ── */}
-        <MobileBottomNav userId={profile?.id} onMenuClick={() => setSidebarOpen(true)} />
+        <MobileBottomNav userId={profile?.id} onMenuClick={handleMenuOpen} showMenuDot={dots.menu} />
       </div>
     </div>
     </DateTimePrefsProvider>

@@ -9,6 +9,8 @@ import { cn, getInitials } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { track } from '@/lib/analytics/posthog'
+import { getDiscoveryDots } from '@/lib/onboarding/discovery-dots'
+import { DiscoveryDot } from '@/components/onboarding/discovery-dot'
 import type { Profile } from '@/types'
 import {
   ListChecks, Users, Settings,
@@ -52,6 +54,7 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
 
   const navItems = isNative ? [...NAV_KEYS, ...NATIVE_NAV_KEYS] : NAV_KEYS
+  const dots = getDiscoveryDots(profile)
 
   const handleSignOut = async () => {
     track('user_logged_out')
@@ -116,7 +119,9 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
               )}
               title={collapsed ? label : undefined}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <DiscoveryDot show={key === 'people' && dots.people}>
+                <Icon className="w-4 h-4 shrink-0" />
+              </DiscoveryDot>
               {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           )
@@ -135,7 +140,9 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
           )}
           title={collapsed ? t('nav.settings') : undefined}
         >
-          <Settings className="w-4 h-4 shrink-0" />
+          <DiscoveryDot show={dots.settings}>
+            <Settings className="w-4 h-4 shrink-0" />
+          </DiscoveryDot>
           {!collapsed && <span>{t('nav.settings')}</span>}
         </Link>
 

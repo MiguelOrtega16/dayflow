@@ -11,6 +11,7 @@ import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { useProfile } from '@/lib/profile-context'
+import { markDiscoverySeen } from '@/lib/onboarding/discovery-dots'
 import type { Profile, SharedCalendar, ShareMutableNotificationType, NotificationType } from '@/types'
 
 const SHARE_NOTIF_TYPES: ShareMutableNotificationType[] = [
@@ -29,7 +30,7 @@ export default function PeoplePage() {
   // so this page can render its UI shell immediately and only the share
   // list waits on its own fetch. Aliased to `currentUser` to keep the rest
   // of the file unchanged.
-  const { profile: currentUser } = useProfile()
+  const { profile: currentUser, setProfile } = useProfile()
   const [sharedCalendars, setSharedCalendars] = useState<SharedCalendar[]>([])
   const [searchQuery, setSearchQuery]       = useState('')
   const [searchResults, setSearchResults]   = useState<Profile[]>([])
@@ -44,6 +45,13 @@ export default function PeoplePage() {
 
   useEffect(() => {
     if (currentUser?.id) loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id])
+
+  // First-run discovery: this page is the destination the People dot
+  // promotes — visiting it clears the dot for next time.
+  useEffect(() => {
+    if (currentUser?.id) markDiscoverySeen(currentUser, setProfile, 'people')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id])
 

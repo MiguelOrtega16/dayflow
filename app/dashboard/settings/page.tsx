@@ -10,6 +10,7 @@ import { useI18n, LOCALE_NAMES, LOCALES, type Locale } from '@/lib/i18n'
 import { CustomSelect } from '@/components/ui/custom-select'
 import { normalizePreferences, updateUserPreferences } from '@/lib/user-preferences'
 import { useProfile } from '@/lib/profile-context'
+import { markDiscoverySeen } from '@/lib/onboarding/discovery-dots'
 import { useTheme } from '@/components/layout/theme-provider'
 import { useRouter } from 'next/navigation'
 import { track } from '@/lib/analytics/posthog'
@@ -34,6 +35,12 @@ export default function SettingsPage() {
   const supabase = createClient()
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
+
+  // First-run discovery: visiting Settings clears its sidebar dot.
+  useEffect(() => {
+    if (profile?.id) markDiscoverySeen(profile, setProfile, 'settings')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id])
 
   // Sync local form state if the cached profile gets replaced (e.g. another
   // dashboard surface called refresh()). Skipped on first mount because
