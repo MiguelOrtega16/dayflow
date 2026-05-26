@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Custom content view for the always-pinned daily-summary tray entry.
-  Wraps title + body + two inline action buttons so the + Task / +
-  Reminder shortcuts are visible without the user having to expand the
-  notification.
 
-  Text colours come from androidx.core's TextAppearance.Compat.Notification
-  family, which is explicitly built for notification panels and adapts
-  correctly to light AND dark system themes. (Plain ?android:attr/text-
-  ColorPrimary resolves against the *host app* theme, not the panel's,
-  which on Samsung One UI's translucent dark panel renders the title at
-  ~50% opacity — the "ghost text" effect we just saw.)
+  Sizing trade-off: Android's compact notification view clips at ~64dp
+  on most launchers (Samsung One UI included). Stacking title + body
+  + button-row vertically (~85dp) made the system clip the button row
+  in the collapsed state — the exact bug the user reported. To keep
+  both + buttons visible without the user having to expand the
+  notification, we merge the date and the event count into ONE title
+  line and place the button row directly under it. Total height is
+  now ~58dp, comfortably under the compact limit.
 
-  Sizes/weights match what the system uses for standard notifications
-  (~14sp bold title, ~13sp body, 14sp uppercase bold action buttons).
+  Text appearance still uses androidx.core's Notification.Title style,
+  which adapts to light/dark system notification panels so the title
+  doesn't render at 50% opacity on Samsung's translucent dark shade.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -21,7 +21,7 @@
     android:orientation="vertical"
     android:paddingStart="2dp"
     android:paddingEnd="12dp"
-    android:paddingTop="2dp"
+    android:paddingTop="0dp"
     android:paddingBottom="2dp">
 
     <TextView
@@ -32,36 +32,21 @@
         android:singleLine="true"
         android:ellipsize="end" />
 
-    <TextView
-        android:id="@+id/summary_body"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textAppearance="@style/TextAppearance.Compat.Notification"
-        android:singleLine="true"
-        android:ellipsize="end" />
-
-    <!-- Inline action button row. Spacing/sizes mimic the action buttons
-         Android draws in the expanded view of a standard notification,
-         so the row feels native. The TextViews are the tap targets —
-         the provider attaches PendingIntents via setOnClickPendingIntent
-         on the RemoteViews. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="6dp"
         android:layout_marginStart="-6dp">
 
         <TextView
             android:id="@+id/summary_btn_task"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:minHeight="36dp"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
+            android:minHeight="32dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
             android:gravity="center"
             android:fontFamily="sans-serif-medium"
             android:textColor="#7C6FE3"
@@ -75,12 +60,12 @@
             android:id="@+id/summary_btn_reminder"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
-            android:minHeight="36dp"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
+            android:layout_marginStart="2dp"
+            android:minHeight="32dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
             android:gravity="center"
             android:fontFamily="sans-serif-medium"
             android:textColor="#7C6FE3"

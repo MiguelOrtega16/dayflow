@@ -379,8 +379,16 @@ function NextUpPreview() {
 // activities with a coloured bullet, title and a small time/sublabel.
 function DayPreview() {
   const { t } = useI18n()
+  // Body uses bg-background + the default foreground text color so the
+  // preview adapts to the app's light/dark theme exactly like the Today
+  // preview above. Hardcoding #FAFAFA / #1A1A1A made the card feel like
+  // an out-of-place patch in dark mode and the inner body looked like
+  // its corners weren't rounded (they were — but a light body inside a
+  // dark page makes the boundary visually pop). The on-device widget
+  // body color is independently customizable via the widget settings
+  // page; this preview only ever needs to look correct in-app.
   return (
-    <div className="rounded-2xl overflow-hidden border border-border/60 bg-[#FAFAFA] text-[#1A1A1A] shadow-sm flex items-stretch">
+    <div className="rounded-2xl overflow-hidden border border-border/60 bg-background shadow-sm flex items-stretch">
       <div className="flex flex-col items-center justify-center w-16 shrink-0 bg-primary text-primary-foreground px-2 py-3">
         <div className="text-3xl font-bold leading-none">{t('widgets.previewLabels.dayBigDay')}</div>
         <div className="text-[10px] mt-1 opacity-90">{t('widgets.previewLabels.dayBigMonth')}</div>
@@ -400,7 +408,7 @@ function DayPreviewRow({ color, title, sub }: { color: string; title: string; su
       <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: color }} />
       <div className="min-w-0">
         <div className="text-xs font-semibold truncate leading-tight">{title}</div>
-        <div className="text-[10px] text-[#666666] truncate">{sub}</div>
+        <div className="text-[10px] text-muted-foreground truncate">{sub}</div>
       </div>
     </div>
   )
@@ -414,8 +422,11 @@ function DayPreviewRow({ color, title, sub }: { color: string; title: string; su
 // 0x55) so the preview tracks the on-device look.
 function AgendaPreview() {
   const { t } = useI18n()
+  // bg-background + default text colors → adapts to the app's dark/light
+  // theme just like the Today preview. See DayPreview note above for the
+  // rationale; same fix applies here.
   return (
-    <div className="rounded-2xl overflow-hidden border border-border/60 bg-[#FAFAFA] text-[#1A1A1A] shadow-sm">
+    <div className="rounded-2xl overflow-hidden border border-border/60 bg-background shadow-sm">
       <div className="bg-primary text-primary-foreground px-4 h-10 flex items-center text-sm font-semibold">
         {t('widgets.previewLabels.agendaMonth')}
       </div>
@@ -447,11 +458,17 @@ function AgendaPreviewDay({
   dayNum: number
   events: Array<{ color: string; title: string; time: string }>
 }) {
+  // On the device the Agenda renderer paints the date column with the
+  // first event-of-the-day's accent (see AgendaWidgetService.kt's
+  // setTextColor on agenda_row_dow / agenda_row_dom). The preview needs
+  // to mirror that or users see a colour scheme on the settings card
+  // that doesn't appear after pinning.
+  const dateAccent = events[0]?.color ?? '#666666'
   return (
     <div className="flex items-stretch gap-3 py-1.5">
       <div className="w-9 shrink-0 text-center">
-        <div className="text-[10px] uppercase tracking-wide text-[#3b82f6]">{dayLabel}</div>
-        <div className="text-lg font-bold leading-tight text-[#3b82f6]">{dayNum}</div>
+        <div className="text-[10px] uppercase tracking-wide" style={{ color: dateAccent }}>{dayLabel}</div>
+        <div className="text-lg font-bold leading-tight" style={{ color: dateAccent }}>{dayNum}</div>
       </div>
       <div className="flex-1 min-w-0 space-y-1">
         {events.map((e, i) => (
@@ -461,7 +478,7 @@ function AgendaPreviewDay({
             style={{ backgroundColor: e.color + '55' }}
           >
             <div className="text-xs font-semibold truncate leading-tight" style={{ color: e.color }}>{e.title}</div>
-            <div className="text-[10px] truncate text-[#666666]">{e.time}</div>
+            <div className="text-[10px] truncate text-muted-foreground">{e.time}</div>
           </div>
         ))}
       </div>

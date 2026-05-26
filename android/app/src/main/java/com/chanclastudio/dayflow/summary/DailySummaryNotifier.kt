@@ -127,14 +127,19 @@ object DailySummaryNotifier {
         //    user having to expand the notification. Standard addAction
         //    buttons render in the *expanded* state on most launchers
         //    (Samsung One UI in particular hides them until the user taps
-        //    the chevron). A custom content view with two click-attached
-        //    TextViews mirrors what the screenshot reference does — see
-        //    layout/daily_summary_notification.xml. ──
+        //    the chevron).
+        //
+        //    Compact view height ceiling is ~64dp on most launchers, so
+        //    the date + the count are merged onto a single title line —
+        //    a separate body line + buttons pushed the layout past the
+        //    ceiling and the system clipped the button row. The combined
+        //    "Mon, May 25 · 8 events today" reads naturally and lets the
+        //    button row stay on screen at all times.
         val taskLabel     = app.getString(R.string.daily_summary_action_task)
         val reminderLabel = app.getString(R.string.daily_summary_action_reminder)
+        val headline      = "$title · $body"
         val contentView   = RemoteViews(app.packageName, R.layout.daily_summary_notification).apply {
-            setTextViewText(R.id.summary_title,        title)
-            setTextViewText(R.id.summary_body,         body)
+            setTextViewText(R.id.summary_title,        headline)
             setTextViewText(R.id.summary_btn_task,     taskLabel)
             setTextViewText(R.id.summary_btn_reminder, reminderLabel)
             setOnClickPendingIntent(R.id.summary_btn_task,     taskPi)
