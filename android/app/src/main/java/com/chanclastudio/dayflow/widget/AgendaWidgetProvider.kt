@@ -57,13 +57,20 @@ class AgendaWidgetProvider : AppWidgetProvider() {
         private fun renderWidget(ctx: Context, mgr: AppWidgetManager, widgetId: Int) {
             val views = RemoteViews(ctx.packageName, R.layout.agenda_widget)
 
-            // ── Apply per-widget config (background tint + opacity) ──
-            val colorHex   = WidgetStore.readColor(ctx, widgetId)
+            // ── Apply per-widget config ──
+            // Body stays a neutral dark base regardless of the user's chosen
+            // color — tinting the whole 4×4 tile with the brand primary made
+            // the colour-coded event blocks blend into the background. The
+            // user's accent is applied only to the top header bar (month
+            // label), the same approach the Today widget already uses.
+            val accentHex  = WidgetStore.readColor(ctx, widgetId)
             val opacityPct = WidgetStore.readOpacity(ctx, widgetId)
-            val baseColor  = parseHex(colorHex, fallback = 0xFF0F0F10.toInt())
+            val accent     = parseHex(accentHex, fallback = 0xFF7C6FE3.toInt())
             val alpha      = (opacityPct.coerceIn(20, 100) * 255 / 100)
-            val bgColor    = (alpha shl 24) or (baseColor and 0x00FFFFFF)
-            views.setInt(R.id.agenda_bg, "setBackgroundColor", bgColor)
+            val baseBg     = (alpha shl 24) or 0x0F0F10
+            val headerBg   = (alpha shl 24) or (accent and 0x00FFFFFF)
+            views.setInt(R.id.agenda_bg,     "setBackgroundColor", baseBg)
+            views.setInt(R.id.agenda_header, "setBackgroundColor", headerBg)
 
             // Header: current month name.
             val monthFmt = SimpleDateFormat("MMMM", Locale.getDefault()).apply { timeZone = TimeZone.getDefault() }

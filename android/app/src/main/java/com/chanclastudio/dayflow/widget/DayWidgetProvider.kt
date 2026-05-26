@@ -65,13 +65,22 @@ class DayWidgetProvider : AppWidgetProvider() {
         private fun renderWidget(ctx: Context, mgr: AppWidgetManager, widgetId: Int) {
             val views = RemoteViews(ctx.packageName, R.layout.day_widget)
 
-            // ── Apply per-widget config (background tint + opacity) ──
-            val colorHex   = WidgetStore.readColor(ctx, widgetId)
+            // ── Apply per-widget config ──
+            // The outer background stays a fixed dark base regardless of the
+            // user's chosen color. Tinting the entire 4×2 tile with the brand
+            // primary washed out the activity rows (illegible text on top of
+            // a vibrant accent). Instead the user's color is applied only to
+            // the left date column, mirroring how the Today widget colors
+            // just the header bar. Opacity still controls the whole tile so
+            // a translucent variant stays cohesive.
+            val accentHex  = WidgetStore.readColor(ctx, widgetId)
             val opacityPct = WidgetStore.readOpacity(ctx, widgetId)
-            val baseColor  = parseHex(colorHex, fallback = 0xFF171818.toInt())
+            val accent     = parseHex(accentHex, fallback = 0xFF7C6FE3.toInt())
             val alpha      = (opacityPct.coerceIn(20, 100) * 255 / 100)
-            val bgColor    = (alpha shl 24) or (baseColor and 0x00FFFFFF)
-            views.setInt(R.id.day_bg, "setBackgroundColor", bgColor)
+            val baseBg     = (alpha shl 24) or 0x171818
+            val headerBg   = (alpha shl 24) or (accent and 0x00FFFFFF)
+            views.setInt(R.id.day_bg,     "setBackgroundColor", baseBg)
+            views.setInt(R.id.day_header, "setBackgroundColor", headerBg)
 
             // ── Header: big date ──
             val today = Date()

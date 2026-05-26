@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Day widget — 4×2 tile showing the current day's number and a vertical
-  list of up to 4 activities. Same Samsung-One-UI-safe constraints as the
-  other widgets (no ImageView, no theme attrs, no shape drawables, no
-  vector drawables in src). The provider fills in setBackgroundColor on
-  day_bg / day_header so per-widget tinting still applies.
+  list of up to 4 activities. Samsung-One-UI-safe constraints: no bare
+  <View> (RemoteViews doesn't accept it — caused "Couldn't add widget"
+  on One UI), no ImageView, no theme attrs, no shape drawables. Dots and
+  the divider use empty TextViews with a coloured background instead.
+  The provider fills in setBackgroundColor on day_bg / day_header so the
+  per-widget config (color + opacity) tints only the left date column,
+  leaving the activity list on a neutral dark base.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/day_bg"
@@ -14,15 +17,17 @@
     android:padding="14dp"
     android:background="#171818">
 
-    <!-- Left column: big day number + sub-label (month, weekday) -->
+    <!-- Left column: big day number + sub-label (month, weekday).
+         Provider tints this with the user-chosen accent. -->
     <LinearLayout
         android:id="@+id/day_header"
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="center"
-        android:paddingStart="2dp"
-        android:paddingEnd="10dp">
+        android:paddingStart="6dp"
+        android:paddingEnd="14dp"
+        android:background="#7C6FE3">
 
         <TextView
             android:id="@+id/day_big_num"
@@ -40,15 +45,18 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:text="Ago, Mié"
-            android:textColor="#BFBFBF"
+            android:textColor="#E0E0FFE6"
             android:textSize="11sp" />
     </LinearLayout>
 
-    <!-- Vertical divider line (inline background instead of shape drawable) -->
-    <View
+    <!-- Vertical divider line. RemoteViews does NOT allow <View>, so we
+         use an empty TextView with a coloured background as the stripe. -->
+    <TextView
         android:layout_width="1dp"
         android:layout_height="match_parent"
+        android:layout_marginStart="10dp"
         android:layout_marginEnd="10dp"
+        android:text=""
         android:background="#33FFFFFF" />
 
     <!-- Right column: up to 4 activity rows. The provider fills each
@@ -69,10 +77,11 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <View
+            <TextView
                 android:id="@+id/day_row_1_dot"
                 android:layout_width="6dp"
                 android:layout_height="6dp"
+                android:text=""
                 android:background="#22C55E" />
 
             <LinearLayout
@@ -112,10 +121,11 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <View
+            <TextView
                 android:id="@+id/day_row_2_dot"
                 android:layout_width="6dp"
                 android:layout_height="6dp"
+                android:text=""
                 android:background="#F59E0B" />
 
             <LinearLayout
@@ -155,10 +165,11 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <View
+            <TextView
                 android:id="@+id/day_row_3_dot"
                 android:layout_width="6dp"
                 android:layout_height="6dp"
+                android:text=""
                 android:background="#A855F7" />
 
             <LinearLayout
@@ -198,10 +209,11 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <View
+            <TextView
                 android:id="@+id/day_row_4_dot"
                 android:layout_width="6dp"
                 android:layout_height="6dp"
+                android:text=""
                 android:background="#0EA5E9" />
 
             <LinearLayout

@@ -156,11 +156,16 @@ class AgendaWidgetFactory(private val ctx: Context) : RemoteViewsService.RemoteV
                 setTextViewText(R.id.agenda_row_title, row.title)
                 setTextViewText(R.id.agenda_row_time,  row.time)
 
-                // Colour the event block: tinted background (alpha ~22)
-                // + matching title text. RemoteViews can't set drawable
-                // borders, so we just tint the block background.
-                setInt(R.id.agenda_row_block, "setBackgroundColor", withAlpha(row.color, 0x33))
+                // Colour the event block. RemoteViews can't paint drawable
+                // borders, so we tint the block background with a stronger
+                // alpha (~0x55 / 33%) so it's clearly visible against the
+                // dark base, and keep the title in the same accent so the
+                // colour identifies the category at a glance.
+                setInt(R.id.agenda_row_block, "setBackgroundColor", withAlpha(row.color, 0x55))
                 setTextColor(R.id.agenda_row_title, row.color)
+                // Time line: bright off-white so it stays readable on the
+                // tinted block, regardless of the accent's hue.
+                setTextColor(R.id.agenda_row_time, 0xFFE5E7EB.toInt())
 
                 // Date column colour matches the block accent on the
                 // first row of each day, muted otherwise.

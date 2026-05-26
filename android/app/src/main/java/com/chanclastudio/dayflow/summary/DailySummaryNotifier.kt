@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Build
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.chanclastudio.dayflow.MainActivity
@@ -122,15 +123,43 @@ object DailySummaryNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // ── Custom RemoteViews so both + buttons stay visible without the
+        //    user having to expand the notification. Standard addAction
+        //    buttons render in the *expanded* state on most launchers
+        //    (Samsung One UI in particular hides them until the user taps
+        //    the chevron). A custom content view with two click-attached
+        //    TextViews mirrors what the screenshot reference does — see
+        //    layout/daily_summary_notification.xml. ──
+        val taskLabel     = app.getString(R.string.daily_summary_action_task)
+        val reminderLabel = app.getString(R.string.daily_summary_action_reminder)
+        val contentView   = RemoteViews(app.packageName, R.layout.daily_summary_notification).apply {
+            setTextViewText(R.id.summary_title,        title)
+            setTextViewText(R.id.summary_body,         body)
+            setTextViewText(R.id.summary_btn_task,     taskLabel)
+            setTextViewText(R.id.summary_btn_reminder, reminderLabel)
+            setOnClickPendingIntent(R.id.summary_btn_task,     taskPi)
+            setOnClickPendingIntent(R.id.summary_btn_reminder, reminderPi)
+        }
+
         val builder = NotificationCompat.Builder(app, CHANNEL_ID)
             // Re-using the launcher icon as the small icon — Android requires
             // a monochrome silhouette here; the standard launcher fills that
             // role across all DayFlow surfaces (same as the FCM default icon).
             .setSmallIcon(R.mipmap.ic_launcher)
+            // setContentTitle / setContentText are still set as a fallback
+            // for accessibility services and for OEMs that ignore custom
+            // views — the visible UI is owned by the RemoteViews above.
             .setContentTitle(title)
             .setContentText(body)
             .setColor(0xFF7C6FE3.toInt())
             .setContentIntent(openPi)
+            // DecoratedCustomViewStyle draws the standard notification
+            // chrome (icon + app name + time + chevron) around our custom
+            // layout — same content view is used in collapsed + expanded
+            // mode so the two action TextViews are always on screen.
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(contentView)
+            .setCustomBigContentView(contentView)
             // No auto-cancel: tapping the body keeps the tray entry alive so
             // the user always has the running summary to come back to. Action
             // buttons don't auto-cancel either (Android default behavior).
@@ -145,8 +174,6 @@ object DailySummaryNotifier {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(0, app.getString(R.string.daily_summary_action_task), taskPi)
-            .addAction(0, app.getString(R.string.daily_summary_action_reminder), reminderPi)
 
         // Avoid the system "Notification posted" toast / sound on refresh —
         // the only time this fires real audio is the first ever post on a
