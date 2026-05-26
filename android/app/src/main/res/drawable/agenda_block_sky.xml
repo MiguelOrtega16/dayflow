@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rounded background for Agenda widget event blocks (sky accent).
+  Alpha 0x55 (33%) matches the in-app preview's "color + '55'" tint.
+  One drawable per accent because RemoteViews can't tint a single
+  shape per-row on pre-API-31 devices.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="6dp" />
+    <solid android:color="#550EA5E9" />
+</shape>

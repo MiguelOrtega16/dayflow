@@ -472,7 +472,7 @@ function AgendaConfigDay({
             className="rounded-md px-2 py-1"
             style={{ backgroundColor: e.color + '55' }}
           >
-            <div className="text-xs font-semibold truncate leading-tight" style={{ color: e.color }}>{e.title}</div>
+            <div className="text-xs font-semibold truncate leading-tight text-[#1A1A1A]">{e.title}</div>
             <div className="text-[10px] truncate text-[#666666]">{e.time}</div>
           </div>
         ))}

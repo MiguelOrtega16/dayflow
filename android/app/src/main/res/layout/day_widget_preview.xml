@@ -11,19 +11,20 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:padding="14dp"
     android:background="#FAFAFA">
 
     <!-- Left column: big day + sub-label, tinted with the default brand
          accent. The live provider re-tints this column with the user's
-         chosen color via setBackgroundColor. -->
+         chosen color via setBackgroundColor. No padding on the parent so
+         the accent fills the left edge edge-to-edge — see day_widget.xml
+         for the matching live-layout pattern. -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="center"
-        android:paddingStart="6dp"
-        android:paddingEnd="14dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
         android:background="#7C6FE3">
 
         <TextView
@@ -51,15 +52,21 @@
         android:layout_height="match_parent"
         android:layout_marginStart="10dp"
         android:layout_marginEnd="10dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="14dp"
         android:text=""
         android:background="#22000000" />
 
-    <!-- Right column: sample activities. -->
+    <!-- Right column: sample activities. Padding lives here since the
+         parent no longer pads (so the accent column reaches the edges). -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:paddingEnd="14dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
 
         <TextView
             android:layout_width="match_parent"

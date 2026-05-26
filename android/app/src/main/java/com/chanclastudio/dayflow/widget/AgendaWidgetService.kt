@@ -156,16 +156,16 @@ class AgendaWidgetFactory(private val ctx: Context) : RemoteViewsService.RemoteV
                 setTextViewText(R.id.agenda_row_title, row.title)
                 setTextViewText(R.id.agenda_row_time,  row.time)
 
-                // Colour the event block. RemoteViews can't paint drawable
-                // borders, so we tint the block background with a stronger
-                // alpha (~0x55 / 33%) so it's clearly visible against the
-                // dark base, and keep the title in the same accent so the
-                // colour identifies the category at a glance.
-                setInt(R.id.agenda_row_block, "setBackgroundColor", withAlpha(row.color, 0x55))
-                setTextColor(R.id.agenda_row_title, row.color)
-                // Time line: bright off-white so it stays readable on the
-                // tinted block, regardless of the accent's hue.
-                setTextColor(R.id.agenda_row_time, 0xFFE5E7EB.toInt())
+                // Colour the event block. Uses a rounded shape drawable
+                // (resolved per accent below) so the block has the same
+                // ~6dp corner radius the in-app preview shows. The block
+                // is the only category cue — the title and time stay in
+                // neutral colours so they match the Today widget's row
+                // style (#1A1A1A title, #666666 time) regardless of which
+                // accent the event uses.
+                setInt(R.id.agenda_row_block, "setBackgroundResource", blockDrawableFor(row.color))
+                setTextColor(R.id.agenda_row_title, 0xFF1A1A1A.toInt())
+                setTextColor(R.id.agenda_row_time,  0xFF666666.toInt())
 
                 // Date column colour matches the block accent on the
                 // first row of each day, muted otherwise.
@@ -200,8 +200,18 @@ class AgendaWidgetFactory(private val ctx: Context) : RemoteViewsService.RemoteV
         else                             -> 0xFF0EA5E9.toInt()
     }
 
-    private fun withAlpha(color: Int, alpha: Int): Int =
-        (alpha shl 24) or (color and 0x00FFFFFF)
+    /** Maps a category accent to the matching rounded-shape drawable.
+     *  We can't tint a single drawable per-row through RemoteViews on
+     *  pre-API-31 devices (setColorStateList wasn't supported then), so
+     *  we ship one pre-baked shape per accent. The five colours match
+     *  colorForCategory above; anything unknown falls back to sky. */
+    private fun blockDrawableFor(color: Int): Int = when (color) {
+        0xFF22C55E.toInt() -> R.drawable.agenda_block_green
+        0xFFA855F7.toInt() -> R.drawable.agenda_block_purple
+        0xFFF59E0B.toInt() -> R.drawable.agenda_block_amber
+        0xFFEC4899.toInt() -> R.drawable.agenda_block_pink
+        else               -> R.drawable.agenda_block_sky
+    }
 
     private fun fmtTime(t: String?): String {
         if (t.isNullOrBlank()) return ""

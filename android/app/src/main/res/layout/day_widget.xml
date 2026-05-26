@@ -14,19 +14,21 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:padding="14dp"
     android:background="#FAFAFA">
 
     <!-- Left column: big day number + sub-label (month, weekday).
-         Provider tints this with the user-chosen accent. -->
+         Provider tints this with the user-chosen accent.
+         No padding on the parent (day_bg) — the accent fills the left
+         edge top-to-bottom; the launcher's rounded-widget clip handles
+         the outer corners. Internal padding lives on this column. -->
     <LinearLayout
         android:id="@+id/day_header"
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="center"
-        android:paddingStart="6dp"
-        android:paddingEnd="14dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
         android:background="#7C6FE3">
 
         <TextView
@@ -50,23 +52,30 @@
     </LinearLayout>
 
     <!-- Vertical divider line. RemoteViews does NOT allow <View>, so we
-         use an empty TextView with a coloured background as the stripe. -->
+         use an empty TextView with a coloured background as the stripe.
+         Top/bottom margin so the divider doesn't run edge-to-edge once
+         the accent column does. -->
     <TextView
         android:layout_width="1dp"
         android:layout_height="match_parent"
         android:layout_marginStart="10dp"
         android:layout_marginEnd="10dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="14dp"
         android:text=""
         android:background="#22000000" />
 
-    <!-- Right column: up to 4 activity rows. The provider fills each
-         row's title/sub TextViews and toggles visibility based on the
-         day's actual activity count. -->
+    <!-- Right column: up to 4 activity rows. Internal padding lives here
+         now that the parent no longer adds it (the accent column needs
+         to reach the widget edges). -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:paddingEnd="14dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
 
         <!-- Row 1 -->
         <LinearLayout

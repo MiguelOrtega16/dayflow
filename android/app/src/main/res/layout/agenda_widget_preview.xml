@@ -74,13 +74,13 @@
             android:paddingEnd="10dp"
             android:paddingTop="8dp"
             android:paddingBottom="8dp"
-            android:background="#5522C55E">
+            android:background="@drawable/agenda_block_green">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Mom’s Birthday"
-                android:textColor="#22C55E"
+                android:textColor="#1A1A1A"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:singleLine="true"
@@ -142,13 +142,13 @@
             android:paddingEnd="10dp"
             android:paddingTop="8dp"
             android:paddingBottom="8dp"
-            android:background="#55F59E0B">
+            android:background="@drawable/agenda_block_amber">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Potluck Party"
-                android:textColor="#F59E0B"
+                android:textColor="#1A1A1A"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:singleLine="true"
