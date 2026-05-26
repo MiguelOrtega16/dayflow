@@ -11,5 +11,6 @@
     <string name="daily_summary_body_one">1 evento hoy</string>
     <string name="daily_summary_body_many">%1$d eventos hoy</string>
     <string name="daily_summary_action_task">+ Tarea</string>
+    <string name="daily_summary_action_template">+ Plantilla</string>
     <string name="daily_summary_action_reminder">+ Recordatorio</string>
 </resources>

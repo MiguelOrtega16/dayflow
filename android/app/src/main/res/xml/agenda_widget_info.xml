@@ -8,8 +8,8 @@
     android:minResizeHeight="180dp"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
-    android:initialLayout="@layout/agenda_widget"
+    android:initialLayout="@layout/agenda_widget_preview"
     android:previewImage="@mipmap/ic_launcher"
-    android:previewLayout="@layout/agenda_widget"
+    android:previewLayout="@layout/agenda_widget_preview"
     android:description="@string/agenda_widget_description"
     android:widgetCategory="home_screen" />

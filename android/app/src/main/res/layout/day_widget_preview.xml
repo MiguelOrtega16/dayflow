@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Static preview shown by the system pinner dialog ("Add to Home screen?")
+  and by the launcher's widget tray before the provider's onUpdate fires.
+  Same Samsung-One-UI-safe constraints as the live layout: only
+  LinearLayout + TextView, no <View>, no ImageView, no theme attrs, no
+  vector drawables. Sample data is baked in so users see what the widget
+  will look like once populated — Today widget does the same thing.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:padding="14dp"
+    android:background="#FAFAFA">
+
+    <!-- Left column: big day + sub-label, tinted with the default brand
+         accent. The live provider re-tints this column with the user's
+         chosen color via setBackgroundColor. -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingStart="6dp"
+        android:paddingEnd="14dp"
+        android:background="#7C6FE3">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="20"
+            android:textColor="#FFFFFF"
+            android:textSize="34sp"
+            android:textStyle="bold"
+            android:includeFontPadding="false" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Aug, Wed"
+            android:textColor="#E0E0FFE6"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Vertical divider — empty TextView with a bg colour stands in for
+         the bare <View> RemoteViews doesn't accept. -->
+    <TextView
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:text=""
+        android:background="#22000000" />
+
+    <!-- Right column: sample activities. -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="2dp"
+            android:paddingBottom="6dp"
+            android:text="• Mom’s Birthday"
+            android:textColor="#1A1A1A"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="6dp"
+            android:text="• Marketing Strategy"
+            android:textColor="#1A1A1A"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="• Team Building"
+            android:textColor="#1A1A1A"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end" />
+    </LinearLayout>
+</LinearLayout>

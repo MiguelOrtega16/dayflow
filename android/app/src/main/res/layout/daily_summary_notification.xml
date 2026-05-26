@@ -57,7 +57,7 @@
             android:clickable="true" />
 
         <TextView
-            android:id="@+id/summary_btn_reminder"
+            android:id="@+id/summary_btn_template"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="2dp"

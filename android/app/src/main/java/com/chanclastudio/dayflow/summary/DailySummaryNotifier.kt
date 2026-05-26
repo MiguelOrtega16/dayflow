@@ -102,8 +102,12 @@ object DailySummaryNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // ── Actions: + Task / + Reminder. The create modal reads ?type= to
-        //    pre-select the activity category. ──
+        // ── Actions: + Task / + Template.
+        //    "+ Task" opens the create-activity modal with the Task category
+        //    pre-selected (the modal reads ?type=task to pre-fill).
+        //    "+ Template" jumps straight to the Templates picker so the user
+        //    can start from a curated activity instead of an empty form —
+        //    one tap, no modal-fly-by. ──
         val taskIntent = Intent(app, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -113,13 +117,13 @@ object DailySummaryNotifier {
             app, REQ_TASK, taskIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val reminderIntent = Intent(app, MainActivity::class.java).apply {
+        val templateIntent = Intent(app, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra("dayflow:gotoPath", "/dashboard?create=today&type=reminder")
+            putExtra("dayflow:gotoPath", "/dashboard/templates")
         }
-        val reminderPi = PendingIntent.getActivity(
-            app, REQ_REMINDER, reminderIntent,
+        val templatePi = PendingIntent.getActivity(
+            app, REQ_TEMPLATE, templateIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -136,14 +140,14 @@ object DailySummaryNotifier {
         //    "Mon, May 25 · 8 events today" reads naturally and lets the
         //    button row stay on screen at all times.
         val taskLabel     = app.getString(R.string.daily_summary_action_task)
-        val reminderLabel = app.getString(R.string.daily_summary_action_reminder)
+        val templateLabel = app.getString(R.string.daily_summary_action_template)
         val headline      = "$title · $body"
         val contentView   = RemoteViews(app.packageName, R.layout.daily_summary_notification).apply {
             setTextViewText(R.id.summary_title,        headline)
             setTextViewText(R.id.summary_btn_task,     taskLabel)
-            setTextViewText(R.id.summary_btn_reminder, reminderLabel)
+            setTextViewText(R.id.summary_btn_template, templateLabel)
             setOnClickPendingIntent(R.id.summary_btn_task,     taskPi)
-            setOnClickPendingIntent(R.id.summary_btn_reminder, reminderPi)
+            setOnClickPendingIntent(R.id.summary_btn_template, templatePi)
         }
 
         val builder = NotificationCompat.Builder(app, CHANNEL_ID)
@@ -216,9 +220,9 @@ object DailySummaryNotifier {
         nm.createNotificationChannel(channel)
     }
 
-    // Distinct request codes so the four PendingIntents don't collapse into
+    // Distinct request codes so the PendingIntents don't collapse into
     // the same cached intent (Android dedupes by requestCode + filterEquals).
     private const val REQ_OPEN     = 1
     private const val REQ_TASK     = 2
-    private const val REQ_REMINDER = 3
+    private const val REQ_TEMPLATE = 3
 }

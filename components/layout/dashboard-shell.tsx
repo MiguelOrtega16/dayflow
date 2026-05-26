@@ -10,6 +10,7 @@ import { initRevenueCat } from '@/lib/billing/revenuecat'
 import { PaywallProvider } from '@/components/paywall/paywall-provider'
 import { startWidgetAuthSync, syncWidgetSnapshot } from '@/lib/widget-sync'
 import { DailySummary } from '@/lib/daily-summary'
+import { DeepLink } from '@/lib/deeplink'
 import { getUserPreferences } from '@/lib/user-preferences'
 import { BackButtonProvider } from '@/lib/back-button'
 import { DateTimePrefsProvider } from '@/lib/datetime-prefs'
@@ -80,6 +81,21 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     document.addEventListener('visibilitychange', onVisChange)
     return () => document.removeEventListener('visibilitychange', onVisChange)
   }, [profile?.id])
+
+  // Cold-start deep link consumer: when MainActivity launches via a
+  // notification / widget action (e.g. daily-summary + Task), the WebView
+  // is still loading and its evaluateJavascript path is unreliable. The
+  // native side stashes the target path in SharedPreferences instead;
+  // here we drain that queue once on mount and force-navigate. Using
+  // window.location.href (not router.push) so every downstream useEffect
+  // — calendar-view's ?create= / ?view=day readers in particular —
+  // re-reads the URL fresh. Warm-path taps continue to go through the
+  // evaluateJavascript fast path in MainActivity.
+  useEffect(() => {
+    DeepLink.consumePending().then(path => {
+      if (path) window.location.href = path
+    }).catch(() => { /* no-op on web */ })
+  }, [])
 
   // Daily summary tray entry: mirror the user's stored preference into the
   // native plugin's local toggle (a brand-new device install starts with

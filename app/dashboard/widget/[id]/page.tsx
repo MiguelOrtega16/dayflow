@@ -9,6 +9,8 @@ import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { createClient } from '@/lib/supabase/client'
+import { useBackButtonRoute } from '@/lib/back-button'
+import { useSwipeBack } from '@/lib/swipe-back'
 
 const COLOR_SWATCHES = [
   '#7C6FE3', // brand purple (default)
@@ -46,6 +48,11 @@ export default function WidgetConfigPage() {
   const params = useParams<{ id: string }>()
   const widgetId = Number(params?.id)
   const { open: openPaywall } = usePaywall()
+
+  // Hardware back + edge-swipe both return to the widgets list instead of
+  // bouncing to the quit-app confirm at the dashboard root.
+  useBackButtonRoute(() => router.push('/dashboard/widgets'))
+  const swipeRef = useSwipeBack(() => router.push('/dashboard/widgets'))
 
   const [color,     setColor]     = useState('#7C6FE3')
   const [bodyColor, setBodyColor] = useState('#FAFAFA')
@@ -134,7 +141,7 @@ export default function WidgetConfigPage() {
 
   if (locked) {
     return (
-      <div className="flex flex-col h-full overflow-y-auto bg-background">
+      <div ref={swipeRef} className="flex flex-col h-full overflow-y-auto bg-background">
         <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border px-4 h-14 flex items-center gap-3 shrink-0">
           <button
             onClick={() => router.back()}
@@ -166,7 +173,7 @@ export default function WidgetConfigPage() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-background">
+    <div ref={swipeRef} className="flex flex-col h-full overflow-y-auto bg-background">
       <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border px-4 h-14 flex items-center gap-3 shrink-0">
         <button
           onClick={() => router.back()}
@@ -179,25 +186,13 @@ export default function WidgetConfigPage() {
       </header>
 
       <div className="p-4 space-y-6 max-w-md mx-auto w-full">
-        <div
-          className="rounded-2xl overflow-hidden border border-border shadow-sm"
-          style={{ backgroundColor: bodyColorWithOpacity(bodyColor, opacity) }}
-        >
-          <div className="px-3 h-10 flex items-center justify-between text-white text-sm font-bold" style={{ backgroundColor: color }}>
-            <span>{t('widgets.title')}</span>
-            <div className="flex items-center gap-2 opacity-90">
-              <Plus className="w-4 h-4" />
-              <RefreshCcw className="w-4 h-4" />
-              <Settings className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="px-3 py-3 space-y-2 text-xs text-[#1A1A1A]">
-            <p className="text-[10px] font-bold text-[#666666]">{t('widgets.preview.today')}</p>
-            <PreviewRow label={t('widgets.preview.sample1')} time="9:00 AM" />
-            <PreviewRow label={t('widgets.preview.sample2')} time="11:30 AM" />
-            <PreviewRow label={t('widgets.preview.sample4')} time="8:00 AM" done />
-          </div>
-        </div>
+        <ConfigPreview
+          kind={widgetKind ?? 'today'}
+          color={color}
+          bodyColor={bodyColor}
+          opacity={opacity}
+          t={t}
+        />
 
         <div>
           <h3 className="text-sm font-semibold mb-3">{t('widgetConfig.headerColor')}</h3>
@@ -327,10 +322,161 @@ function PreviewRow({ label, time, done }: { label: string; time: string; done?:
     <div className="flex items-center gap-2.5">
       <div className={cn(
         'w-4 h-4 rounded-full border',
-        done ? 'bg-emerald-500 border-emerald-500' : 'border-muted-foreground/40'
+        done ? 'bg-emerald-500 border-emerald-500' : 'border-[#666666]/40'
       )} />
-      <span className={cn('flex-1 truncate text-sm', done && 'line-through text-muted-foreground')}>{label}</span>
-      <span className="text-[10px] text-muted-foreground">{time}</span>
+      <span className={cn('flex-1 truncate text-sm text-[#1A1A1A]', done && 'line-through text-[#888]')}>{label}</span>
+      <span className="text-[10px] text-[#666666]">{time}</span>
+    </div>
+  )
+}
+
+// ─── Per-kind config preview ─────────────────────────────────────────────────
+// Renders a preview that matches the widget the user is configuring AND
+// live-reacts to the swatches above. Streak / NextUp ignore bodyColor —
+// those widgets are single-tone strips with no separable body surface.
+function ConfigPreview({
+  kind, color, bodyColor, opacity, t,
+}: {
+  kind: WidgetKind
+  color: string
+  bodyColor: string
+  opacity: number
+  t: (key: string, params?: Record<string, any>) => string
+}) {
+  switch (kind) {
+    case 'streak':
+      return (
+        <div className="rounded-2xl overflow-hidden border border-border shadow-sm flex items-center gap-3 px-4 py-3 text-white" style={{ backgroundColor: color }}>
+          <div className="flex items-center gap-1 shrink-0">
+            <div className="text-3xl font-bold leading-none">5</div>
+            <span className="text-xl leading-none">🔥</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[9px] font-bold tracking-widest truncate">{t('widgets.previewLabels.streakDays')}</div>
+            <div className="text-xs opacity-80 mt-0.5 truncate">{t('widgets.previewLabels.todayShort', { done: 3, total: 7 })}</div>
+          </div>
+        </div>
+      )
+    case 'nextup':
+      return (
+        <div className="rounded-2xl overflow-hidden border border-border shadow-sm px-4 py-3 text-white" style={{ backgroundColor: color }}>
+          <div className="text-[10px] font-bold tracking-widest opacity-80">{t('widgets.previewLabels.nextupKicker')}</div>
+          <div className="text-base font-bold mt-1 truncate">📅 {t('widgets.previewLabels.nextupSample')}</div>
+          <div className="text-xs opacity-80 mt-0.5">{t('widgets.previewLabels.nextupCountdown')}</div>
+        </div>
+      )
+    case 'day':
+      return (
+        <div
+          className="rounded-2xl overflow-hidden border border-border shadow-sm flex items-stretch"
+          style={{ backgroundColor: bodyColorWithOpacity(bodyColor, opacity) }}
+        >
+          <div className="flex flex-col items-center justify-center w-16 shrink-0 text-white px-2 py-3" style={{ backgroundColor: color }}>
+            <div className="text-3xl font-bold leading-none">{t('widgets.previewLabels.dayBigDay')}</div>
+            <div className="text-[10px] mt-1 opacity-90">{t('widgets.previewLabels.dayBigMonth')}</div>
+          </div>
+          <div className="flex-1 min-w-0 space-y-1.5 py-2.5 pl-3 pr-3">
+            <DayConfigRow color="#22c55e" title={t('widgets.previewLabels.daySample1')} sub={t('widgets.previewLabels.daySample1Sub')} />
+            <DayConfigRow color="#f59e0b" title={t('widgets.previewLabels.daySample2')} sub={t('widgets.previewLabels.daySample2Sub')} />
+            <DayConfigRow color="#a855f7" title={t('widgets.previewLabels.daySample3')} sub={t('widgets.previewLabels.daySample3Sub')} />
+          </div>
+        </div>
+      )
+    case 'agenda':
+      return (
+        <div
+          className="rounded-2xl overflow-hidden border border-border shadow-sm"
+          style={{ backgroundColor: bodyColorWithOpacity(bodyColor, opacity) }}
+        >
+          <div className="px-4 h-10 flex items-center text-sm font-semibold text-white" style={{ backgroundColor: color }}>
+            {t('widgets.previewLabels.agendaMonth')}
+          </div>
+          <div className="px-4 py-2.5">
+            <AgendaConfigDay
+              dayLabel={t('widgets.previewLabels.agendaThu')}
+              dayNum={7}
+              events={[
+                { color: '#22c55e', title: t('widgets.previewLabels.agendaSample1'), time: t('widgets.previewLabels.agendaSample1Time') },
+                { color: '#0ea5e9', title: t('widgets.previewLabels.agendaSample2'), time: t('widgets.previewLabels.agendaSample2Time') },
+              ]}
+            />
+            <AgendaConfigDay
+              dayLabel={t('widgets.previewLabels.agendaFri')}
+              dayNum={8}
+              events={[
+                { color: '#f59e0b', title: t('widgets.previewLabels.agendaSample3'), time: t('widgets.previewLabels.agendaSample3Time') },
+              ]}
+            />
+          </div>
+        </div>
+      )
+    case 'today':
+    default:
+      return (
+        <div
+          className="rounded-2xl overflow-hidden border border-border shadow-sm"
+          style={{ backgroundColor: bodyColorWithOpacity(bodyColor, opacity) }}
+        >
+          <div className="px-3 h-10 flex items-center justify-between text-white text-sm font-bold" style={{ backgroundColor: color }}>
+            <span>{t('widgets.title')}</span>
+            <div className="flex items-center gap-2 opacity-90">
+              <Plus className="w-4 h-4" />
+              <RefreshCcw className="w-4 h-4" />
+              <Settings className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="px-3 py-3 space-y-2 text-xs">
+            <p className="text-[10px] font-bold text-[#666666]">{t('widgets.preview.today')}</p>
+            <PreviewRow label={t('widgets.preview.sample1')} time="9:00 AM" />
+            <PreviewRow label={t('widgets.preview.sample2')} time="11:30 AM" />
+            <PreviewRow label={t('widgets.preview.sample4')} time="8:00 AM" done />
+          </div>
+        </div>
+      )
+  }
+}
+
+function DayConfigRow({ color, title, sub }: { color: string; title: string; sub: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: color }} />
+      <div className="min-w-0">
+        <div className="text-xs font-semibold truncate leading-tight text-[#1A1A1A]">{title}</div>
+        <div className="text-[10px] text-[#666666] truncate">{sub}</div>
+      </div>
+    </div>
+  )
+}
+
+function AgendaConfigDay({
+  dayLabel, dayNum, events,
+}: {
+  dayLabel: string
+  dayNum: number
+  events: Array<{ color: string; title: string; time: string }>
+}) {
+  // Date column shows the first event's accent — mirrors what
+  // AgendaWidgetService.kt paints on-device via setTextColor on
+  // agenda_row_dow / agenda_row_dom.
+  const dateAccent = events[0]?.color ?? '#666666'
+  return (
+    <div className="flex items-stretch gap-3 py-1.5">
+      <div className="w-9 shrink-0 text-center">
+        <div className="text-[10px] uppercase tracking-wide" style={{ color: dateAccent }}>{dayLabel}</div>
+        <div className="text-lg font-bold leading-tight" style={{ color: dateAccent }}>{dayNum}</div>
+      </div>
+      <div className="flex-1 min-w-0 space-y-1">
+        {events.map((e, i) => (
+          <div
+            key={i}
+            className="rounded-md px-2 py-1"
+            style={{ backgroundColor: e.color + '55' }}
+          >
+            <div className="text-xs font-semibold truncate leading-tight" style={{ color: e.color }}>{e.title}</div>
+            <div className="text-[10px] truncate text-[#666666]">{e.time}</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

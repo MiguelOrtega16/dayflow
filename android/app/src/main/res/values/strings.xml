@@ -32,5 +32,10 @@
     <!-- Plural-N case; %1$d is the count. -->
     <string name="daily_summary_body_many">%1$d events today</string>
     <string name="daily_summary_action_task">+ Task</string>
+    <string name="daily_summary_action_template">+ Template</string>
+    <!--
+      Kept for backwards compatibility with older builds that may still
+      reference this id. Safe to remove on the next major release.
+    -->
     <string name="daily_summary_action_reminder">+ Reminder</string>
 </resources>
