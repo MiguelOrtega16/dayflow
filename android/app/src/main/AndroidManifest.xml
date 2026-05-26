@@ -140,4 +140,12 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Google Play Billing — required for in-app purchases / subscriptions -->
     <uses-permission android:name="com.android.vending.BILLING" />
+    <!-- Advertising ID — required by Google whenever the Play Console
+         Advertising ID declaration says "yes, uses ad ID" AND the app targets
+         Android 13 (API 33) or later. Without it the system zeroes out the
+         ID at runtime regardless of what the SDK requests, which would
+         silently break AdMob fill rate once we re-enable ads. Even though
+         the SDK is dormant today, the permission must match the listing
+         declaration to clear the Play Console pre-launch report. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 </manifest>
