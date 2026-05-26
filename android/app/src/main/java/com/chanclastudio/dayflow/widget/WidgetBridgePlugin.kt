@@ -83,10 +83,14 @@ class WidgetBridgePlugin : Plugin() {
 
     @PluginMethod
     fun writeConfig(call: PluginCall) {
-        val widgetId = call.getInt("widgetId") ?: run { call.reject("Missing widgetId"); return }
-        val color    = call.getString("color")  ?: "#7C6FE3"
-        val opacity  = call.getInt("opacity")   ?: 95
-        WidgetStore.writeConfig(context, widgetId, color, opacity)
+        val widgetId  = call.getInt("widgetId") ?: run { call.reject("Missing widgetId"); return }
+        val color     = call.getString("color")  ?: "#7C6FE3"
+        val opacity   = call.getInt("opacity")   ?: 95
+        // bodyColor is optional — older JS layers that only know about
+        // header + opacity won't send it. WidgetStore.writeConfig leaves
+        // the previously saved body color untouched when null is passed.
+        val bodyColor = call.getString("bodyColor")
+        WidgetStore.writeConfig(context, widgetId, color, opacity, bodyColor)
         // We don't know which provider owns this id, so re-render all of
         // them. Each renderAll iterates its own getAppWidgetIds set, so the
         // updated widget gets refreshed and the others are cheap no-ops.
@@ -102,8 +106,9 @@ class WidgetBridgePlugin : Plugin() {
     fun readConfig(call: PluginCall) {
         val widgetId = call.getInt("widgetId") ?: run { call.reject("Missing widgetId"); return }
         val result = com.getcapacitor.JSObject().apply {
-            put("color",   WidgetStore.readColor(context, widgetId))
-            put("opacity", WidgetStore.readOpacity(context, widgetId))
+            put("color",     WidgetStore.readColor(context, widgetId))
+            put("opacity",   WidgetStore.readOpacity(context, widgetId))
+            put("bodyColor", WidgetStore.readBodyColor(context, widgetId))
         }
         call.resolve(result)
     }

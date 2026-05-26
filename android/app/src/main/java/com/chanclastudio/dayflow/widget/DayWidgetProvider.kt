@@ -65,20 +65,19 @@ class DayWidgetProvider : AppWidgetProvider() {
         private fun renderWidget(ctx: Context, mgr: AppWidgetManager, widgetId: Int) {
             val views = RemoteViews(ctx.packageName, R.layout.day_widget)
 
-            // ── Apply per-widget config ──
-            // The outer background stays a fixed dark base regardless of the
-            // user's chosen color. Tinting the entire 4×2 tile with the brand
-            // primary washed out the activity rows (illegible text on top of
-            // a vibrant accent). Instead the user's color is applied only to
-            // the left date column, mirroring how the Today widget colors
-            // just the header bar. Opacity still controls the whole tile so
-            // a translucent variant stays cohesive.
-            val accentHex  = WidgetStore.readColor(ctx, widgetId)
-            val opacityPct = WidgetStore.readOpacity(ctx, widgetId)
-            val accent     = parseHex(accentHex, fallback = 0xFF7C6FE3.toInt())
-            val alpha      = (opacityPct.coerceIn(20, 100) * 255 / 100)
-            val baseBg     = (alpha shl 24) or 0x171818
-            val headerBg   = (alpha shl 24) or (accent and 0x00FFFFFF)
+            // ── Apply per-widget config (header + body + opacity) ──
+            // Body color matches the Today widget by default (#FAFAFA), and
+            // can be customized per widget. The user-chosen accent paints
+            // only the left date column so the activity rows stay legible
+            // regardless of the picked accent hue.
+            val accentHex    = WidgetStore.readColor(ctx, widgetId)
+            val bodyColorHex = WidgetStore.readBodyColor(ctx, widgetId)
+            val opacityPct   = WidgetStore.readOpacity(ctx, widgetId)
+            val accent       = parseHex(accentHex,    fallback = 0xFF7C6FE3.toInt())
+            val bodyBase     = parseHex(bodyColorHex, fallback = 0xFFFAFAFA.toInt())
+            val alpha        = (opacityPct.coerceIn(20, 100) * 255 / 100)
+            val baseBg       = (alpha shl 24) or (bodyBase and 0x00FFFFFF)
+            val headerBg     = (alpha shl 24) or (accent   and 0x00FFFFFF)
             views.setInt(R.id.day_bg,     "setBackgroundColor", baseBg)
             views.setInt(R.id.day_header, "setBackgroundColor", headerBg)
 

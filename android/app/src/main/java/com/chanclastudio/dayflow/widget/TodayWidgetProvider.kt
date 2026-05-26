@@ -58,12 +58,17 @@ class TodayWidgetProvider : AppWidgetProvider() {
         private fun renderWidget(ctx: Context, mgr: AppWidgetManager, widgetId: Int) {
             val views = RemoteViews(ctx.packageName, R.layout.today_widget)
 
-            // ── Apply per-widget config (color + opacity) ──
-            val colorHex   = WidgetStore.readColor(ctx, widgetId)
-            val opacityPct = WidgetStore.readOpacity(ctx, widgetId)
-            val headerColor = parseHex(colorHex, fallback = 0xFF7C6FE3.toInt())
-            val bgAlpha     = (opacityPct.coerceIn(20, 100) * 255 / 100)
-            val bodyColor   = (bgAlpha shl 24) or 0x00FFFFFF
+            // ── Apply per-widget config (header color + body color + opacity) ──
+            // Body color is user-customizable per widget; #FAFAFA is the
+            // long-standing off-white default. The opacity slider tints the
+            // body alpha so users can pin a semi-transparent variant.
+            val colorHex     = WidgetStore.readColor(ctx, widgetId)
+            val bodyColorHex = WidgetStore.readBodyColor(ctx, widgetId)
+            val opacityPct   = WidgetStore.readOpacity(ctx, widgetId)
+            val headerColor  = parseHex(colorHex, fallback = 0xFF7C6FE3.toInt())
+            val bodyBase     = parseHex(bodyColorHex, fallback = 0xFFFAFAFA.toInt())
+            val bgAlpha      = (opacityPct.coerceIn(20, 100) * 255 / 100)
+            val bodyColor    = (bgAlpha shl 24) or (bodyBase and 0x00FFFFFF)
 
             views.setInt(R.id.widget_header, "setBackgroundColor", headerColor)
             views.setInt(R.id.widget_bg,     "setBackgroundColor", bodyColor)

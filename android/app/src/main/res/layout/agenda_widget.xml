@@ -11,7 +11,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#0F0F10">
+    android:background="#FAFAFA">
 
     <!-- Header bar -->
     <LinearLayout
@@ -68,7 +68,7 @@
             android:layout_height="match_parent"
             android:gravity="center"
             android:padding="16dp"
-            android:textColor="#9CA3AF"
+            android:textColor="#666666"
             android:textSize="14sp"
             android:text="Sin actividades en los próximos días"
             android:visibility="gone" />

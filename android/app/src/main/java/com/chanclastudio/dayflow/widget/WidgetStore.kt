@@ -26,8 +26,9 @@ object WidgetStore {
     private const val K_USER_ID      = "sb_user"
 
     // Per-widget config (suffixed by widgetId)
-    private const val K_CFG_COLOR   = "cfg_color_"
-    private const val K_CFG_OPACITY = "cfg_opacity_"
+    private const val K_CFG_COLOR      = "cfg_color_"
+    private const val K_CFG_OPACITY    = "cfg_opacity_"
+    private const val K_CFG_BODY_COLOR = "cfg_body_color_"
 
     private fun prefs(ctx: Context): SharedPreferences =
         ctx.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -138,16 +139,26 @@ object WidgetStore {
     }
 
     // ── Per-widget config ────────────────────────────────────────────────────
-    fun writeConfig(ctx: Context, widgetId: Int, colorHex: String, opacityPct: Int) {
-        prefs(ctx).edit()
+    fun writeConfig(ctx: Context, widgetId: Int, colorHex: String, opacityPct: Int, bodyColorHex: String? = null) {
+        val editor = prefs(ctx).edit()
             .putString(K_CFG_COLOR + widgetId, colorHex)
             .putInt(K_CFG_OPACITY + widgetId, opacityPct.coerceIn(20, 100))
-            .apply()
+        // Skip overwriting body color when the bridge call omits it so older
+        // JS layers that only know about header + opacity don't silently
+        // reset a body customization the user has already applied.
+        if (bodyColorHex != null) editor.putString(K_CFG_BODY_COLOR + widgetId, bodyColorHex)
+        editor.apply()
     }
 
     /** Returns the header color (hex, e.g. "#7C6FE3"). Defaults to brand primary. */
     fun readColor(ctx: Context, widgetId: Int): String =
         prefs(ctx).getString(K_CFG_COLOR + widgetId, null) ?: "#7C6FE3"
+
+    /** Returns the body background color (hex). Defaults to a light off-white
+     *  that matches the Today widget's original look (#FAFAFA). The provider
+     *  layers the opacity on top so a translucent body stays cohesive. */
+    fun readBodyColor(ctx: Context, widgetId: Int): String =
+        prefs(ctx).getString(K_CFG_BODY_COLOR + widgetId, null) ?: "#FAFAFA"
 
     /** Returns the body opacity as 0–100 (default 95). */
     fun readOpacity(ctx: Context, widgetId: Int): Int =
@@ -157,6 +168,7 @@ object WidgetStore {
         prefs(ctx).edit()
             .remove(K_CFG_COLOR + widgetId)
             .remove(K_CFG_OPACITY + widgetId)
+            .remove(K_CFG_BODY_COLOR + widgetId)
             .apply()
     }
 }

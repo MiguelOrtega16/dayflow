@@ -21,6 +21,25 @@ const COLOR_SWATCHES = [
   '#111827', // near-black
 ]
 
+// Body swatches lean toward neutral surfaces — picking a vibrant body
+// makes the dark row text illegible. The user can still type any hex via
+// the colour input if they want something off-palette.
+const BODY_SWATCHES = [
+  '#FAFAFA', // off-white (default)
+  '#FFFFFF', // pure white
+  '#F3F4F6', // cool grey 100
+  '#FEF3C7', // soft amber tint
+  '#DBEAFE', // soft blue tint
+  '#DCFCE7', // soft green tint
+  '#FCE7F3', // soft pink tint
+  '#E5E7EB', // cool grey 200
+]
+
+/** Widget kinds whose layout has a distinct header + body split — Today,
+ *  Day and Agenda. Streak and NextUp are single-tone strips with no
+ *  separable body surface to recolor. */
+const KINDS_WITH_BODY: Array<WidgetKind | null> = ['today', 'day', 'agenda']
+
 export default function WidgetConfigPage() {
   const { t } = useI18n()
   const router = useRouter()
@@ -28,10 +47,11 @@ export default function WidgetConfigPage() {
   const widgetId = Number(params?.id)
   const { open: openPaywall } = usePaywall()
 
-  const [color,   setColor]   = useState('#7C6FE3')
-  const [opacity, setOpacity] = useState(95)
-  const [saving,  setSaving]  = useState(false)
-  const [saved,   setSaved]   = useState(false)
+  const [color,     setColor]     = useState('#7C6FE3')
+  const [bodyColor, setBodyColor] = useState('#FAFAFA')
+  const [opacity,   setOpacity]   = useState(95)
+  const [saving,    setSaving]    = useState(false)
+  const [saved,     setSaved]     = useState(false)
   // Pro entitlement is loaded async. We need both the user id and the
   // widget kind to decide whether to lock this page — the kind isn't in
   // the URL (only the numeric id), so we look it up via WidgetBridge.
@@ -49,6 +69,7 @@ export default function WidgetConfigPage() {
     WidgetBridge.readConfig(widgetId).then(cfg => {
       setColor(cfg.color)
       setOpacity(cfg.opacity)
+      if (cfg.bodyColor) setBodyColor(cfg.bodyColor)
     })
   }, [widgetId])
 
@@ -88,7 +109,7 @@ export default function WidgetConfigPage() {
     if (Number.isNaN(widgetId)) return
     setSaving(true)
     try {
-      await WidgetBridge.writeConfig(widgetId, { color, opacity })
+      await WidgetBridge.writeConfig(widgetId, { color, bodyColor, opacity })
       setSaved(true)
       // Let the user see the "Saved" confirmation briefly, then return to
       // the widgets list — they're done with this screen.
@@ -97,6 +118,11 @@ export default function WidgetConfigPage() {
       setSaving(false)
     }
   }
+
+  // Streak/NextUp have no body surface to recolor — keep the picker
+  // hidden for those kinds so the UI doesn't promise something the
+  // widget can't render.
+  const showBodyPicker = KINDS_WITH_BODY.includes(widgetKind)
 
   if (Number.isNaN(widgetId)) {
     return (
@@ -153,7 +179,10 @@ export default function WidgetConfigPage() {
       </header>
 
       <div className="p-4 space-y-6 max-w-md mx-auto w-full">
-        <div className="rounded-2xl overflow-hidden border border-border shadow-sm" style={{ backgroundColor: `rgba(255,255,255,${opacity / 100})` }}>
+        <div
+          className="rounded-2xl overflow-hidden border border-border shadow-sm"
+          style={{ backgroundColor: bodyColorWithOpacity(bodyColor, opacity) }}
+        >
           <div className="px-3 h-10 flex items-center justify-between text-white text-sm font-bold" style={{ backgroundColor: color }}>
             <span>{t('widgets.title')}</span>
             <div className="flex items-center gap-2 opacity-90">
@@ -162,8 +191,8 @@ export default function WidgetConfigPage() {
               <Settings className="w-4 h-4" />
             </div>
           </div>
-          <div className="px-3 py-3 space-y-2 text-xs">
-            <p className="text-[10px] font-bold text-muted-foreground">{t('widgets.preview.today')}</p>
+          <div className="px-3 py-3 space-y-2 text-xs text-[#1A1A1A]">
+            <p className="text-[10px] font-bold text-[#666666]">{t('widgets.preview.today')}</p>
             <PreviewRow label={t('widgets.preview.sample1')} time="9:00 AM" />
             <PreviewRow label={t('widgets.preview.sample2')} time="11:30 AM" />
             <PreviewRow label={t('widgets.preview.sample4')} time="8:00 AM" done />
@@ -205,6 +234,43 @@ export default function WidgetConfigPage() {
           </div>
         </div>
 
+        {showBodyPicker && (
+          <div>
+            <h3 className="text-sm font-semibold mb-3">{t('widgetConfig.bodyColor')}</h3>
+            <div className="grid grid-cols-8 gap-2">
+              {BODY_SWATCHES.map(c => (
+                <button
+                  key={c}
+                  onClick={() => setBodyColor(c)}
+                  className={cn(
+                    'aspect-square rounded-xl border-2 transition-all flex items-center justify-center',
+                    bodyColor === c ? 'border-foreground scale-105' : 'border-input hover:scale-105'
+                  )}
+                  style={{ backgroundColor: c }}
+                  aria-label={t('widgetConfig.colorAria', { color: c })}
+                >
+                  {bodyColor === c && <Check className="w-4 h-4 text-foreground drop-shadow" />}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <label className="text-xs text-muted-foreground">{t('widgetConfig.custom')}</label>
+              <input
+                type="color"
+                value={bodyColor}
+                onChange={e => setBodyColor(e.target.value)}
+                className="w-10 h-8 rounded-md border border-input bg-background cursor-pointer"
+              />
+              <input
+                type="text"
+                value={bodyColor}
+                onChange={e => setBodyColor(e.target.value)}
+                className="flex-1 text-xs font-mono rounded-md border border-input bg-background px-2 py-1.5 outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+        )}
+
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold">{t('widgetConfig.opacity')}</h3>
@@ -241,6 +307,19 @@ export default function WidgetConfigPage() {
       </div>
     </div>
   )
+}
+
+/** Converts a "#rrggbb" + 0..100 opacity into an rgba() string for the
+ *  preview tile. Returns the hex unchanged if it isn't a valid 6-digit
+ *  colour (the colour input can be in flux while the user types). */
+function bodyColorWithOpacity(hex: string, opacityPct: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex)
+  if (!m) return hex
+  const n = parseInt(m[1], 16)
+  const r = (n >> 16) & 0xff
+  const g = (n >>  8) & 0xff
+  const b =  n        & 0xff
+  return `rgba(${r}, ${g}, ${b}, ${opacityPct / 100})`
 }
 
 function PreviewRow({ label, time, done }: { label: string; time: string; done?: boolean }) {

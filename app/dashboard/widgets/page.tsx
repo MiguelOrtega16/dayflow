@@ -380,7 +380,7 @@ function NextUpPreview() {
 function DayPreview() {
   const { t } = useI18n()
   return (
-    <div className="rounded-2xl overflow-hidden border border-border/60 bg-[#171818] text-white shadow-sm flex items-stretch">
+    <div className="rounded-2xl overflow-hidden border border-border/60 bg-[#FAFAFA] text-[#1A1A1A] shadow-sm flex items-stretch">
       <div className="flex flex-col items-center justify-center w-16 shrink-0 bg-primary text-primary-foreground px-2 py-3">
         <div className="text-3xl font-bold leading-none">{t('widgets.previewLabels.dayBigDay')}</div>
         <div className="text-[10px] mt-1 opacity-90">{t('widgets.previewLabels.dayBigMonth')}</div>
@@ -400,7 +400,7 @@ function DayPreviewRow({ color, title, sub }: { color: string; title: string; su
       <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: color }} />
       <div className="min-w-0">
         <div className="text-xs font-semibold truncate leading-tight">{title}</div>
-        <div className="text-[10px] opacity-60 truncate">{sub}</div>
+        <div className="text-[10px] text-[#666666] truncate">{sub}</div>
       </div>
     </div>
   )
@@ -415,7 +415,7 @@ function DayPreviewRow({ color, title, sub }: { color: string; title: string; su
 function AgendaPreview() {
   const { t } = useI18n()
   return (
-    <div className="rounded-2xl overflow-hidden border border-border/60 bg-[#0f0f10] text-white shadow-sm">
+    <div className="rounded-2xl overflow-hidden border border-border/60 bg-[#FAFAFA] text-[#1A1A1A] shadow-sm">
       <div className="bg-primary text-primary-foreground px-4 h-10 flex items-center text-sm font-semibold">
         {t('widgets.previewLabels.agendaMonth')}
       </div>
@@ -461,7 +461,7 @@ function AgendaPreviewDay({
             style={{ backgroundColor: e.color + '55' }}
           >
             <div className="text-xs font-semibold truncate leading-tight" style={{ color: e.color }}>{e.title}</div>
-            <div className="text-[10px] truncate text-[#E5E7EB]">{e.time}</div>
+            <div className="text-[10px] truncate text-[#666666]">{e.time}</div>
           </div>
         ))}
       </div>

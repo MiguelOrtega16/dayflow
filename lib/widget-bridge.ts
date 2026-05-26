@@ -10,8 +10,13 @@ export interface WidgetAuthPayload {
 }
 
 export interface WidgetConfig {
-  color:   string   // hex like "#7C6FE3"
-  opacity: number   // 0–100
+  /** Header / accent strip color (hex like "#7C6FE3"). */
+  color:     string
+  /** Body background color (hex). Where activity rows render on Today /
+   *  Day / Agenda. Defaults to a light off-white. */
+  bodyColor: string
+  /** 0–100 opacity applied to the body (not the header). */
+  opacity:   number
 }
 
 /**
@@ -24,7 +29,7 @@ interface WidgetBridgePlugin {
   writeSnapshot(opts: { json: string }): Promise<void>
   writeAuth(opts: WidgetAuthPayload): Promise<void>
   clearAuth(): Promise<void>
-  writeConfig(opts: { widgetId: number; color: string; opacity: number }): Promise<void>
+  writeConfig(opts: { widgetId: number; color: string; opacity: number; bodyColor?: string }): Promise<void>
   readConfig(opts: { widgetId: number }): Promise<WidgetConfig>
   listWidgetIds(opts?: { widget?: WidgetKind }): Promise<{ ids: number[] }>
   requestPin(opts?: { widget?: WidgetKind }): Promise<{ supported: boolean; requested: boolean }>
@@ -50,13 +55,13 @@ export const WidgetBridge = {
 
   writeConfig: (widgetId: number, cfg: WidgetConfig) =>
     isWidgetSupported()
-      ? native.writeConfig({ widgetId, color: cfg.color, opacity: cfg.opacity })
+      ? native.writeConfig({ widgetId, color: cfg.color, opacity: cfg.opacity, bodyColor: cfg.bodyColor })
       : Promise.resolve(),
 
   readConfig: (widgetId: number): Promise<WidgetConfig> =>
     isWidgetSupported()
       ? native.readConfig({ widgetId })
-      : Promise.resolve({ color: '#7C6FE3', opacity: 95 }),
+      : Promise.resolve({ color: '#7C6FE3', bodyColor: '#FAFAFA', opacity: 95 }),
 
   listWidgetIds: (widget: WidgetKind = 'today'): Promise<number[]> =>
     isWidgetSupported()

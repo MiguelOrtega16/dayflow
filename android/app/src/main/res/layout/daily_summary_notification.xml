@@ -1,32 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Custom collapsed/expanded content view for the always-pinned daily-
-  summary tray entry. Wraps title + body + two inline action buttons so
-  the + Task / + Reminder shortcuts are visible without the user having
-  to expand the notification (Samsung One UI hides standard actions in
-  the collapsed view, which is the exact problem this layout solves).
+  Custom content view for the always-pinned daily-summary tray entry.
+  Wraps title + body + two inline action buttons so the + Task / +
+  Reminder shortcuts are visible without the user having to expand the
+  notification.
 
-  Designed to work inside Notification.DecoratedCustomViewStyle, which
-  draws the system header (app icon, app name, time, expand arrow)
-  above and lets us own the rest of the layout. Theme attrs adapt the
-  text colours to the system's light/dark notification panel.
+  Text colours come from androidx.core's TextAppearance.Compat.Notification
+  family, which is explicitly built for notification panels and adapts
+  correctly to light AND dark system themes. (Plain ?android:attr/text-
+  ColorPrimary resolves against the *host app* theme, not the panel's,
+  which on Samsung One UI's translucent dark panel renders the title at
+  ~50% opacity — the "ghost text" effect we just saw.)
+
+  Sizes/weights match what the system uses for standard notifications
+  (~14sp bold title, ~13sp body, 14sp uppercase bold action buttons).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingStart="12dp"
+    android:paddingStart="2dp"
     android:paddingEnd="12dp"
     android:paddingTop="2dp"
-    android:paddingBottom="8dp">
+    android:paddingBottom="2dp">
 
     <TextView
         android:id="@+id/summary_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="?android:attr/textColorPrimary"
-        android:textSize="14sp"
-        android:textStyle="bold"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
         android:singleLine="true"
         android:ellipsize="end" />
 
@@ -35,33 +37,35 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
-        android:textColor="?android:attr/textColorSecondary"
-        android:textSize="13sp"
+        android:textAppearance="@style/TextAppearance.Compat.Notification"
         android:singleLine="true"
         android:ellipsize="end" />
 
-    <!-- Inline button row. The TextViews are tap targets — the provider
-         attaches PendingIntents to each one via setOnClickPendingIntent
-         on the RemoteViews. Selectable item background draws the ripple
-         on press so it visually reads as a button. -->
+    <!-- Inline action button row. Spacing/sizes mimic the action buttons
+         Android draws in the expanded view of a standard notification,
+         so the row feels native. The TextViews are the tap targets —
+         the provider attaches PendingIntents via setOnClickPendingIntent
+         on the RemoteViews. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="6dp">
+        android:layout_marginTop="6dp"
+        android:layout_marginStart="-6dp">
 
         <TextView
             android:id="@+id/summary_btn_task"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="4dp"
+            android:minHeight="36dp"
             android:paddingStart="10dp"
             android:paddingEnd="10dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
-            android:textColor="?android:attr/colorAccent"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:gravity="center"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="#7C6FE3"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:textAllCaps="true"
             android:background="?android:attr/selectableItemBackground"
             android:focusable="true"
@@ -72,13 +76,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
+            android:minHeight="36dp"
             android:paddingStart="10dp"
             android:paddingEnd="10dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
-            android:textColor="?android:attr/colorAccent"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:gravity="center"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="#7C6FE3"
             android:textSize="13sp"
-            android:textStyle="bold"
             android:textAllCaps="true"
             android:background="?android:attr/selectableItemBackground"
             android:focusable="true"

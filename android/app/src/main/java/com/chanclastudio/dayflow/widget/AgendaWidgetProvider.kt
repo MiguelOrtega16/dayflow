@@ -57,18 +57,19 @@ class AgendaWidgetProvider : AppWidgetProvider() {
         private fun renderWidget(ctx: Context, mgr: AppWidgetManager, widgetId: Int) {
             val views = RemoteViews(ctx.packageName, R.layout.agenda_widget)
 
-            // ── Apply per-widget config ──
-            // Body stays a neutral dark base regardless of the user's chosen
-            // color — tinting the whole 4×4 tile with the brand primary made
-            // the colour-coded event blocks blend into the background. The
-            // user's accent is applied only to the top header bar (month
-            // label), the same approach the Today widget already uses.
-            val accentHex  = WidgetStore.readColor(ctx, widgetId)
-            val opacityPct = WidgetStore.readOpacity(ctx, widgetId)
-            val accent     = parseHex(accentHex, fallback = 0xFF7C6FE3.toInt())
-            val alpha      = (opacityPct.coerceIn(20, 100) * 255 / 100)
-            val baseBg     = (alpha shl 24) or 0x0F0F10
-            val headerBg   = (alpha shl 24) or (accent and 0x00FFFFFF)
+            // ── Apply per-widget config (header + body + opacity) ──
+            // Body color matches the Today widget by default (#FAFAFA) and
+            // is user-customizable. The accent paints only the top header
+            // bar (month label) so colour-coded event blocks below retain
+            // their contrast against a neutral body.
+            val accentHex    = WidgetStore.readColor(ctx, widgetId)
+            val bodyColorHex = WidgetStore.readBodyColor(ctx, widgetId)
+            val opacityPct   = WidgetStore.readOpacity(ctx, widgetId)
+            val accent       = parseHex(accentHex,    fallback = 0xFF7C6FE3.toInt())
+            val bodyBase     = parseHex(bodyColorHex, fallback = 0xFFFAFAFA.toInt())
+            val alpha        = (opacityPct.coerceIn(20, 100) * 255 / 100)
+            val baseBg       = (alpha shl 24) or (bodyBase and 0x00FFFFFF)
+            val headerBg     = (alpha shl 24) or (accent   and 0x00FFFFFF)
             views.setInt(R.id.agenda_bg,     "setBackgroundColor", baseBg)
             views.setInt(R.id.agenda_header, "setBackgroundColor", headerBg)
 
