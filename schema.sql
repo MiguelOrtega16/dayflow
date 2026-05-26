@@ -478,6 +478,9 @@ create table if not exists public.activity_comments (
   updated_at timestamptz default now() not null
 );
 
+create index if not exists activity_comments_activity_id_idx
+  on public.activity_comments(activity_id);
+
 alter table public.activity_comments enable row level security;
 
 drop policy if exists "Comments visible if activity is visible" on public.activity_comments;

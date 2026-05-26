@@ -26,6 +26,10 @@ import { TimeGridView } from './time-grid-view'
 
 type CalendarMode = 'month' | 'week' | 'day'
 
+// Stable empty-array reference so days with no activities don't hand a fresh
+// [] to DayCell on every render and bust its memo.
+const EMPTY_ACTIVITIES: Activity[] = []
+
 interface CalendarViewProps {
   currentUser: Profile | null
   sharedCalendars: any[]
@@ -383,9 +387,21 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     end:   endOfWeek(isMobileWeek ? selectedDate : currentDate, { weekStartsOn }),
   })
 
+  // Group activities by date once per fetch so DayCell lookups are O(1)
+  // instead of O(n) per cell — a month view would otherwise scan the full
+  // activity list 35+ times on every render.
+  const activitiesByDate = useMemo(() => {
+    const map = new Map<string, Activity[]>()
+    for (const a of activities) {
+      const list = map.get(a.date)
+      if (list) list.push(a)
+      else map.set(a.date, [a])
+    }
+    return map
+  }, [activities])
+
   const getActivitiesForDate = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd')
-    return activities.filter(a => a.date === dateStr)
+    return activitiesByDate.get(format(date, 'yyyy-MM-dd')) ?? EMPTY_ACTIVITIES
   }
 
   // Animation cue for swipe/arrow navigation. The key changes on each move

@@ -131,10 +131,16 @@ export default function OverviewPage() {
   const handleCycleStatus = async (activity: Activity) => {
     const idx = STATUS_CYCLE.indexOf(activity.status)
     const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
+    // Mirror the drag-end handler: flip the status locally so the card moves
+    // columns immediately, no full refetch flashing the loading skeleton.
+    const previous = activity.status
+    setActivities(prev => prev.map(a => a.id === activity.id ? { ...a, status: next } : a))
     setUpdatingIds(prev => new Set(prev).add(activity.id))
     try {
       await updateActivityStatus(activity.id, next, profile?.id)
-      await loadData()
+    } catch (err) {
+      console.error('[overview] status cycle failed', err)
+      setActivities(prev => prev.map(a => a.id === activity.id ? { ...a, status: previous } : a))
     } finally {
       setUpdatingIds(prev => { const s = new Set(prev); s.delete(activity.id); return s })
     }
