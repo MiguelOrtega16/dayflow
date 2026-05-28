@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { createClient } from '@/lib/supabase/client'
 import { Paywall, type PaywallTrigger } from './paywall'
 import { track } from '@/lib/analytics/posthog'
+import { pushAdSuppress } from '@/lib/ad-suppress'
 
 interface PaywallContextValue {
   open: (trigger?: PaywallTrigger) => void
@@ -50,6 +51,14 @@ export function PaywallProvider({ children }: { children: React.ReactNode }) {
       return null
     })
   }, [])
+
+  // Native AdMob banner sits above the WebView and would otherwise cover
+  // the paywall's bottom CTAs ("Restore purchases" / price disclaimer).
+  // Suppress while the modal is open.
+  useEffect(() => {
+    if (!activeTrigger) return
+    return pushAdSuppress('paywall')
+  }, [activeTrigger])
 
   return (
     <PaywallContext.Provider value={{ open, close }}>

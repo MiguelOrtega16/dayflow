@@ -13,6 +13,7 @@ import {
 } from '@/lib/onboarding/starter-packs'
 import { cn } from '@/lib/utils'
 import { track } from '@/lib/analytics/posthog'
+import { pushAdSuppress } from '@/lib/ad-suppress'
 
 interface Props {
   userId: string
@@ -25,6 +26,8 @@ export function StarterPackPicker({ userId }: Props) {
   const [donePack, setDonePack] = useState<StarterPackId | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dismissing, setDismissing] = useState(false)
+
+  useEffect(() => pushAdSuppress('starter-pack-picker'), [])
 
   useEffect(() => {
     track('starter_picker_shown')

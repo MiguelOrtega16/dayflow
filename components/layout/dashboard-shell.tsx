@@ -8,6 +8,7 @@ import { initPushNotifications } from '@/lib/push-notifications'
 import { initVersionCheck } from '@/lib/version-check'
 import { initRevenueCat } from '@/lib/billing/revenuecat'
 import { initAdMob } from '@/lib/admob'
+import { pushAdSuppress } from '@/lib/ad-suppress'
 import { PaywallProvider } from '@/components/paywall/paywall-provider'
 import { startWidgetAuthSync, syncWidgetSnapshot } from '@/lib/widget-sync'
 import { DailySummary } from '@/lib/daily-summary'
@@ -67,6 +68,14 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   // either is false this is a fast no-op, so it's safe to call even while
   // the app is still on the Play testing track.
   useEffect(() => { initAdMob() }, [])
+
+  // The sidebar drawer slides over the bottom of the screen on mobile.
+  // The native AdMob banner would otherwise cover the Settings menu item
+  // and profile chip at the drawer's bottom. Suppress while open.
+  useEffect(() => {
+    if (!sidebarOpen) return
+    return pushAdSuppress('sidebar')
+  }, [sidebarOpen])
 
   // Mirror the Supabase session into native storage so the home-screen widget
   // can refresh / toggle-done on its own. Hoisted to the dashboard shell so
@@ -169,7 +178,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        <main className="flex-1 overflow-auto min-w-0">
+        <main
+          className="flex-1 overflow-auto min-w-0"
+          style={{ paddingBottom: 'var(--ad-bottom-padding, 0px)' }}
+        >
           {children}
         </main>
 

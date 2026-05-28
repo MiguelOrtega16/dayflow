@@ -8,6 +8,7 @@ import {
   openStoreForUpdate,
 } from '@/lib/version-check'
 import { useI18n } from '@/lib/i18n'
+import { pushAdSuppress } from '@/lib/ad-suppress'
 
 /**
  * Full-screen blocking modal shown when the installed Android versionCode is
@@ -38,6 +39,13 @@ export function ForceUpdateGate() {
     })
     return () => { cancelled = true }
   }, [])
+
+  // Native AdMob banner sits above the WebView and would cover the
+  // single update CTA. Suppress while the gate is showing.
+  useEffect(() => {
+    if (!blocked) return
+    return pushAdSuppress('force-update')
+  }, [blocked])
 
   if (!blocked) return null
 

@@ -5,6 +5,7 @@ import { Trash2 } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 import { deleteActivity } from '@/lib/api'
 import { useBackButtonClose } from '@/lib/back-button'
+import { pushAdSuppress } from '@/lib/ad-suppress'
 import type { Activity } from '@/types'
 
 interface Props {
@@ -22,6 +23,7 @@ export function DeleteActivityDialog({ activity, currentUserId, onClose, onDelet
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useBackButtonClose(true, onClose)
+  useEffect(() => pushAdSuppress('delete-activity-dialog'), [])
 
   // Treat anything with a recurrence_type OR a parent_activity_id as "part of
   // a series" — children inherit the parent's recurrence_type but the user

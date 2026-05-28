@@ -15,6 +15,7 @@ import {
 import { cn, CATEGORY_CONFIG, STATUS_CONFIG, statusLabel, categoryLabel } from '@/lib/utils'
 import { useI18n, weekdayNarrow, weekdayShort, dateFnsLocale } from '@/lib/i18n'
 import { useBackButtonClose } from '@/lib/back-button'
+import { pushAdSuppress } from '@/lib/ad-suppress'
 import {
   createActivity, updateActivity, createRecurringActivities, getGoals,
   getActivityTitleSuggestions, getActivityInvitations, inviteToActivity,
@@ -116,6 +117,10 @@ export function ActivityFormModal({ date, activity, currentUser, onClose, onSave
   const router = useRouter()
 
   useBackButtonClose(true, onClose)
+
+  // Native AdMob banner would overlay the modal's bottom action bar
+  // (Save/Cancel) — suppress for the modal's lifetime.
+  useEffect(() => pushAdSuppress('activity-form'), [])
 
   // Core fields
   const [title, setTitle]             = useState(activity?.title || '')

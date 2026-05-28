@@ -1037,6 +1037,10 @@ export const messages = {
             title: 'Más colores para tu perfil',
             subtitle: 'Desbloquea 8 colores adicionales con Pro.',
           },
+          locked_color_mode: {
+            title: 'Colorea por categoría',
+            subtitle: 'Tiñe tus actividades en el calendario y en el panel diario por categoría con paletas personalizables.',
+          },
           custom_reminders: {
             title: 'Horas personalizadas para tus recordatorios',
             subtitle: 'Ajusta a qué hora te llegan el plan matutino y la revisión nocturna.',
@@ -2188,6 +2192,10 @@ export const messages = {
           locked_color: {
             title: 'More colors for your profile',
             subtitle: 'Unlock 8 more accent colors with Pro.',
+          },
+          locked_color_mode: {
+            title: 'Color by category',
+            subtitle: 'Tint your activities in the calendar and day panel by category, with customizable palettes.',
           },
           custom_reminders: {
             title: 'Custom hours for your reminders',

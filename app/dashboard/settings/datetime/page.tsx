@@ -52,7 +52,11 @@ export default function DateTimeSettingsPage() {
   }
 
   return (
-    <div ref={swipeRef} className="flex flex-col h-full overflow-y-auto bg-background">
+    <div
+      ref={swipeRef}
+      className="flex flex-col h-full overflow-y-auto bg-background"
+      style={{ paddingBottom: 'var(--ad-bottom-padding, 0px)' }}
+    >
       <AdBanner />
       <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border px-4 h-14 flex items-center gap-3 shrink-0">
         <button
