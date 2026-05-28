@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { searchUsers, shareCalendar, removeCalendarShare, getSharedCalendarUsers, respondToCalendarShare, markCalendarShareNotificationRead, updateShareNotificationMutes } from '@/lib/api'
 import { cn, getInitials } from '@/lib/utils'
-import { Search, UserPlus, X, Check, Users, Clock, CheckCircle2, XCircle, Bell, BellOff } from 'lucide-react'
+import { Search, UserPlus, X, Check, Users, Clock, CheckCircle2, XCircle, Bell, BellOff, ChevronDown, ChevronUp } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { PageTour } from '@/components/onboarding/page-tour'
 import { useI18n } from '@/lib/i18n'
@@ -39,6 +39,13 @@ export default function PeoplePage() {
   const [responding, setResponding]         = useState<string | null>(null)
   // Which "visible to me" share row has its notifications panel expanded.
   const [openNotifPanelId, setOpenNotifPanelId] = useState<string | null>(null)
+  // Collapsible state for the two list sections. Default open; users with
+  // long member lists can collapse to reduce scrolling.
+  const [sharedWithOpen, setSharedWithOpen] = useState(true)
+  const [visibleOpen, setVisibleOpen]       = useState(true)
+  // Pending share IDs the recipient has marked "share my calendar back too".
+  // Cleared per-row after the respond call completes.
+  const [shareBackIds, setShareBackIds] = useState<Set<string>>(new Set())
   const supabase = createClient()
   const { entitlement } = useEntitlement(currentUser?.id ?? null)
   const { open: openPaywall } = usePaywall()
@@ -219,10 +226,44 @@ export default function PeoplePage() {
       if (share) {
         await markCalendarShareNotificationRead(currentUser.id, share.owner_id)
       }
+
+      // Reciprocal "share back" if the recipient ticked the option. We skip
+      // when a reverse share already exists (pending or accepted) so we don't
+      // create duplicate rows. Failures (e.g. free-tier limit hit on the
+      // recipient side) are swallowed — the accept itself already succeeded.
+      if (accept && share && shareBackIds.has(shareId)) {
+        const alreadyHasReverse = sharedCalendars.some(
+          sc => sc.owner_id === currentUser.id
+            && sc.shared_with_id === share.owner_id
+            && sc.status !== 'declined',
+        )
+        if (!alreadyHasReverse) {
+          try {
+            await shareCalendar(currentUser.id, share.owner_id)
+          } catch (err) {
+            console.warn('[people] reciprocal share failed', err)
+          }
+        }
+      }
+
       loadData()
     } finally {
       setResponding(null)
+      setShareBackIds(prev => {
+        if (!prev.has(shareId)) return prev
+        const next = new Set(prev)
+        next.delete(shareId)
+        return next
+      })
     }
+  }
+
+  const toggleShareBack = (shareId: string) => {
+    setShareBackIds(prev => {
+      const next = new Set(prev)
+      if (next.has(shareId)) next.delete(shareId); else next.add(shareId)
+      return next
+    })
   }
 
   const myShares     = sharedCalendars.filter(sc => sc.owner_id === currentUser?.id)
@@ -262,6 +303,7 @@ export default function PeoplePage() {
             t('onboarding.pageTour.people.bullets.share'),
             t('onboarding.pageTour.people.bullets.sharedWith'),
             t('onboarding.pageTour.people.bullets.visible'),
+            t('onboarding.pageTour.people.bullets.notifications'),
           ]}
         />
       )}
@@ -275,6 +317,11 @@ export default function PeoplePage() {
           <div className="space-y-3">
             {pendingIncoming.map(sc => {
               const owner = sc.owner as Profile
+              const ownerName = owner?.full_name || owner?.username || t('common.unknown')
+              const shareBack = shareBackIds.has(sc.id)
+              const alreadyHasReverse = myShares.some(
+                m => m.shared_with_id === sc.owner_id && m.status !== 'declined',
+              )
               return (
                 <div key={sc.id} className="bg-background/60 rounded-xl p-3 space-y-2.5">
                   <div className="flex items-center gap-3">
@@ -285,11 +332,25 @@ export default function PeoplePage() {
                         : getInitials(owner?.full_name, owner?.email)}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{owner?.full_name || owner?.username || t('common.unknown')}</p>
+                      <p className="text-sm font-medium truncate">{ownerName}</p>
                       <p className="text-xs text-muted-foreground truncate">{owner?.email}</p>
                       <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">{t('people.pendingNote')}</p>
                     </div>
                   </div>
+                  {!alreadyHasReverse && (
+                    <label className="flex items-start gap-2 pl-12 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={shareBack}
+                        onChange={() => toggleShareBack(sc.id)}
+                        disabled={responding === sc.id}
+                        className="mt-0.5 h-4 w-4 rounded border-border accent-primary cursor-pointer disabled:opacity-50"
+                      />
+                      <span className="text-xs text-foreground/80 leading-snug">
+                        {t('people.shareBack', { name: ownerName })}
+                      </span>
+                    </label>
+                  )}
                   <div className="flex gap-2 pl-12">
                     <button
                       onClick={() => handleRespond(sc.id, true)}
@@ -365,14 +426,31 @@ export default function PeoplePage() {
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-5 mb-4">
-        <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => myShares.length > 0 && setSharedWithOpen(o => !o)}
+          disabled={myShares.length === 0}
+          aria-expanded={sharedWithOpen}
+          aria-controls="shared-with-list"
+          className={cn(
+            'w-full text-left flex items-center gap-2 text-base font-semibold',
+            myShares.length === 0 ? 'cursor-default' : 'cursor-pointer',
+            sharedWithOpen && myShares.length > 0 ? 'mb-3' : '',
+          )}
+          title={myShares.length > 0 ? t(sharedWithOpen ? 'people.collapse' : 'people.expand') : undefined}
+        >
           <Users className="w-4 h-4 text-primary" /> {t('people.sharedWith')}
           <span className="ml-auto text-xs text-muted-foreground font-normal">{t('people.sharedCount', { count: myShares.length })}</span>
-        </h2>
+          {myShares.length > 0 && (
+            sharedWithOpen
+              ? <ChevronUp   className="w-4 h-4 text-muted-foreground shrink-0" />
+              : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+          )}
+        </button>
         {myShares.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('people.sharedEmpty')}</p>
-        ) : (
-          <div className="space-y-2">
+        ) : sharedWithOpen && (
+          <div id="shared-with-list" className="space-y-2">
             {myShares.map(sc => {
               const user = sc.shared_with as Profile
               return (
@@ -404,11 +482,26 @@ export default function PeoplePage() {
 
       {acceptedIncoming.length > 0 && (
         <div className="bg-card border border-border rounded-2xl p-5">
-          <h2 className="text-base font-semibold mb-3">
+          <button
+            type="button"
+            onClick={() => setVisibleOpen(o => !o)}
+            aria-expanded={visibleOpen}
+            aria-controls="visible-calendars-list"
+            className={cn(
+              'w-full text-left flex items-center gap-2 text-base font-semibold cursor-pointer',
+              visibleOpen ? 'mb-3' : '',
+            )}
+            title={t(visibleOpen ? 'people.collapse' : 'people.expand')}
+          >
             {t('people.visibleHeading')}
             <span className="ml-2 text-xs text-muted-foreground font-normal">{t('people.sharedCount', { count: acceptedIncoming.length })}</span>
-          </h2>
-          <div className="space-y-2">
+            <span className="ml-auto" />
+            {visibleOpen
+              ? <ChevronUp   className="w-4 h-4 text-muted-foreground shrink-0" />
+              : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+          </button>
+          {visibleOpen && (
+          <div id="visible-calendars-list" className="space-y-2">
             {acceptedIncoming.map(sc => {
               const owner = sc.owner as Profile
               const mutes = sc.notification_mutes ?? []
@@ -486,6 +579,7 @@ export default function PeoplePage() {
               )
             })}
           </div>
+          )}
         </div>
       )}
     </div>
