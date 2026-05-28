@@ -102,9 +102,16 @@ export async function hideBottomBanner(): Promise<void> {
   if (!isAndroidNative()) return
   try {
     const { AdMob } = await import('@capacitor-community/admob')
-    await AdMob.hideBanner()
+    // removeBanner (destroy) — NOT hideBanner (which is a temporary hide
+    // meant to be paired with resumeBanner). Pairing hideBanner with
+    // showBanner on the next mount leaves the plugin holding a stale hidden
+    // banner reference, and after the user clicks an ad (which transitions
+    // the banner through Opened/Closed events) subsequent showBanner calls
+    // silently fail to render. removeBanner forces a clean teardown so each
+    // page mount gets a fresh ad request.
+    await AdMob.removeBanner()
   } catch (err) {
-    // Swallow — hideBanner throws if no banner is currently showing, which
-    // happens during fast route transitions.
+    // Swallow — removeBanner throws if no banner exists, which happens
+    // during fast route transitions or after a failed showBanner.
   }
 }

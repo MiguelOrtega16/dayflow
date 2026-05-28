@@ -176,97 +176,100 @@ export default function AppearanceSettingsPage() {
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-5 space-y-5">
-          <div>
-            <h2 className="text-sm font-semibold">{t('settings.appearanceSection')}</h2>
-            <p className="text-xs text-muted-foreground mt-1">{t('settings.appearanceHelp')}</p>
-          </div>
+        {/* Three sibling cards (profile color / activity coloring / theme)
+            replace the previous single mega-card. Same logic, but each area
+            stands on its own with a clear title + help text so it doesn't
+            feel like options-inside-options-inside-options. */}
 
+        <section className="bg-card border border-border rounded-2xl p-5 space-y-3">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">{t('settings.profileColorLabel')}</label>
-            <p className="text-[11px] text-muted-foreground/80 mb-2">{t('settings.profileColorHelp')}</p>
-            <div className="flex flex-wrap gap-2">
-              {USER_COLORS.map(c => {
-                const isPro  = isProColor(c)
-                const locked = isPro && !!profile && !entitlementLoading && !entitlement.isPro
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => handleColorClick(c)}
-                    disabled={savingColor}
-                    className="relative w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 disabled:opacity-60"
-                    style={{
-                      backgroundColor: c,
-                      borderColor: color === c ? 'white' : c,
-                      outline: color === c ? `2px solid ${c}` : 'none',
-                      outlineOffset: '2px',
-                    }}
-                  >
-                    {locked && (
-                      <Crown className="absolute -top-1 -right-1 w-3 h-3 text-indigo-500 bg-background rounded-full p-[1px]" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+            <h2 className="text-sm font-semibold">{t('settings.profileColorLabel')}</h2>
+            <p className="text-xs text-muted-foreground mt-1">{t('settings.profileColorHelp')}</p>
           </div>
-
-          {/* Pro: color activities by category instead of by owner. Pairs with
-              the per-category hex map in CATEGORY_CONFIG; activity cards in
-              the Day list + time-grid blocks pick up the change in real time
-              via the shared profile cache. Free users see a Crown + paywall. */}
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground">{t('settings.colorModeLabel')}</label>
-            <p className="text-[11px] text-muted-foreground/80 mb-2">{t('settings.colorModeHelp')}</p>
-            <div className="flex items-center gap-3 rounded-xl border border-border p-3">
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm font-medium">{t('settings.colorModeOptionLabel')}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {colorByCategory ? t('settings.colorModeOnHint') : t('settings.colorModeOffHint')}
-                </span>
-              </span>
-              {!entitlement.isPro && !entitlementLoading && (
-                <Crown className="w-4 h-4 text-indigo-500 shrink-0" />
-              )}
-              <button
-                type="button"
-                role="switch"
-                aria-checked={colorByCategory}
-                onClick={handleColorModeToggle}
-                className={cn(
-                  'shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                  colorByCategory ? 'bg-primary' : 'bg-muted',
-                )}
-              >
-                <span
-                  className={cn(
-                    'inline-block h-5 w-5 transform rounded-full bg-background shadow transition-transform',
-                    colorByCategory ? 'translate-x-5' : 'translate-x-0.5',
+          <div className="flex flex-wrap gap-2">
+            {USER_COLORS.map(c => {
+              const isPro  = isProColor(c)
+              const locked = isPro && !!profile && !entitlementLoading && !entitlement.isPro
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => handleColorClick(c)}
+                  disabled={savingColor}
+                  className="relative w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 disabled:opacity-60"
+                  style={{
+                    backgroundColor: c,
+                    borderColor: color === c ? 'white' : c,
+                    outline: color === c ? `2px solid ${c}` : 'none',
+                    outlineOffset: '2px',
+                  }}
+                >
+                  {locked && (
+                    <Crown className="absolute -top-1 -right-1 w-3 h-3 text-indigo-500 bg-background rounded-full p-[1px]" />
                   )}
-                />
-              </button>
-            </div>
+                </button>
+              )
+            })}
+          </div>
+        </section>
 
-            {/* Per-category color picker: only meaningful when the toggle is
-                on (otherwise the override never feeds into activityColor()),
-                so we hide it entirely in 'profile' mode rather than show
-                inert rows. Pro is already enforced by the toggle gate above.
+        {/* Pro: color activities by category instead of by owner. Pairs with
+            the per-category hex map in CATEGORY_CONFIG; activity cards in
+            the Day list + time-grid blocks pick up the change in real time
+            via the shared profile cache. Free users see a Crown + paywall. */}
+        <section className="bg-card border border-border rounded-2xl p-5 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold">{t('settings.colorModeLabel')}</h2>
+            <p className="text-xs text-muted-foreground mt-1">{t('settings.colorModeHelp')}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-medium">{t('settings.colorModeOptionLabel')}</span>
+              <span className="block text-xs text-muted-foreground">
+                {colorByCategory ? t('settings.colorModeOnHint') : t('settings.colorModeOffHint')}
+              </span>
+            </span>
+            {!entitlement.isPro && !entitlementLoading && (
+              <Crown className="w-4 h-4 text-indigo-500 shrink-0" />
+            )}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={colorByCategory}
+              onClick={handleColorModeToggle}
+              className={cn(
+                'shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                colorByCategory ? 'bg-primary' : 'bg-muted',
+              )}
+            >
+              <span
+                className={cn(
+                  'inline-block h-5 w-5 transform rounded-full bg-background shadow transition-transform',
+                  colorByCategory ? 'translate-x-5' : 'translate-x-0.5',
+                )}
+              />
+            </button>
+          </div>
 
-                Layout: each category is its own mini-card with a header row
-                (emoji + label + current-color chip + reset link) and a tidy
-                grid of swatches below. Mobile gets 6 columns; >=sm gets the
-                full 12 swatches in one row. This was rebuilt after the
-                inline flex-wrap version produced ragged 3-line swatch blocks
-                on narrow phones that didn't align with the category labels. */}
-            {colorByCategory && entitlement.isPro && (
-              <div className="mt-3 space-y-2 rounded-xl border border-border bg-background/40 p-3">
-                <p className="text-[11px] text-muted-foreground mb-1">{t('settings.categoryColorsHelp')}</p>
+          {/* Per-category color picker: only meaningful when the toggle is
+              on (otherwise the override never feeds into activityColor()),
+              so we hide it entirely in 'profile' mode rather than show
+              inert rows. Pro is already enforced by the toggle gate above.
+
+              Flattened from the previous box-in-box-in-box layout: now it's
+              a single divider-separated list within this card, so the user
+              sees per-category rows as part of "Activity coloring" instead
+              of a third nesting level. Mobile gets 6 swatches per row;
+              >=sm gets the full 12 in one row. */}
+          {colorByCategory && entitlement.isPro && (
+            <div className="pt-1">
+              <p className="text-xs text-muted-foreground mb-2">{t('settings.categoryColorsHelp')}</p>
+              <ul className="divide-y divide-border/60 border-t border-border/60">
                 {PICKER_CATEGORIES.map(cat => {
                   const current = categoryOverrides[cat] ?? CATEGORY_CONFIG[cat].hex
                   const isOverridden = !!categoryOverrides[cat]
                   return (
-                    <div key={cat} className="rounded-lg border border-border/60 bg-card p-2.5 space-y-2">
+                    <li key={cat} className="py-3 space-y-2 first:pt-3 last:pb-0">
                       <div className="flex items-center gap-2">
                         <span className="text-base shrink-0">{CATEGORY_CONFIG[cat].emoji}</span>
                         <span className="text-sm font-medium flex-1 min-w-0 truncate">
@@ -302,52 +305,54 @@ export default function AppearanceSettingsPage() {
                           />
                         ))}
                       </div>
-                    </div>
+                    </li>
                   )
                 })}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-2">{t('settings.themeLabel')}</label>
-            {/* Drop to 2 columns on narrow phones so the theme name doesn't get
-                truncated next to the swatch + check icon. Three columns is fine
-                from `sm` upwards (>=640px). */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {THEMES.map(p => {
-                const locked   = !p.free && !!profile && !entitlementLoading && !entitlement.isPro
-                const selected = palette === p.id
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handlePaletteClick(p.id)}
-                    className={`relative flex items-center gap-2 rounded-xl border p-2.5 text-left transition-colors ${
-                      selected ? 'border-primary bg-primary/5' : 'border-border hover:border-foreground/30'
-                    }`}
-                  >
-                    <span
-                      className="w-7 h-7 rounded-full shrink-0 border border-black/5"
-                      style={{ backgroundColor: p.swatch }}
-                    />
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-xs font-medium truncate">
-                        {t(`settings.themePalettes.${p.i18nKey}`)}
-                      </span>
-                    </span>
-                    {selected && (
-                      <Check className="w-3.5 h-3.5 text-primary shrink-0" />
-                    )}
-                    {locked && (
-                      <Crown className="absolute -top-1 -right-1 w-3.5 h-3.5 text-indigo-500 bg-background rounded-full p-[1px]" />
-                    )}
-                  </button>
-                )
-              })}
+              </ul>
             </div>
+          )}
+        </section>
+
+        <section className="bg-card border border-border rounded-2xl p-5 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold">{t('settings.themeLabel')}</h2>
           </div>
-        </div>
+          {/* Drop to 2 columns on narrow phones so the theme name doesn't get
+              truncated next to the swatch + check icon. Three columns is fine
+              from `sm` upwards (>=640px). */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {THEMES.map(p => {
+              const locked   = !p.free && !!profile && !entitlementLoading && !entitlement.isPro
+              const selected = palette === p.id
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handlePaletteClick(p.id)}
+                  className={`relative flex items-center gap-2 rounded-xl border p-2.5 text-left transition-colors ${
+                    selected ? 'border-primary bg-primary/5' : 'border-border hover:border-foreground/30'
+                  }`}
+                >
+                  <span
+                    className="w-7 h-7 rounded-full shrink-0 border border-black/5"
+                    style={{ backgroundColor: p.swatch }}
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-xs font-medium truncate">
+                      {t(`settings.themePalettes.${p.i18nKey}`)}
+                    </span>
+                  </span>
+                  {selected && (
+                    <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                  )}
+                  {locked && (
+                    <Crown className="absolute -top-1 -right-1 w-3.5 h-3.5 text-indigo-500 bg-background rounded-full p-[1px]" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </section>
       </div>
     </div>
   )
