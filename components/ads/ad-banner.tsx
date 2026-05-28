@@ -11,10 +11,16 @@ import { initAdMob, showBottomBanner, hideBottomBanner } from '@/lib/admob'
 // safe-area inset is absorbed by the nav itself, so we don't double-count it.
 const BOTTOM_NAV_HEIGHT_PX = 56
 
+// Build-time kill switch. Mirrors the gate in lib/admob.ts so we don't even
+// pay for the entitlement subscription when ads are off. A single env-var
+// flip + rebuild turns the whole pipeline on.
+const ADS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_ADS === '1'
+
 /**
  * Mount this on any page where a bottom banner is welcome. Renders nothing
  * in the DOM — the banner is a native Android view managed by the AdMob
  * SDK. Show is gated on:
+ *   - NEXT_PUBLIC_ENABLE_ADS=1 at build time (off → instant noop)
  *   - Capacitor native Android build (web + iOS are no-ops via initAdMob)
  *   - Entitlement loaded (avoids a brief banner flash for Pro users)
  *   - User is NOT Pro
@@ -23,6 +29,11 @@ const BOTTOM_NAV_HEIGHT_PX = 56
  * Calendar) immediately reclaims the bottom strip.
  */
 export function AdBanner() {
+  if (!ADS_ENABLED) return null
+  return <AdBannerInner />
+}
+
+function AdBannerInner() {
   const { profile } = useProfile()
   const { entitlement, loading } = useEntitlement(profile?.id ?? null)
 

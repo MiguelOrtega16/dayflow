@@ -12,6 +12,7 @@ import { normalizePreferences, updateUserPreferences } from '@/lib/user-preferen
 import { useProfile } from '@/lib/profile-context'
 import { markDiscoverySeen } from '@/lib/onboarding/discovery-dots'
 import { useTheme } from '@/components/layout/theme-provider'
+import { AdBanner } from '@/components/ads/ad-banner'
 import { useRouter } from 'next/navigation'
 import { track } from '@/lib/analytics/posthog'
 
@@ -95,6 +96,7 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 max-w-lg mx-auto">
+      <AdBanner />
       <div className="mb-8">
         <h1 className="text-2xl font-semibold mb-1">{t('settings.title')}</h1>
         <p className="text-muted-foreground">{t('settings.subtitle')}</p>

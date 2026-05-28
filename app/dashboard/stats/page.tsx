@@ -11,6 +11,7 @@ import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { activitiesToCsv, downloadCsv } from '@/lib/csv-export'
 import { PageTour } from '@/components/onboarding/page-tour'
+import { AdBanner } from '@/components/ads/ad-banner'
 import {
   ClipboardList, CheckCircle2, Gauge, Flame, Users, Download, Crown,
 } from 'lucide-react'
@@ -259,6 +260,7 @@ export default function StatsPage() {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 max-w-7xl mx-auto space-y-4">
+      <AdBanner />
       <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-0.5">

@@ -24,6 +24,12 @@ const TEST_BANNER_AD_ID = 'ca-app-pub-3940256099942544/6300978111'
 const isAndroidNative = (): boolean =>
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
 
+// Hard kill-switch. Banners and the UMP consent flow stay dormant until
+// NEXT_PUBLIC_ENABLE_ADS is set to '1' at build time. Lets the production
+// publish ship with ads-off, then a single env-var flip + rebuild turns
+// them on — no code churn, no risk of forgetting to mount a component.
+const adsEnabled = (): boolean => process.env.NEXT_PUBLIC_ENABLE_ADS === '1'
+
 let initPromise: Promise<void> | null = null
 
 /**
@@ -31,6 +37,7 @@ let initPromise: Promise<void> | null = null
  * call from multiple places — the promise is cached.
  */
 export function initAdMob(): Promise<void> {
+  if (!adsEnabled()) return Promise.resolve()
   if (!isAndroidNative()) return Promise.resolve()
   if (initPromise) return initPromise
 
@@ -73,6 +80,7 @@ export function initAdMob(): Promise<void> {
  * *outside* the WebView, so it doesn't disturb React state.
  */
 export async function showBottomBanner(marginPx: number = 0): Promise<void> {
+  if (!adsEnabled()) return
   if (!isAndroidNative()) return
   try {
     const { AdMob, BannerAdSize, BannerAdPosition } = await import('@capacitor-community/admob')

@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { initPushNotifications } from '@/lib/push-notifications'
 import { initVersionCheck } from '@/lib/version-check'
 import { initRevenueCat } from '@/lib/billing/revenuecat'
+import { initAdMob } from '@/lib/admob'
 import { PaywallProvider } from '@/components/paywall/paywall-provider'
 import { startWidgetAuthSync, syncWidgetSnapshot } from '@/lib/widget-sync'
 import { DailySummary } from '@/lib/daily-summary'
@@ -61,10 +62,11 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   // otherwise a soft flexible update. Web / iOS are no-ops.
   useEffect(() => { initVersionCheck() }, [])
 
-  // AdMob init intentionally NOT called yet — banners stay dormant until
-  // the app is published to Google Play production. Firing initAdMob here
-  // would surface the UMP consent sheet to EU users for ads we're not
-  // serving. See memory/project_ads_pending.md for the re-enable checklist.
+  // AdMob init runs once per dashboard mount. Internally gated by
+  // NEXT_PUBLIC_ENABLE_ADS=1 and the Android-native platform check — when
+  // either is false this is a fast no-op, so it's safe to call even while
+  // the app is still on the Play testing track.
+  useEffect(() => { initAdMob() }, [])
 
   // Mirror the Supabase session into native storage so the home-screen widget
   // can refresh / toggle-done on its own. Hoisted to the dashboard shell so

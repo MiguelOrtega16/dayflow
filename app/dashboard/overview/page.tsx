@@ -15,6 +15,7 @@ import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useI18n, useFormatDate } from '@/lib/i18n'
 import { useProfile } from '@/lib/profile-context'
 import { BillingDebugButton } from '@/components/billing-debug-button'
+import { AdBanner } from '@/components/ads/ad-banner'
 import { PageTour } from '@/components/onboarding/page-tour'
 import { DeleteActivityDialog } from '@/components/activities/delete-activity-dialog'
 import {
@@ -209,6 +210,7 @@ export default function OverviewPage() {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 max-w-7xl mx-auto">
+      <AdBanner />
       <BillingDebugButton />
       <div className="mb-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">

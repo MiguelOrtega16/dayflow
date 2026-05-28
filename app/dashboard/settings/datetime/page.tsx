@@ -12,6 +12,7 @@ import {
   getUserPreferences, updateUserPreferences,
   type UserPreferences, type FirstDayOfWeek, type TimeFormat, type DateFormat,
 } from '@/lib/user-preferences'
+import { AdBanner } from '@/components/ads/ad-banner'
 
 export default function DateTimeSettingsPage() {
   const { t } = useI18n()
@@ -52,6 +53,7 @@ export default function DateTimeSettingsPage() {
 
   return (
     <div ref={swipeRef} className="flex flex-col h-full overflow-y-auto bg-background">
+      <AdBanner />
       <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border px-4 h-14 flex items-center gap-3 shrink-0">
         <button
           onClick={() => router.push('/dashboard/settings')}

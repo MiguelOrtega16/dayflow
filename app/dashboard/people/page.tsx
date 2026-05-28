@@ -7,6 +7,7 @@ import { cn, getInitials } from '@/lib/utils'
 import { Search, UserPlus, X, Check, Users, Clock, CheckCircle2, XCircle, Bell, BellOff, ChevronDown, ChevronUp } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { PageTour } from '@/components/onboarding/page-tour'
+import { AdBanner } from '@/components/ads/ad-banner'
 import { useI18n } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { usePaywall } from '@/components/paywall/paywall-provider'
@@ -286,6 +287,7 @@ export default function PeoplePage() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
+      <AdBanner />
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-1">
           <h1 className="text-2xl font-semibold">{t('people.title')}</h1>

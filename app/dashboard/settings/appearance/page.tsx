@@ -16,6 +16,7 @@ import { THEMES, isProTheme } from '@/lib/themes'
 import { normalizePreferences, updateUserPreferences } from '@/lib/user-preferences'
 import { useProfile } from '@/lib/profile-context'
 import { cn } from '@/lib/utils'
+import { AdBanner } from '@/components/ads/ad-banner'
 
 // Categories shown in the per-category color picker — matches what users
 // can pick in the activity-form type chooser. 'note' is filtered out of
@@ -144,6 +145,7 @@ export default function AppearanceSettingsPage() {
 
   return (
     <div ref={swipeRef} className="flex flex-col h-full overflow-y-auto bg-background">
+      <AdBanner />
       <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border px-4 h-14 flex items-center gap-3 shrink-0">
         <button
           onClick={() => router.push('/dashboard/settings')}

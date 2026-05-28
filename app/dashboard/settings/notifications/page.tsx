@@ -17,6 +17,7 @@ import {
   type UserPreferences, type ReminderType, type SnoozeMinutes, type DailySlot,
 } from '@/lib/user-preferences'
 import { DailySummary, isDailySummarySupported } from '@/lib/daily-summary'
+import { AdBanner } from '@/components/ads/ad-banner'
 
 const SNOOZE_OPTIONS: SnoozeMinutes[] = [5, 15, 30]
 // Morning hours pickable on the Pro custom-time mode. 5 AM .. 11 AM.
@@ -88,6 +89,7 @@ export default function NotificationsSettingsPage() {
 
   return (
     <div ref={swipeRef} className="flex flex-col h-full overflow-y-auto bg-background">
+      <AdBanner />
       <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border px-4 h-14 flex items-center gap-3 shrink-0">
         <button
           onClick={() => router.back()}
