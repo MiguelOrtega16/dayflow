@@ -311,6 +311,23 @@ export const messages = {
         ownPct: '{pct}% mías',
         sharedPct: '{pct}% compartidas',
         total: 'total',
+        includesShared: 'Incluye compartidas',
+        catCompletion: '{done}/{count} completadas',
+      },
+      delta: {
+        vsPrev: 'vs. anterior',
+      },
+      trend: {
+        heading: 'Tendencia de finalización',
+        subtitle: 'Completadas por día',
+        empty: 'Sin completadas en este período',
+        tooltip: '{count} completadas · {date}',
+      },
+      drill: {
+        close: 'Cerrar',
+        empty: 'Sin actividades',
+        shared: 'Compartida',
+        from: 'de {name}',
       },
       collab: {
         heading: 'Detalle por colaborador',
@@ -1470,6 +1487,23 @@ export const messages = {
         ownPct: '{pct}% mine',
         sharedPct: '{pct}% shared',
         total: 'total',
+        includesShared: 'Includes shared',
+        catCompletion: '{done}/{count} completed',
+      },
+      delta: {
+        vsPrev: 'vs. prev',
+      },
+      trend: {
+        heading: 'Completion trend',
+        subtitle: 'Completed per day',
+        empty: 'Nothing completed in this period',
+        tooltip: '{count} completed · {date}',
+      },
+      drill: {
+        close: 'Close',
+        empty: 'No activities',
+        shared: 'Shared',
+        from: 'from {name}',
       },
       collab: {
         heading: 'Per-collaborator breakdown',

@@ -14,6 +14,7 @@ import { PageTour } from '@/components/onboarding/page-tour'
 import { AdBanner } from '@/components/ads/ad-banner'
 import {
   ClipboardList, CheckCircle2, Gauge, Flame, Users, Download, Crown,
+  TrendingUp, ArrowUp, ArrowDown, X,
 } from 'lucide-react'
 
 const STATUS_HEX: Record<ActivityStatus, string> = {
@@ -26,23 +27,42 @@ const STATUS_HEX: Record<ActivityStatus, string> = {
 
 const RING_ORDER: ActivityStatus[] = ['done', 'in_progress', 'todo', 'blocked', 'skipped']
 
-interface Collaborator {
-  profile: Profile
-  activities: Activity[]
+// An activity scoped to the current user's perspective. For owned activities
+// `myStatus` mirrors `status`; for activities shared *with* the user it holds
+// the user's own `participant_status` (their progress), while `status` keeps
+// the owner's value so the collaborator card can still show the owner's side.
+type ScopedActivity = Activity & { isShared: boolean; myStatus: ActivityStatus }
+
+interface CollabEntry { id: string; title: string; date: string; status: ActivityStatus }
+interface Collaborator { profile: Profile; entries: CollabEntry[] }
+
+interface DrillItem {
+  id: string
+  title: string
+  date: string
+  status: ActivityStatus
+  category?: ActivityCategory
+  isShared?: boolean
+  ownerName?: string
 }
+interface Drill { title: string; items: DrillItem[] }
+
+const RANGE_LEN: Record<'week' | 'month' | '3months', number> = { week: 7, month: 30, '3months': 90 }
 
 export default function StatsPage() {
   const { t, locale } = useI18n()
-  const [ownActivities, setOwnActivities]         = useState<Activity[]>([])
-  const [invitedActivities, setInvitedActivities] = useState<Activity[]>([])
-  const [loading, setLoading]                     = useState(true)
-  const [range, setRange]                         = useState<'week' | 'month' | '3months'>('month')
-  const [userId, setUserId]                       = useState<string | null>(null)
-  const [exporting, setExporting]                 = useState(false)
+  const [scoped, setScoped]     = useState<ScopedActivity[]>([])
+  const [outgoing, setOutgoing] = useState<{ profile: Profile; status: ActivityStatus; activityId: string; date: string; title: string }[]>([])
+  const [prevAgg, setPrevAgg]   = useState<{ total: number; done: number } | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [range, setRange]       = useState<'week' | 'month' | '3months'>('month')
+  const [userId, setUserId]     = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [drill, setDrill]       = useState<Drill | null>(null)
   // Tour gate. Loaded on mount (separate from loadStats so it doesn't refire
   // on every range change). Defaults to false so the tour never flashes
   // before we know whether the user has already dismissed it.
-  const [showTour, setShowTour]                   = useState(false)
+  const [showTour, setShowTour] = useState(false)
   const supabase = createClient()
   const { entitlement } = useEntitlement(userId)
   const { open: openPaywall } = usePaywall()
@@ -69,128 +89,216 @@ export default function StatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Fetch the user's own + shared-with-me activities for a window, each tagged
+  // with the user's effective status (`myStatus`). Used for both the current
+  // range and the immediately-preceding window (for period-over-period deltas).
+  const fetchScoped = async (uid: string, start: string, end: string): Promise<ScopedActivity[]> => {
+    const { data: ownData } = await supabase
+      .from('activities')
+      .select('*')
+      .eq('user_id', uid)
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: true })
+    const own: ScopedActivity[] = (ownData || []).map(a => ({
+      ...(a as Activity), isShared: false, myStatus: (a as Activity).status,
+    }))
+
+    const { data: invitations } = await supabase
+      .from('activity_invitations')
+      .select('activity_id, participant_status')
+      .eq('invitee_id', uid)
+      .eq('status', 'accepted')
+
+    let shared: ScopedActivity[] = []
+    if (invitations && invitations.length > 0) {
+      const ids = invitations.map(i => i.activity_id)
+      const psById = new Map<string, ActivityStatus>(
+        invitations.map(i => [i.activity_id as string, (i.participant_status as ActivityStatus)]),
+      )
+      const { data: invited } = await supabase
+        .from('activities')
+        .select('*, profile:profiles(*)')
+        .in('id', ids)
+        .gte('date', start)
+        .lte('date', end)
+      shared = (invited || []).map(a => ({
+        ...(a as Activity),
+        isShared: true,
+        // The user's progress on the shared activity, not the owner's.
+        myStatus: psById.get((a as Activity).id) ?? (a as Activity).status,
+      }))
+    }
+
+    // Dedup by id (an owned record should never also appear as shared, but guard).
+    const seen = new Set<string>()
+    const out: ScopedActivity[] = []
+    for (const a of [...own, ...shared]) {
+      if (!seen.has(a.id)) { seen.add(a.id); out.push(a) }
+    }
+    return out
+  }
+
   const loadStats = async () => {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
 
+    const len   = RANGE_LEN[range]
     const today = new Date()
-    const endDate = format(today, 'yyyy-MM-dd')
-    const startDate = format(
-      subDays(today, range === 'week' ? 6 : range === 'month' ? 29 : 89),
-      'yyyy-MM-dd'
-    )
+    const curEnd    = format(today, 'yyyy-MM-dd')
+    const curStart  = format(subDays(today, len - 1), 'yyyy-MM-dd')
+    const prevEnd   = format(subDays(today, len), 'yyyy-MM-dd')
+    const prevStart = format(subDays(today, len * 2 - 1), 'yyyy-MM-dd')
 
-    const { data: ownData } = await supabase
-      .from('activities')
-      .select('*')
-      .eq('user_id', user.id)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: true })
-    setOwnActivities((ownData || []) as Activity[])
+    const cur = await fetchScoped(user.id, curStart, curEnd)
+    setScoped(cur)
 
-    const { data: invitations } = await supabase
-      .from('activity_invitations')
-      .select('activity_id')
-      .eq('invitee_id', user.id)
-      .eq('status', 'accepted')
-
-    if (invitations && invitations.length > 0) {
-      const ids = invitations.map(i => i.activity_id)
-      const { data: invited } = await supabase
-        .from('activities')
-        .select('*, profile:profiles(*)')
-        .in('id', ids)
-        .gte('date', startDate)
-        .lte('date', endDate)
-      setInvitedActivities((invited || []) as Activity[])
+    // Outgoing collaborators: accepted invitees on the user's OWN activities.
+    // This is the half the breakdown used to miss — people the user shared TO.
+    const ownIds = cur.filter(a => !a.isShared).map(a => a.id)
+    if (ownIds.length > 0) {
+      const { data: outRows } = await supabase
+        .from('activity_invitations')
+        .select('activity_id, participant_status, invitee:profiles!activity_invitations_invitee_id_fkey(*)')
+        .in('activity_id', ownIds)
+        .eq('status', 'accepted')
+      const byId = new Map(cur.map(a => [a.id, a]))
+      setOutgoing((outRows || [])
+        .filter(r => (r as any).invitee)
+        .map(r => {
+          const act = byId.get((r as any).activity_id)
+          return {
+            profile:    (r as any).invitee as Profile,
+            status:     (r as any).participant_status as ActivityStatus,
+            activityId: (r as any).activity_id as string,
+            date:       act?.date ?? '',
+            title:      act?.title ?? '',
+          }
+        }))
     } else {
-      setInvitedActivities([])
+      setOutgoing([])
     }
+
+    // Previous window — only aggregate counts are needed for KPI deltas.
+    const prev = await fetchScoped(user.id, prevStart, prevEnd)
+    setPrevAgg({ total: prev.length, done: prev.filter(a => a.myStatus === 'done').length })
 
     setLoading(false)
   }
 
-  const { total, done, completionRate, ownTotal, ownDone, ownRate,
-          sharedTotal, sharedDone, sharedRate, collaborators, byCategory,
-          byStatus, statusCounts, streak } = useMemo(() => {
-    const allIds = new Set<string>()
-    const activities: Activity[] = []
-    for (const a of [...ownActivities, ...invitedActivities]) {
-      if (!allIds.has(a.id)) { allIds.add(a.id); activities.push(a) }
-    }
+  const agg = useMemo(() => {
+    const own    = scoped.filter(a => !a.isShared)
+    const shared = scoped.filter(a => a.isShared)
 
-    const total = activities.length
-    const done  = activities.filter(a => a.status === 'done').length
+    const total = scoped.length
+    const done  = scoped.filter(a => a.myStatus === 'done').length
     const completionRate = total > 0 ? Math.round((done / total) * 100) : 0
 
-    const ownTotal = ownActivities.length
-    const ownDone  = ownActivities.filter(a => a.status === 'done').length
+    const ownTotal = own.length
+    const ownDone  = own.filter(a => a.myStatus === 'done').length
     const ownRate  = ownTotal > 0 ? Math.round((ownDone / ownTotal) * 100) : 0
 
-    const sharedTotal = invitedActivities.length
-    const sharedDone  = invitedActivities.filter(a => a.status === 'done').length
+    const sharedTotal = shared.length
+    const sharedDone  = shared.filter(a => a.myStatus === 'done').length
     const sharedRate  = sharedTotal > 0 ? Math.round((sharedDone / sharedTotal) * 100) : 0
 
-    const collaboratorMap: Record<string, Collaborator> = {}
-    for (const act of invitedActivities) {
-      const profile = act.profile as Profile | undefined
-      if (!profile) continue
-      if (!collaboratorMap[profile.id]) collaboratorMap[profile.id] = { profile, activities: [] }
-      collaboratorMap[profile.id].activities.push(act)
-    }
-    const collaborators = Object.values(collaboratorMap)
-      .sort((a, b) => b.activities.length - a.activities.length)
-
+    // Category breakdown now carries a completion rate, not just volume.
     const byCategory = (Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
-      .map(cat => ({ cat, count: activities.filter(a => a.category === cat).length }))
+      .map(cat => {
+        const inCat = scoped.filter(a => a.category === cat)
+        const cdone = inCat.filter(a => a.myStatus === 'done').length
+        return { cat, count: inCat.length, done: cdone, rate: inCat.length > 0 ? Math.round((cdone / inCat.length) * 100) : 0 }
+      })
       .filter(c => c.count > 0)
       .sort((a, b) => b.count - a.count)
 
-    const byStatus = (Object.keys(STATUS_CONFIG) as ActivityStatus[])
-      .map(s => ({ status: s, count: activities.filter(a => a.status === s).length }))
-      .filter(s => s.count > 0)
-
     const statusCounts: Record<ActivityStatus, number> = {
-      todo:        activities.filter(a => a.status === 'todo').length,
-      in_progress: activities.filter(a => a.status === 'in_progress').length,
+      todo:        scoped.filter(a => a.myStatus === 'todo').length,
+      in_progress: scoped.filter(a => a.myStatus === 'in_progress').length,
       done,
-      blocked:     activities.filter(a => a.status === 'blocked').length,
-      skipped:     activities.filter(a => a.status === 'skipped').length,
+      blocked:     scoped.filter(a => a.myStatus === 'blocked').length,
+      skipped:     scoped.filter(a => a.myStatus === 'skipped').length,
     }
+
+    // Completion trend — done count per day across the selected window.
+    const len = RANGE_LEN[range]
+    const today = new Date()
+    const days = Array.from({ length: len }, (_, i) => format(subDays(today, len - 1 - i), 'yyyy-MM-dd'))
+    const doneByDate: Record<string, number> = {}
+    for (const a of scoped) if (a.myStatus === 'done') doneByDate[a.date] = (doneByDate[a.date] || 0) + 1
+    const trend = days.map(d => ({ date: d, done: doneByDate[d] || 0 }))
 
     let streak = 0
     let d = new Date()
     while (streak <= 365) {
-      const hasActivity = activities.some(a => a.date === format(d, 'yyyy-MM-dd') && a.status === 'done')
+      const key = format(d, 'yyyy-MM-dd')
+      const hasActivity = scoped.some(a => a.date === key && a.myStatus === 'done')
       if (!hasActivity) break
       streak++
       d = subDays(d, 1)
     }
 
-    return { total, done, completionRate, ownTotal, ownDone, ownRate,
-             sharedTotal, sharedDone, sharedRate, collaborators, byCategory,
-             byStatus, statusCounts, streak }
-  }, [ownActivities, invitedActivities])
+    // Bidirectional collaborators. Incoming: activities others shared with me
+    // (collaborator = owner, status = owner's). Outgoing: my activities I shared
+    // out (collaborator = invitee, status = their participant_status).
+    const map: Record<string, Collaborator> = {}
+    const addEntry = (profile: Profile | undefined, entry: CollabEntry) => {
+      if (!profile) return
+      if (!map[profile.id]) map[profile.id] = { profile, entries: [] }
+      map[profile.id].entries.push(entry)
+    }
+    for (const a of shared) {
+      addEntry(a.profile, { id: a.id, title: a.title, date: a.date, status: a.status })
+    }
+    for (const o of outgoing) {
+      addEntry(o.profile, { id: o.activityId, title: o.title, date: o.date, status: o.status })
+    }
+    const collaborators = Object.values(map).sort((a, b) => b.entries.length - a.entries.length)
+
+    return {
+      total, done, completionRate, ownTotal, ownDone, ownRate,
+      sharedTotal, sharedDone, sharedRate, collaborators, byCategory,
+      statusCounts, streak, trend,
+    }
+  }, [scoped, outgoing, range])
+
+  const {
+    total, done, completionRate, ownTotal, ownDone, ownRate,
+    sharedTotal, sharedDone, sharedRate, collaborators, byCategory,
+    statusCounts, streak, trend,
+  } = agg
+
+  // KPI deltas vs the immediately-preceding window of the same length.
+  const prevRate = prevAgg && prevAgg.total > 0 ? Math.round((prevAgg.done / prevAgg.total) * 100) : 0
+  const hasPrev  = !!prevAgg && prevAgg.total > 0
+  const totalDelta = hasPrev ? total - prevAgg!.total : null
+  const doneDelta  = hasPrev ? done - prevAgg!.done : null
+  const rateDelta  = hasPrev ? completionRate - prevRate : null
 
   const rangeLabel = (r: typeof range) => t(`stats.ranges.${r}`)
 
+  // Open the drill-in modal with the activities in a given status.
+  const drillStatus = (s: ActivityStatus) => {
+    const items: DrillItem[] = scoped
+      .filter(a => a.myStatus === s)
+      .map(a => ({
+        id: a.id, title: a.title, date: a.date, status: a.myStatus,
+        category: a.category, isShared: a.isShared,
+        ownerName: a.isShared ? (a.profile?.full_name || a.profile?.email || undefined) : undefined,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date))
+    setDrill({ title: statusLabel(s, locale), items })
+  }
+
   // ── CSV export ─────────────────────────────────────────────────────────────
-  // Pro-only: free users tap and get the paywall (stats_export trigger).
-  // Generates client-side from the activities already loaded for the current
-  // range, so the export reflects exactly what's on screen.
   const allActivitiesForRange = useMemo(() => {
-    const seen = new Set<string>()
-    const out: Activity[] = []
-    for (const a of [...ownActivities, ...invitedActivities]) {
-      if (seen.has(a.id)) continue
-      seen.add(a.id)
-      out.push(a)
-    }
-    return out.sort((a, b) => a.date.localeCompare(b.date))
-  }, [ownActivities, invitedActivities])
+    return [...scoped]
+      // Export the user's effective status so the file matches what's on screen.
+      .map(a => ({ ...a, status: a.myStatus }) as Activity)
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [scoped])
 
   const handleExport = async () => {
     if (!entitlement.isPro) {
@@ -200,11 +308,8 @@ export default function StatsPage() {
     if (allActivitiesForRange.length === 0) return
     setExporting(true)
     try {
-      // Build the "is shared" set. An activity is considered shared if it
-      // has ANY invitations attached, regardless of status — the user's
-      // intent of sharing is what matters here, not whether the invitee
-      // has accepted yet. Owners would otherwise show 'No' for activities
-      // they shared because their own activity row has no invitation_id.
+      // An activity is "shared" if it has ANY invitations attached, regardless
+      // of acceptance — the user's intent of sharing is what matters here.
       const sharedActivityIds = new Set<string>()
       const allIds = allActivitiesForRange.map(a => a.id)
       if (allIds.length > 0) {
@@ -314,14 +419,18 @@ export default function StatsPage() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard icon={<ClipboardList className="w-4 h-4" />} label={t('stats.kpis.total')} value={total} accent="primary" />
-        <KpiCard icon={<CheckCircle2 className="w-4 h-4" />}  label={t('stats.kpis.done')}  value={done} accent="emerald" />
+        <KpiCard icon={<ClipboardList className="w-4 h-4" />} label={t('stats.kpis.total')} value={total} accent="primary"
+          delta={totalDelta} />
+        <KpiCard icon={<CheckCircle2 className="w-4 h-4" />}  label={t('stats.kpis.done')}  value={done} accent="emerald"
+          delta={doneDelta} />
         <KpiCard
           icon={<Gauge className="w-4 h-4" />}
           label={t('stats.kpis.rate')}
           value={`${completionRate}%`}
           accent="indigo"
           progress={completionRate}
+          delta={rateDelta}
+          deltaSuffix="%"
         />
         <KpiCard
           icon={<Flame className="w-4 h-4" />}
@@ -332,7 +441,7 @@ export default function StatsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-        <StatusBreakdownCard total={total} statusCounts={statusCounts} byStatus={byStatus} />
+        <StatusBreakdownCard total={total} statusCounts={statusCounts} sharedTotal={sharedTotal} onPick={drillStatus} />
         <CategoryBreakdownCard total={total} byCategory={byCategory} />
         <OwnVsSharedCard
           ownTotal={ownTotal} ownDone={ownDone} ownRate={ownRate}
@@ -341,9 +450,13 @@ export default function StatsPage() {
         />
       </div>
 
+      <TrendCard trend={trend} />
+
       {collaborators.length > 0 && (
-        <CollaboratorsCard collaborators={collaborators} />
+        <CollaboratorsCard collaborators={collaborators} onPick={(c, s, items) => setDrill({ title: `${c} · ${statusLabel(s, locale)}`, items })} />
       )}
+
+      {drill && <DrillModal drill={drill} onClose={() => setDrill(null)} />}
     </div>
   )
 }
@@ -356,14 +469,22 @@ const ACCENT_BG: Record<string, string> = {
 }
 
 function KpiCard({
-  icon, label, value, accent, progress,
+  icon, label, value, accent, progress, delta, deltaSuffix,
 }: {
   icon: React.ReactNode
   label: string
   value: number | string
   accent: 'primary' | 'emerald' | 'indigo' | 'orange'
   progress?: number
+  /** Difference vs the previous window. null = no comparable previous data. */
+  delta?: number | null
+  deltaSuffix?: string
 }) {
+  const { t } = useI18n()
+  const showDelta = typeof delta === 'number'
+  const tone = !showDelta ? '' : delta! > 0
+    ? 'text-emerald-600 dark:text-emerald-400'
+    : delta! < 0 ? 'text-red-500' : 'text-muted-foreground'
   return (
     <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -373,6 +494,15 @@ function KpiCard({
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
       </div>
       <div className="text-2xl sm:text-3xl font-bold tabular-nums leading-tight">{value}</div>
+      {showDelta && (
+        <div className="flex items-center gap-1 text-[11px] -mt-1">
+          <span className={cn('inline-flex items-center gap-0.5 font-medium tabular-nums', tone)}>
+            {delta! > 0 ? <ArrowUp className="w-3 h-3" /> : delta! < 0 ? <ArrowDown className="w-3 h-3" /> : null}
+            {delta! > 0 ? '+' : ''}{delta}{deltaSuffix ?? ''}
+          </span>
+          <span className="text-muted-foreground/70">{t('stats.delta.vsPrev')}</span>
+        </div>
+      )}
       {typeof progress === 'number' && (
         <div className="h-1 rounded-full bg-muted overflow-hidden">
           <div className="h-full bg-current rounded-full transition-all duration-500"
@@ -384,11 +514,12 @@ function KpiCard({
 }
 
 function StatusBreakdownCard({
-  total, statusCounts,
+  total, statusCounts, sharedTotal, onPick,
 }: {
   total: number
   statusCounts: Record<ActivityStatus, number>
-  byStatus: { status: ActivityStatus; count: number }[]
+  sharedTotal: number
+  onPick: (s: ActivityStatus) => void
 }) {
   const { t } = useI18n()
   const radius = 32
@@ -410,7 +541,12 @@ function StatusBreakdownCard({
 
   return (
     <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 flex flex-col">
-      <h2 className="text-sm font-semibold mb-3">{t('stats.cards.byStatus')}</h2>
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <h2 className="text-sm font-semibold">{t('stats.cards.byStatus')}</h2>
+        {sharedTotal > 0 && (
+          <span className="text-[10px] text-muted-foreground/70 shrink-0">{t('stats.cards.includesShared')}</span>
+        )}
+      </div>
       {total === 0 ? (
         <p className="text-sm text-muted-foreground">{t('stats.empty')}</p>
       ) : (
@@ -427,11 +563,12 @@ function StatusBreakdownCard({
                     strokeWidth="7" strokeLinecap="butt"
                     strokeDasharray={`${seg.segmentLength} ${circumference - seg.segmentLength}`}
                     strokeDashoffset={seg.offset}
-                    className="transition-[stroke-dashoffset,stroke-dasharray] duration-500"
+                    className="transition-[stroke-dashoffset,stroke-dasharray] duration-500 cursor-pointer hover:opacity-80"
+                    onClick={() => onPick(seg.status)}
                   />
                 ))}
               </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
+              <div className="absolute inset-0 flex flex-col items-center justify-center leading-none pointer-events-none">
                 <span className="text-xl font-bold tabular-nums">{total}</span>
                 <span className="text-[10px] text-muted-foreground mt-0.5">{t('stats.cards.total')}</span>
               </div>
@@ -439,14 +576,15 @@ function StatusBreakdownCard({
             <div className="flex-1 min-w-0 grid grid-cols-1 gap-1.5">
               {RING_ORDER.map(s =>
                 statusCounts[s] > 0 ? (
-                  <div key={s} className="flex items-center gap-2 text-xs">
+                  <button key={s} onClick={() => onPick(s)}
+                    className="flex items-center gap-2 text-xs -mx-1 px-1 py-0.5 rounded-md hover:bg-muted/60 transition-colors text-left">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: STATUS_HEX[s] }} />
                     <span className="truncate text-muted-foreground flex-1">{t(`status.${s}`)}</span>
                     <span className="tabular-nums font-medium">{statusCounts[s]}</span>
                     <span className="tabular-nums text-[10px] text-muted-foreground w-9 text-right">
                       {Math.round((statusCounts[s] / total) * 100)}%
                     </span>
-                  </div>
+                  </button>
                 ) : null
               )}
             </div>
@@ -461,7 +599,7 @@ function CategoryBreakdownCard({
   total, byCategory,
 }: {
   total: number
-  byCategory: { cat: string; count: number }[]
+  byCategory: { cat: string; count: number; done: number; rate: number }[]
 }) {
   const { t } = useI18n()
   return (
@@ -471,7 +609,7 @@ function CategoryBreakdownCard({
         <p className="text-sm text-muted-foreground">{t('stats.empty')}</p>
       ) : (
         <div className="space-y-2.5 flex-1">
-          {byCategory.map(({ cat, count }) => {
+          {byCategory.map(({ cat, count, done, rate }) => {
             const cfg = CATEGORY_CONFIG[cat as ActivityCategory]
             const pct = total > 0 ? (count / total) * 100 : 0
             return (
@@ -481,12 +619,19 @@ function CategoryBreakdownCard({
                     <span>{cfg.emoji}</span>
                     <span className="truncate">{t(`category.${cat as ActivityCategory}`)}</span>
                   </span>
-                  <span className="text-muted-foreground tabular-nums shrink-0">
-                    {count} <span className="text-[10px]">· {Math.round(pct)}%</span>
+                  <span className="text-muted-foreground tabular-nums shrink-0 flex items-center gap-1.5">
+                    <span>{count} <span className="text-[10px]">· {Math.round(pct)}%</span></span>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400"
+                      title={t('stats.cards.catCompletion', { done, count })}>
+                      ✓ {rate}%
+                    </span>
                   </span>
                 </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden relative">
+                  {/* Volume share (faint) with completed portion (solid) on top. */}
+                  <div className="absolute inset-y-0 left-0 bg-primary/25 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                  <div className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all duration-500"
+                    style={{ width: `${(pct * rate) / 100}%` }} />
                 </div>
               </div>
             )
@@ -568,7 +713,59 @@ function OwnVsSharedCard({
   )
 }
 
-function CollaboratorsCard({ collaborators }: { collaborators: Collaborator[] }) {
+function TrendCard({ trend }: { trend: { date: string; done: number }[] }) {
+  const { t } = useI18n()
+  const fmt = useFormatDate()
+  const max = Math.max(1, ...trend.map(d => d.done))
+  const totalDone = trend.reduce((s, d) => s + d.done, 0)
+  const first = trend[0]?.date
+  const last  = trend[trend.length - 1]?.date
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-muted-foreground" />
+          {t('stats.trend.heading')}
+        </h2>
+        <span className="text-xs text-muted-foreground">{t('stats.trend.subtitle')}</span>
+      </div>
+      {totalDone === 0 ? (
+        <p className="text-sm text-muted-foreground">{t('stats.trend.empty')}</p>
+      ) : (
+        <>
+          <div className="flex items-end gap-px h-24">
+            {trend.map(d => (
+              <div
+                key={d.date}
+                className="flex-1 min-w-0 bg-muted/40 rounded-sm flex items-end overflow-hidden"
+                title={t('stats.trend.tooltip', { count: d.done, date: fmt(new Date(d.date + 'T12:00:00'), 'dayMonthShort') })}
+              >
+                <div
+                  className="w-full bg-emerald-500/80 hover:bg-emerald-500 transition-colors rounded-sm"
+                  style={{ height: `${d.done === 0 ? 0 : Math.max(8, (d.done / max) * 100)}%` }}
+                />
+              </div>
+            ))}
+          </div>
+          {first && last && (
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground/70 mt-1.5 tabular-nums">
+              <span>{fmt(new Date(first + 'T12:00:00'), 'dayMonthShort')}</span>
+              <span>{fmt(new Date(last + 'T12:00:00'), 'dayMonthShort')}</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function CollaboratorsCard({
+  collaborators, onPick,
+}: {
+  collaborators: Collaborator[]
+  onPick: (collaboratorName: string, status: ActivityStatus, items: DrillItem[]) => void
+}) {
   const { t } = useI18n()
   const fmt = useFormatDate()
   return (
@@ -586,13 +783,14 @@ function CollaboratorsCard({ collaborators }: { collaborators: Collaborator[] })
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {collaborators.map(({ profile, activities: colActs }) => {
-          const colDone   = colActs.filter(a => a.status === 'done').length
-          const colRate   = colActs.length > 0 ? Math.round((colDone / colActs.length) * 100) : 0
+        {collaborators.map(({ profile, entries }) => {
+          const name      = profile.full_name || profile.email
+          const colDone   = entries.filter(a => a.status === 'done').length
+          const colRate   = entries.length > 0 ? Math.round((colDone / entries.length) * 100) : 0
           const colByStatus = (Object.keys(STATUS_CONFIG) as ActivityStatus[])
-            .map(s => ({ status: s, count: colActs.filter(a => a.status === s).length }))
+            .map(s => ({ status: s, count: entries.filter(a => a.status === s).length }))
             .filter(s => s.count > 0)
-          const mostRecentDate = colActs.map(a => a.date).sort().reverse()[0]
+          const mostRecentDate = entries.map(a => a.date).filter(Boolean).sort().reverse()[0]
 
           return (
             <div key={profile.id} className="rounded-xl border border-border/60 p-3.5">
@@ -605,11 +803,9 @@ function CollaboratorsCard({ collaborators }: { collaborators: Collaborator[] })
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-sm font-semibold truncate">
-                      {profile.full_name || profile.email}
-                    </span>
+                    <span className="text-sm font-semibold truncate">{name}</span>
                     <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
-                      {colActs.length}
+                      {entries.length}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mb-2">
@@ -622,10 +818,14 @@ function CollaboratorsCard({ collaborators }: { collaborators: Collaborator[] })
                     {colByStatus.map(({ status, count }) => {
                       const cfg = STATUS_CONFIG[status]
                       return (
-                        <span key={status}
-                          className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', cfg.bgColor, cfg.textColor)}>
+                        <button key={status}
+                          onClick={() => onPick(name, status, entries
+                            .filter(e => e.status === status)
+                            .map(e => ({ id: e.id, title: e.title, date: e.date, status: e.status }))
+                            .sort((a, b) => b.date.localeCompare(a.date)))}
+                          className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium hover:opacity-80 transition-opacity', cfg.bgColor, cfg.textColor)}>
                           {count} {t(`status.${status}`)}
-                        </span>
+                        </button>
                       )
                     })}
                   </div>
@@ -639,6 +839,66 @@ function CollaboratorsCard({ collaborators }: { collaborators: Collaborator[] })
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+function DrillModal({ drill, onClose }: { drill: Drill; onClose: () => void }) {
+  const { t } = useI18n()
+  const fmt = useFormatDate()
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-card border border-border w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[80vh] flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            {drill.title}
+            <span className="text-xs text-muted-foreground tabular-nums">{drill.items.length}</span>
+          </h3>
+          <button onClick={onClose} aria-label={t('stats.drill.close')}
+            className="w-7 h-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-2">
+          {drill.items.length === 0 ? (
+            <p className="text-sm text-muted-foreground px-2 py-6 text-center">{t('stats.drill.empty')}</p>
+          ) : (
+            <ul className="space-y-1">
+              {drill.items.map(item => {
+                const catCfg = item.category ? CATEGORY_CONFIG[item.category] : null
+                return (
+                  <li key={item.id} className="flex items-start gap-2.5 px-2.5 py-2 rounded-lg hover:bg-muted/50">
+                    <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: STATUS_HEX[item.status] }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        {catCfg && <span className="text-xs shrink-0">{catCfg.emoji}</span>}
+                        <span className="text-sm font-medium truncate">{item.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                        {item.date && <span className="tabular-nums">{fmt(new Date(item.date + 'T12:00:00'), 'dayMonthShort')}</span>}
+                        {item.isShared && (
+                          <span className="inline-flex items-center gap-1 text-violet-500">
+                            <span className="w-1 h-1 rounded-full bg-violet-500" />
+                            {item.ownerName ? t('stats.drill.from', { name: item.ownerName }) : t('stats.drill.shared')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   )
