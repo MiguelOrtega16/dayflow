@@ -14,6 +14,7 @@ import {
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useI18n, useFormatDate } from '@/lib/i18n'
 import { useProfile } from '@/lib/profile-context'
+import { getCache, setCache } from '@/lib/view-cache'
 import { BillingDebugButton } from '@/components/billing-debug-button'
 import { AdBanner } from '@/components/ads/ad-banner'
 import { PageTour } from '@/components/onboarding/page-tour'
@@ -114,7 +115,10 @@ export default function OverviewPage() {
 
   useEffect(() => {
     if (!profile?.id) return
-    setLoading(true)
+    // Stale-while-revalidate: show the last data for this range immediately
+    // (no skeleton) and refetch in the background.
+    const cached = getCache<Activity[]>(`tasks:${profile.id}:${range}`)
+    if (cached) { setActivities(cached); setLoading(false) } else { setLoading(true) }
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range, profile?.id])
@@ -125,6 +129,7 @@ export default function OverviewPage() {
     const days = range === '7days' ? 6 : range === '30days' ? 29 : range === '90days' ? 89 : 0
     const start = format(subDays(new Date(), days), 'yyyy-MM-dd')
     const data = await getActivitiesForRange(start, today, [profile.id], profile.id)
+    setCache(`tasks:${profile.id}:${range}`, data)
     setActivities(data)
     setLoading(false)
   }

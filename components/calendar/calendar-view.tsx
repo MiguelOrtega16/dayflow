@@ -8,6 +8,7 @@ import {
 } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import { getActivitiesForRange } from '@/lib/api'
+import { getCache, setCache } from '@/lib/view-cache'
 import { cn } from '@/lib/utils'
 import { Plus } from 'lucide-react'
 import { getColombiaHolidays } from '@/lib/holidays'
@@ -203,10 +204,15 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
 
   const fetchActivities = useCallback(async () => {
     if (activeUserIds.length === 0) { setActivities([]); setLoading(false); return }
-    setLoading(true)
+    const { start, end } = getDateRange()
+    // Stale-while-revalidate keyed by viewer + window + visible people: paint
+    // the last data for this exact view instantly, then refetch in background.
+    const cacheKey = `cal:${currentUser?.id ?? ''}:${start}:${end}:${[...activeUserIds].sort().join(',')}`
+    const cached = getCache<Activity[]>(cacheKey)
+    if (cached) { setActivities(cached); setLoading(false) } else { setLoading(true) }
     try {
-      const { start, end } = getDateRange()
       const data = await getActivitiesForRange(start, end, activeUserIds, currentUser?.id)
+      setCache(cacheKey, data)
       setActivities(data)
       scheduleActivityReminders(data)
       if (currentUser?.id) syncWidgetSnapshot(currentUser.id)

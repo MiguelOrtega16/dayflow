@@ -12,6 +12,8 @@ import { usePaywall } from '@/components/paywall/paywall-provider'
 import { activitiesToCsv, downloadCsv } from '@/lib/csv-export'
 import { PageTour } from '@/components/onboarding/page-tour'
 import { AdBanner } from '@/components/ads/ad-banner'
+import { useProfile } from '@/lib/profile-context'
+import { getCache, setCache } from '@/lib/view-cache'
 import {
   ClipboardList, CheckCircle2, Gauge, Flame, Users, Download, Crown,
   TrendingUp, ArrowUp, ArrowDown, X,
@@ -51,83 +53,68 @@ interface Drill {
   summary?: { status: ActivityStatus; count: number }[]
 }
 
+interface OutgoingEntry { profile: Profile; status: ActivityStatus; activityId: string; date: string; title: string }
+// What we stash in the view cache so a revisit / range-toggle paints instantly.
+interface StatsSnapshot { scoped: ScopedActivity[]; outgoing: OutgoingEntry[]; prevAgg: { total: number; done: number } }
+
+// Profile columns the collaborator UI renders — avoids pulling profiles(*).
+const PROFILE_COLS = 'id, full_name, email, avatar_url, color, username'
+
 const RANGE_LEN: Record<'week' | 'month' | '3months', number> = { week: 7, month: 30, '3months': 90 }
 
 export default function StatsPage() {
   const { t, locale } = useI18n()
   const fmt = useFormatDate()
+  // Profile comes from the dashboard layout's server fetch — no client auth
+  // round-trip needed (used to call supabase.auth.getUser() on every load).
+  const { profile } = useProfile()
+  const userId = profile?.id ?? null
   const [scoped, setScoped]     = useState<ScopedActivity[]>([])
-  const [outgoing, setOutgoing] = useState<{ profile: Profile; status: ActivityStatus; activityId: string; date: string; title: string }[]>([])
+  const [outgoing, setOutgoing] = useState<OutgoingEntry[]>([])
   const [prevAgg, setPrevAgg]   = useState<{ total: number; done: number } | null>(null)
   const [loading, setLoading]   = useState(true)
   const [range, setRange]       = useState<'week' | 'month' | '3months'>('month')
-  const [userId, setUserId]     = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [drill, setDrill]       = useState<Drill | null>(null)
-  // Tour gate. Loaded on mount (separate from loadStats so it doesn't refire
-  // on every range change). Defaults to false so the tour never flashes
-  // before we know whether the user has already dismissed it.
-  const [showTour, setShowTour] = useState(false)
   const supabase = createClient()
   const { entitlement } = useEntitlement(userId)
   const { open: openPaywall } = usePaywall()
 
-  useEffect(() => { loadStats() // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range])
+  // Tour gate — read straight from the already-loaded profile preferences
+  // (no extra query). Mirrors the overview page.
+  const tourPrefs = (profile?.preferences as Record<string, unknown> | null) ?? {}
+  const showTour  = !!profile && tourPrefs.dismissed_tour_stats !== true
 
-  // One-time preferences read to decide whether to show the page tour.
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || cancelled) return
-      const { data } = await supabase
-        .from('profiles')
-        .select('preferences')
-        .eq('id', user.id)
-        .single()
-      if (cancelled) return
-      const prefs = (data?.preferences as Record<string, unknown> | null) ?? {}
-      setShowTour(prefs.dismissed_tour_stats !== true)
-    })()
-    return () => { cancelled = true }
+    if (profile?.id) loadStats()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [range, profile?.id])
 
   // Fetch the user's own + shared-with-me activities for a window, tagged with
-  // `isShared`. Used for both the current range and the immediately-preceding
-  // window (for period-over-period deltas).
+  // `isShared`. The owned-activities and accepted-invitations queries are
+  // independent, so they run in parallel; only the invited-activities fetch
+  // depends on the invitations result.
   const fetchScoped = async (uid: string, start: string, end: string): Promise<ScopedActivity[]> => {
-    const { data: ownData } = await supabase
-      .from('activities')
-      .select('*')
-      .eq('user_id', uid)
-      .gte('date', start)
-      .lte('date', end)
-      .order('date', { ascending: true })
-    const own: ScopedActivity[] = (ownData || []).map(a => ({
-      ...(a as Activity), isShared: false,
-    }))
-
-    const { data: invitations } = await supabase
-      .from('activity_invitations')
-      .select('activity_id')
-      .eq('invitee_id', uid)
-      .eq('status', 'accepted')
+    const [ownRes, invRes] = await Promise.all([
+      supabase.from('activities').select('*')
+        .eq('user_id', uid).gte('date', start).lte('date', end)
+        .order('date', { ascending: true }),
+      supabase.from('activity_invitations').select('activity_id')
+        .eq('invitee_id', uid).eq('status', 'accepted'),
+    ])
+    const own: ScopedActivity[] = (ownRes.data || []).map(a => ({ ...(a as Activity), isShared: false }))
 
     let shared: ScopedActivity[] = []
+    const invitations = invRes.data
     if (invitations && invitations.length > 0) {
       const ids = invitations.map(i => i.activity_id)
       const { data: invited } = await supabase
         .from('activities')
-        .select('*, profile:profiles(*)')
+        .select(`*, profile:profiles(${PROFILE_COLS})`)
         .in('id', ids)
         .gte('date', start)
         .lte('date', end)
-      shared = (invited || []).map(a => ({
-        ...(a as Activity),
-        isShared: true,
-      }))
+      shared = (invited || []).map(a => ({ ...(a as Activity), isShared: true }))
     }
 
     // Dedup by id (an owned record should never also appear as shared, but guard).
@@ -140,10 +127,19 @@ export default function StatsPage() {
   }
 
   const loadStats = async () => {
-    setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    setUserId(user.id)
+    const uid = profile?.id
+    if (!uid) return
+
+    // Stale-while-revalidate: paint the last snapshot for this range instantly,
+    // skip the skeleton, and refetch in the background.
+    const key = `stats:${uid}:${range}`
+    const cached = getCache<StatsSnapshot>(key)
+    if (cached) {
+      setScoped(cached.scoped); setOutgoing(cached.outgoing); setPrevAgg(cached.prevAgg)
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
 
     const len   = RANGE_LEN[range]
     const today = new Date()
@@ -152,40 +148,45 @@ export default function StatsPage() {
     const prevEnd   = format(subDays(today, len), 'yyyy-MM-dd')
     const prevStart = format(subDays(today, len * 2 - 1), 'yyyy-MM-dd')
 
-    const cur = await fetchScoped(user.id, curStart, curEnd)
-    setScoped(cur)
+    // Current + previous windows are independent — fetch concurrently. The
+    // outgoing-collaborators query depends on the current window's owned ids,
+    // so it overlaps with the (still in-flight) previous-window fetch.
+    const curPromise  = fetchScoped(uid, curStart, curEnd)
+    const prevPromise = fetchScoped(uid, prevStart, prevEnd)
+    const cur = await curPromise
 
-    // Outgoing collaborators: accepted invitees on the user's OWN activities.
-    // This is the half the breakdown used to miss — people the user shared TO.
     const ownIds = cur.filter(a => !a.isShared).map(a => a.id)
-    if (ownIds.length > 0) {
-      const { data: outRows } = await supabase
-        .from('activity_invitations')
-        .select('activity_id, invitee:profiles!activity_invitations_invitee_id_fkey(*)')
-        .in('activity_id', ownIds)
-        .eq('status', 'accepted')
-      const byId = new Map(cur.map(a => [a.id, a]))
-      setOutgoing((outRows || [])
-        .filter(r => (r as any).invitee)
-        .map(r => {
-          const act = byId.get((r as any).activity_id)
-          return {
-            profile:    (r as any).invitee as Profile,
-            // Shared activities carry a single shared status; surface that.
-            status:     (act?.status ?? 'todo') as ActivityStatus,
-            activityId: (r as any).activity_id as string,
-            date:       act?.date ?? '',
-            title:      act?.title ?? '',
-          }
-        }))
-    } else {
-      setOutgoing([])
-    }
+    const outgoingPromise = ownIds.length > 0
+      ? supabase
+          .from('activity_invitations')
+          .select(`activity_id, invitee:profiles!activity_invitations_invitee_id_fkey(${PROFILE_COLS})`)
+          .in('activity_id', ownIds)
+          .eq('status', 'accepted')
+      : Promise.resolve({ data: [] as any[] })
 
-    // Previous window — only aggregate counts are needed for KPI deltas.
-    const prev = await fetchScoped(user.id, prevStart, prevEnd)
-    setPrevAgg({ total: prev.length, done: prev.filter(a => a.status === 'done').length })
+    const [prev, outRowsRes] = await Promise.all([prevPromise, outgoingPromise])
 
+    const byId = new Map(cur.map(a => [a.id, a]))
+    const outgoing: OutgoingEntry[] = ((outRowsRes as { data: any[] | null }).data || [])
+      .filter(r => r.invitee)
+      .map(r => {
+        const act = byId.get(r.activity_id)
+        return {
+          profile:    r.invitee as Profile,
+          // Shared activities carry a single shared status; surface that.
+          status:     (act?.status ?? 'todo') as ActivityStatus,
+          activityId: r.activity_id as string,
+          date:       act?.date ?? '',
+          title:      act?.title ?? '',
+        }
+      })
+
+    const newPrevAgg = { total: prev.length, done: prev.filter(a => a.status === 'done').length }
+
+    setCache<StatsSnapshot>(key, { scoped: cur, outgoing, prevAgg: newPrevAgg })
+    setScoped(cur)
+    setOutgoing(outgoing)
+    setPrevAgg(newPrevAgg)
     setLoading(false)
   }
 

@@ -28,6 +28,11 @@ export async function getActivitiesByDate(date: string, userIds?: string[]) {
   return data as Activity[]
 }
 
+// Profile columns the calendar/board UI actually renders. Selecting these
+// explicitly instead of profiles(*) avoids dragging the heavy `preferences`
+// JSON, push subscription and token columns over the wire on every activity.
+const ACTIVITY_PROFILE_COLS = 'id, full_name, email, avatar_url, color, username'
+
 export async function getActivitiesForRange(
   startDate: string,
   endDate: string,
@@ -36,86 +41,87 @@ export async function getActivitiesForRange(
 ) {
   const supabase = createClient()
 
-  // 1. Activities owned by the user(s) in the filter list
-  let query = supabase
+  // ── Layer 1 (parallel): owned activities + the current user's accepted
+  // invitations. These two are independent, so fire them together instead of
+  // awaiting one before the other.
+  let ownedQuery = supabase
     .from('activities')
-    .select(`*, profile:profiles(*), goal:goals(id, title, emoji, color)`)
+    .select(`*, profile:profiles(${ACTIVITY_PROFILE_COLS}), goal:goals(id, title, emoji, color)`)
     .gte('date', startDate)
     .lte('date', endDate)
     .order('date', { ascending: true })
     .order('start_time', { ascending: true, nullsFirst: false })
+  if (userIds && userIds.length > 0) ownedQuery = ownedQuery.in('user_id', userIds)
 
-  if (userIds && userIds.length > 0) {
-    query = query.in('user_id', userIds)
-  }
+  const invitationsQuery = currentUserId
+    ? supabase
+        .from('activity_invitations')
+        .select('id, activity_id')
+        .eq('invitee_id', currentUserId)
+        .eq('status', 'accepted')
+    : null
 
-  const { data: ownedData, error } = await query
-  if (error) throw error
+  const [ownedRes, invitationsRes] = await Promise.all([
+    ownedQuery,
+    invitationsQuery ?? Promise.resolve({ data: [] as { id: string; activity_id: string }[], error: null }),
+  ])
+  if (ownedRes.error) throw ownedRes.error
+  const ownedData = ownedRes.data || []
+  const invitations = ((invitationsRes as { data: { id: string; activity_id: string }[] | null }).data) || []
 
-  // 2. Participant statuses for owned activities (so owners can see each invitee's progress)
-  let participantsByActivity: Record<string, Activity['participants']> = {}
-  if (currentUserId && ownedData && ownedData.length > 0) {
-    const ownedIds = ownedData.map((a: any) => a.id)
-    const { data: invites } = await supabase
-      .from('activity_invitations')
-      .select('activity_id, invitee_id, profile:profiles!activity_invitations_invitee_id_fkey(id, full_name, email, color, avatar_url)')
-      .in('activity_id', ownedIds)
-      .eq('status', 'accepted')
+  // ── Layer 2 (parallel): participant statuses for owned activities (depends
+  // on the owned ids) and the invited activities (depends on the invitations).
+  // These two are independent of each other, so fire them together too.
+  const ownedIds = ownedData.map((a: any) => a.id)
+  const participantsQuery = (currentUserId && ownedIds.length > 0)
+    ? supabase
+        .from('activity_invitations')
+        .select('activity_id, invitee_id, profile:profiles!activity_invitations_invitee_id_fkey(id, full_name, email, color, avatar_url)')
+        .in('activity_id', ownedIds)
+        .eq('status', 'accepted')
+    : null
 
-    if (invites) {
-      for (const inv of invites as any[]) {
-        if (!participantsByActivity[inv.activity_id]) participantsByActivity[inv.activity_id] = []
-        participantsByActivity[inv.activity_id]!.push({
-          invitee_id: inv.invitee_id,
-          profile: inv.profile,
-        })
-      }
-    }
-  }
-
-  // 3. Activities the current user was invited to and accepted
-  let participantData: Activity[] = []
-  if (currentUserId) {
-    const { data: invitations } = await supabase
-      .from('activity_invitations')
-      .select('id, activity_id')
-      .eq('invitee_id', currentUserId)
-      .eq('status', 'accepted')
-
-    if (invitations && invitations.length > 0) {
-      const ids = invitations.map(i => i.activity_id)
-      let invQuery = supabase
+  const invitedIds = invitations.map(i => i.activity_id)
+  // Respect the people-filter chips: only surface invited activities whose
+  // OWNER is in the active set (otherwise deselecting a user who invited you
+  // would leave their activities visible).
+  let invitedQuery = invitedIds.length > 0
+    ? supabase
         .from('activities')
-        .select(`*, profile:profiles(*), goal:goals(id, title, emoji, color)`)
-        .in('id', ids)
+        .select(`*, profile:profiles(${ACTIVITY_PROFILE_COLS}), goal:goals(id, title, emoji, color)`)
+        .in('id', invitedIds)
         .gte('date', startDate)
         .lte('date', endDate)
+    : null
+  if (invitedQuery && userIds && userIds.length > 0) invitedQuery = invitedQuery.in('user_id', userIds)
 
-      // Respect the people-filter chips: only surface invited activities
-      // whose OWNER is in the active set. Without this, deselecting a user
-      // who invited you leaves their activities still visible on your
-      // calendar (the owned-activities query is filtered correctly above,
-      // but the invited-activities branch used to bypass `userIds` entirely).
-      if (userIds && userIds.length > 0) {
-        invQuery = invQuery.in('user_id', userIds)
-      }
+  const [participantsRes, invitedRes] = await Promise.all([
+    participantsQuery ?? Promise.resolve({ data: [] as any[] }),
+    invitedQuery ?? Promise.resolve({ data: [] as any[] }),
+  ])
 
-      const { data: invitedActs } = await invQuery
+  // Participant statuses → map keyed by activity id
+  const participantsByActivity: Record<string, Activity['participants']> = {}
+  for (const inv of ((participantsRes as { data: any[] | null }).data || [])) {
+    if (!participantsByActivity[inv.activity_id]) participantsByActivity[inv.activity_id] = []
+    participantsByActivity[inv.activity_id]!.push({
+      invitee_id: inv.invitee_id,
+      profile: inv.profile,
+    })
+  }
 
-      if (invitedActs) {
-        participantData = invitedActs.map(act => {
-          const inv = invitations.find(i => i.activity_id === act.id)!
-          return {
-            ...act,
-            invitation_id: inv.id,
-          }
-        })
-      }
-    }
+  // Invited activities → carry the invitation_id for the current user
+  let participantData: Activity[] = []
+  const invitedActs = (invitedRes as { data: any[] | null }).data || []
+  if (invitedActs.length > 0) {
+    participantData = invitedActs.map(act => {
+      const inv = invitations.find(i => i.activity_id === act.id)
+      return { ...act, invitation_id: inv?.id }
+    })
   }
 
   // Attach participant statuses to owned activities
-  const enrichedOwned: Activity[] = (ownedData || []).map((a: any) => ({
+  const enrichedOwned: Activity[] = ownedData.map((a: any) => ({
     ...a,
     participants: participantsByActivity[a.id] || [],
   }))
