@@ -730,7 +730,7 @@ function TrendCard({ trend }: { trend: { date: string; done: number }[] }) {
             {trend.map(d => (
               <div
                 key={d.date}
-                className="flex-1 min-w-0 bg-muted/40 rounded-sm flex items-end overflow-hidden"
+                className="flex-1 min-w-0 h-full bg-muted/40 rounded-sm flex items-end overflow-hidden"
                 title={t('stats.trend.tooltip', { count: d.done, date: fmt(new Date(d.date + 'T12:00:00'), 'dayMonthShort') })}
               >
                 <div
