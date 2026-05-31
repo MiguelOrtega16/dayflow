@@ -88,6 +88,17 @@ module.exports = {
           "60%":      { transform: "rotate(-6deg)" },
           "80%":      { transform: "rotate(4deg)" },
         },
+        // Looping "there are unread notifications" ring: a quick swing burst in
+        // the first ~18% of the cycle, then a long rest, so it draws the eye
+        // periodically without shaking constantly. Pairs with `origin-top`.
+        "bell-ring": {
+          "0%, 18%, 100%": { transform: "rotate(0deg)" },
+          "3%":  { transform: "rotate(-13deg)" },
+          "6%":  { transform: "rotate(11deg)" },
+          "9%":  { transform: "rotate(-9deg)" },
+          "12%": { transform: "rotate(7deg)" },
+          "15%": { transform: "rotate(-4deg)" },
+        },
         // Direction-aware page transitions used when navigating the calendar
         // (swipe or arrow buttons). Slightly larger offset than the generic
         // slide-in so the motion is clearly visible on a month swap.
@@ -104,6 +115,7 @@ module.exports = {
         "panel-in":  "panel-in 0.24s cubic-bezier(0.16, 1, 0.3, 1)",
         "panel-out": "panel-out 0.16s ease-in forwards",
         "bell-wiggle": "bell-wiggle 0.55s ease-in-out",
+        "bell-ring": "bell-ring 2.5s ease-in-out infinite",
         "swipe-in-from-right": "swipe-in-from-right 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
         "swipe-in-from-left":  "swipe-in-from-left  0.22s cubic-bezier(0.16, 1, 0.3, 1)",
       },

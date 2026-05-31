@@ -345,7 +345,16 @@ export function NotificationBell({ userId, collapsed, topBar }: NotificationBell
         )}
         title={t('notifications.title')}
       >
-        <Bell key={bellAnimKey} className="w-4 h-4 shrink-0 origin-top animate-bell-wiggle" />
+        <Bell
+          key={bellAnimKey}
+          className={cn(
+            'w-4 h-4 shrink-0 origin-top motion-reduce:animate-none',
+            // Keep ringing while there are unread notifications so the user
+            // can't miss them; fall back to the one-shot click wiggle once
+            // everything is read.
+            unreadCount > 0 ? 'animate-bell-ring' : 'animate-bell-wiggle',
+          )}
+        />
         {!topBar && !collapsed && <span className="flex-1 text-left">{t('notifications.title')}</span>}
         {unreadCount > 0 && (
           <span className={cn(
