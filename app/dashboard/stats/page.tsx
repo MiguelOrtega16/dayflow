@@ -44,12 +44,18 @@ interface DrillItem {
   isShared?: boolean
   ownerName?: string
 }
-interface Drill { title: string; items: DrillItem[] }
+interface Drill {
+  title: string
+  items: DrillItem[]
+  /** Optional per-status counts shown as chips above the list (day drill-in). */
+  summary?: { status: ActivityStatus; count: number }[]
+}
 
 const RANGE_LEN: Record<'week' | 'month' | '3months', number> = { week: 7, month: 30, '3months': 90 }
 
 export default function StatsPage() {
   const { t, locale } = useI18n()
+  const fmt = useFormatDate()
   const [scoped, setScoped]     = useState<ScopedActivity[]>([])
   const [outgoing, setOutgoing] = useState<{ profile: Profile; status: ActivityStatus; activityId: string; date: string; title: string }[]>([])
   const [prevAgg, setPrevAgg]   = useState<{ total: number; done: number } | null>(null)
@@ -217,13 +223,17 @@ export default function StatsPage() {
       skipped:     scoped.filter(a => a.status === 'skipped').length,
     }
 
-    // Completion trend — done count per day across the selected window.
+    // Completion trend — total + completed count per day across the window.
     const len = RANGE_LEN[range]
     const today = new Date()
     const days = Array.from({ length: len }, (_, i) => format(subDays(today, len - 1 - i), 'yyyy-MM-dd'))
-    const doneByDate: Record<string, number> = {}
-    for (const a of scoped) if (a.status === 'done') doneByDate[a.date] = (doneByDate[a.date] || 0) + 1
-    const trend = days.map(d => ({ date: d, done: doneByDate[d] || 0 }))
+    const byDate: Record<string, { total: number; done: number }> = {}
+    for (const a of scoped) {
+      const e = byDate[a.date] || (byDate[a.date] = { total: 0, done: 0 })
+      e.total++
+      if (a.status === 'done') e.done++
+    }
+    const trend = days.map(d => ({ date: d, total: byDate[d]?.total || 0, done: byDate[d]?.done || 0 }))
 
     let streak = 0
     let d = new Date()
@@ -285,6 +295,24 @@ export default function StatsPage() {
       }))
       .sort((a, b) => b.date.localeCompare(a.date))
     setDrill({ title: statusLabel(s, locale), items })
+  }
+
+  // Open the drill-in modal with one day's activities, plus a per-status summary.
+  const drillDay = (date: string) => {
+    const dayActs = scoped.filter(a => a.date === date)
+    if (dayActs.length === 0) return
+    const items: DrillItem[] = dayActs
+      .map(a => ({
+        id: a.id, title: a.title, date: a.date, status: a.status,
+        category: a.category, isShared: a.isShared,
+        ownerName: a.isShared ? (a.profile?.full_name || a.profile?.email || undefined) : undefined,
+      }))
+      // Group visually by status so the list reads like the summary chips.
+      .sort((a, b) => RING_ORDER.indexOf(a.status) - RING_ORDER.indexOf(b.status))
+    const summary = (Object.keys(STATUS_CONFIG) as ActivityStatus[])
+      .map(s => ({ status: s, count: dayActs.filter(a => a.status === s).length }))
+      .filter(s => s.count > 0)
+    setDrill({ title: fmt(new Date(date + 'T12:00:00'), 'dayMonthLong'), items, summary })
   }
 
   // ── CSV export ─────────────────────────────────────────────────────────────
@@ -442,7 +470,7 @@ export default function StatsPage() {
         />
       </div>
 
-      <TrendCard trend={trend} />
+      <TrendCard trend={trend} onPickDay={drillDay} />
 
       {collaborators.length > 0 && (
         <CollaboratorsCard collaborators={collaborators} onPick={(c, s, items) => setDrill({ title: `${c} · ${statusLabel(s, locale)}`, items })} />
@@ -705,40 +733,60 @@ function OwnVsSharedCard({
   )
 }
 
-function TrendCard({ trend }: { trend: { date: string; done: number }[] }) {
+function TrendCard({
+  trend, onPickDay,
+}: {
+  trend: { date: string; total: number; done: number }[]
+  onPickDay: (date: string) => void
+}) {
   const { t } = useI18n()
   const fmt = useFormatDate()
-  const max = Math.max(1, ...trend.map(d => d.done))
-  const totalDone = trend.reduce((s, d) => s + d.done, 0)
+  // Bars scale to the busiest day's total so completed + pending both fit.
+  const max = Math.max(1, ...trend.map(d => d.total))
+  const totalActivities = trend.reduce((s, d) => s + d.total, 0)
   const first = trend[0]?.date
   const last  = trend[trend.length - 1]?.date
 
   return (
     <div className="bg-card border border-border rounded-2xl p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-3 gap-2">
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <h2 className="text-sm font-semibold flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-muted-foreground" />
           {t('stats.trend.heading')}
         </h2>
-        <span className="text-xs text-muted-foreground">{t('stats.trend.subtitle')}</span>
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{t('stats.trend.legendDone')}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />{t('stats.trend.legendOther')}
+          </span>
+        </div>
       </div>
-      {totalDone === 0 ? (
+      {totalActivities === 0 ? (
         <p className="text-sm text-muted-foreground">{t('stats.trend.empty')}</p>
       ) : (
         <>
           <div className="flex items-end gap-px h-24">
-            {trend.map(d => (
-              <div
-                key={d.date}
-                className="flex-1 min-w-0 h-full bg-muted/40 rounded-sm flex items-end overflow-hidden"
-                title={t('stats.trend.tooltip', { count: d.done, date: fmt(new Date(d.date + 'T12:00:00'), 'dayMonthShort') })}
-              >
-                <div
-                  className="w-full bg-emerald-500/80 hover:bg-emerald-500 transition-colors rounded-sm"
-                  style={{ height: `${d.done === 0 ? 0 : Math.max(8, (d.done / max) * 100)}%` }}
-                />
-              </div>
-            ))}
+            {trend.map(d => {
+              // Slate column = the day's total; emerald overlay (from the bottom)
+              // = the completed share. The slate visible above = not completed.
+              const slateH = d.total === 0 ? 0 : Math.max(6, (d.total / max) * 100)
+              const greenH = d.done === 0 ? 0 : Math.min(slateH, Math.max(6, (d.done / max) * 100))
+              return (
+                <button
+                  key={d.date}
+                  type="button"
+                  onClick={() => onPickDay(d.date)}
+                  disabled={d.total === 0}
+                  title={t('stats.trend.tooltip', { done: d.done, total: d.total, date: fmt(new Date(d.date + 'T12:00:00'), 'dayMonthShort') })}
+                  className="relative flex-1 min-w-0 h-full bg-muted/40 rounded-sm overflow-hidden transition-colors enabled:hover:bg-muted/70 disabled:cursor-default"
+                >
+                  <span className="absolute bottom-0 inset-x-0 bg-slate-400/60" style={{ height: `${slateH}%` }} />
+                  <span className="absolute bottom-0 inset-x-0 bg-emerald-500/85" style={{ height: `${greenH}%` }} />
+                </button>
+              )
+            })}
           </div>
           {first && last && (
             <div className="flex items-center justify-between text-[10px] text-muted-foreground/70 mt-1.5 tabular-nums">
@@ -860,6 +908,19 @@ function DrillModal({ drill, onClose }: { drill: Drill; onClose: () => void }) {
             <X className="w-4 h-4" />
           </button>
         </div>
+        {drill.summary && drill.summary.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 px-4 py-2.5 border-b border-border">
+            {drill.summary.map(({ status, count }) => {
+              const cfg = STATUS_CONFIG[status]
+              return (
+                <span key={status}
+                  className={cn('text-[11px] px-2 py-0.5 rounded-full font-medium', cfg.bgColor, cfg.textColor)}>
+                  {count} {t(`status.${status}`)}
+                </span>
+              )
+            })}
+          </div>
+        )}
         <div className="overflow-y-auto p-2">
           {drill.items.length === 0 ? (
             <p className="text-sm text-muted-foreground px-2 py-6 text-center">{t('stats.drill.empty')}</p>

@@ -320,9 +320,10 @@ export const messages = {
       },
       trend: {
         heading: 'Tendencia de finalización',
-        subtitle: 'Completadas por día',
-        empty: 'Sin completadas en este período',
-        tooltip: '{count} completadas · {date}',
+        empty: 'Sin actividades en este período',
+        tooltip: '{done}/{total} completadas · {date}',
+        legendDone: 'Completadas',
+        legendOther: 'Sin completar',
       },
       drill: {
         close: 'Cerrar',
@@ -1497,9 +1498,10 @@ export const messages = {
       },
       trend: {
         heading: 'Completion trend',
-        subtitle: 'Completed per day',
-        empty: 'Nothing completed in this period',
-        tooltip: '{count} completed · {date}',
+        empty: 'No activities in this period',
+        tooltip: '{done}/{total} completed · {date}',
+        legendDone: 'Completed',
+        legendOther: 'Not completed',
       },
       drill: {
         close: 'Close',
