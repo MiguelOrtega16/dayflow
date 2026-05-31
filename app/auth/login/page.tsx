@@ -9,10 +9,19 @@ import { translateAuthError } from '@/lib/auth-errors'
 import { useI18n } from '@/lib/i18n'
 import { identify, track } from '@/lib/analytics/posthog'
 
+const REMEMBERED_EMAIL_KEY = 'dayflow_remembered_email'
+
 export default function LoginPage() {
   const { t, locale } = useI18n()
-  const [email, setEmail]     = useState('')
+  // Prefill the last-used email when the user opted to be remembered.
+  const [email, setEmail]     = useState(() =>
+    typeof window === 'undefined' ? '' : (localStorage.getItem(REMEMBERED_EMAIL_KEY) ?? ''))
   const [password, setPassword] = useState('')
+  // Default on; only off if the user previously logged in with it unchecked
+  // (which clears the stored email).
+  const [rememberMe, setRememberMe]     = useState(() =>
+    typeof window === 'undefined' ? true
+      : localStorage.getItem('dayflow_remember_me') !== '0')
   const [loading, setLoading]           = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   // Surface errors forwarded from the auth callback (e.g. expired confirmation link)
@@ -35,6 +44,16 @@ export default function LoginPage() {
       setError(translateAuthError(error.message, locale))
       setLoading(false)
     } else {
+      // Remember the email for next time (or forget it if opted out). The
+      // session itself stays persistent regardless (Supabase keeps a long-lived
+      // refresh-token cookie); this only controls email prefill.
+      if (rememberMe) {
+        localStorage.setItem(REMEMBERED_EMAIL_KEY, email)
+        localStorage.setItem('dayflow_remember_me', '1')
+      } else {
+        localStorage.removeItem(REMEMBERED_EMAIL_KEY)
+        localStorage.setItem('dayflow_remember_me', '0')
+      }
       if (data.user?.id) identify(data.user.id, { email })
       track('user_logged_in', { method: 'email' })
       router.push('/dashboard')
@@ -131,6 +150,15 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none w-fit">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-input accent-primary cursor-pointer"
+              />
+              {t('auth.login.rememberMe')}
+            </label>
             <button
               type="submit"
               disabled={loading}

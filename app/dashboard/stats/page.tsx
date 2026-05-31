@@ -27,11 +27,10 @@ const STATUS_HEX: Record<ActivityStatus, string> = {
 
 const RING_ORDER: ActivityStatus[] = ['done', 'in_progress', 'todo', 'blocked', 'skipped']
 
-// An activity scoped to the current user's perspective. For owned activities
-// `myStatus` mirrors `status`; for activities shared *with* the user it holds
-// the user's own `participant_status` (their progress), while `status` keeps
-// the owner's value so the collaborator card can still show the owner's side.
-type ScopedActivity = Activity & { isShared: boolean; myStatus: ActivityStatus }
+// An activity scoped to the current user's perspective. Shared activities use a
+// single shared `status` — when anyone marks it done it's done for everyone — so
+// there is no separate per-invitee status to track here.
+type ScopedActivity = Activity & { isShared: boolean }
 
 interface CollabEntry { id: string; title: string; date: string; status: ActivityStatus }
 interface Collaborator { profile: Profile; entries: CollabEntry[] }
@@ -89,9 +88,9 @@ export default function StatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Fetch the user's own + shared-with-me activities for a window, each tagged
-  // with the user's effective status (`myStatus`). Used for both the current
-  // range and the immediately-preceding window (for period-over-period deltas).
+  // Fetch the user's own + shared-with-me activities for a window, tagged with
+  // `isShared`. Used for both the current range and the immediately-preceding
+  // window (for period-over-period deltas).
   const fetchScoped = async (uid: string, start: string, end: string): Promise<ScopedActivity[]> => {
     const { data: ownData } = await supabase
       .from('activities')
@@ -101,21 +100,18 @@ export default function StatsPage() {
       .lte('date', end)
       .order('date', { ascending: true })
     const own: ScopedActivity[] = (ownData || []).map(a => ({
-      ...(a as Activity), isShared: false, myStatus: (a as Activity).status,
+      ...(a as Activity), isShared: false,
     }))
 
     const { data: invitations } = await supabase
       .from('activity_invitations')
-      .select('activity_id, participant_status')
+      .select('activity_id')
       .eq('invitee_id', uid)
       .eq('status', 'accepted')
 
     let shared: ScopedActivity[] = []
     if (invitations && invitations.length > 0) {
       const ids = invitations.map(i => i.activity_id)
-      const psById = new Map<string, ActivityStatus>(
-        invitations.map(i => [i.activity_id as string, (i.participant_status as ActivityStatus)]),
-      )
       const { data: invited } = await supabase
         .from('activities')
         .select('*, profile:profiles(*)')
@@ -125,8 +121,6 @@ export default function StatsPage() {
       shared = (invited || []).map(a => ({
         ...(a as Activity),
         isShared: true,
-        // The user's progress on the shared activity, not the owner's.
-        myStatus: psById.get((a as Activity).id) ?? (a as Activity).status,
       }))
     }
 
@@ -161,7 +155,7 @@ export default function StatsPage() {
     if (ownIds.length > 0) {
       const { data: outRows } = await supabase
         .from('activity_invitations')
-        .select('activity_id, participant_status, invitee:profiles!activity_invitations_invitee_id_fkey(*)')
+        .select('activity_id, invitee:profiles!activity_invitations_invitee_id_fkey(*)')
         .in('activity_id', ownIds)
         .eq('status', 'accepted')
       const byId = new Map(cur.map(a => [a.id, a]))
@@ -171,7 +165,8 @@ export default function StatsPage() {
           const act = byId.get((r as any).activity_id)
           return {
             profile:    (r as any).invitee as Profile,
-            status:     (r as any).participant_status as ActivityStatus,
+            // Shared activities carry a single shared status; surface that.
+            status:     (act?.status ?? 'todo') as ActivityStatus,
             activityId: (r as any).activity_id as string,
             date:       act?.date ?? '',
             title:      act?.title ?? '',
@@ -183,7 +178,7 @@ export default function StatsPage() {
 
     // Previous window — only aggregate counts are needed for KPI deltas.
     const prev = await fetchScoped(user.id, prevStart, prevEnd)
-    setPrevAgg({ total: prev.length, done: prev.filter(a => a.myStatus === 'done').length })
+    setPrevAgg({ total: prev.length, done: prev.filter(a => a.status === 'done').length })
 
     setLoading(false)
   }
@@ -193,33 +188,33 @@ export default function StatsPage() {
     const shared = scoped.filter(a => a.isShared)
 
     const total = scoped.length
-    const done  = scoped.filter(a => a.myStatus === 'done').length
+    const done  = scoped.filter(a => a.status === 'done').length
     const completionRate = total > 0 ? Math.round((done / total) * 100) : 0
 
     const ownTotal = own.length
-    const ownDone  = own.filter(a => a.myStatus === 'done').length
+    const ownDone  = own.filter(a => a.status === 'done').length
     const ownRate  = ownTotal > 0 ? Math.round((ownDone / ownTotal) * 100) : 0
 
     const sharedTotal = shared.length
-    const sharedDone  = shared.filter(a => a.myStatus === 'done').length
+    const sharedDone  = shared.filter(a => a.status === 'done').length
     const sharedRate  = sharedTotal > 0 ? Math.round((sharedDone / sharedTotal) * 100) : 0
 
     // Category breakdown now carries a completion rate, not just volume.
     const byCategory = (Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
       .map(cat => {
         const inCat = scoped.filter(a => a.category === cat)
-        const cdone = inCat.filter(a => a.myStatus === 'done').length
+        const cdone = inCat.filter(a => a.status === 'done').length
         return { cat, count: inCat.length, done: cdone, rate: inCat.length > 0 ? Math.round((cdone / inCat.length) * 100) : 0 }
       })
       .filter(c => c.count > 0)
       .sort((a, b) => b.count - a.count)
 
     const statusCounts: Record<ActivityStatus, number> = {
-      todo:        scoped.filter(a => a.myStatus === 'todo').length,
-      in_progress: scoped.filter(a => a.myStatus === 'in_progress').length,
+      todo:        scoped.filter(a => a.status === 'todo').length,
+      in_progress: scoped.filter(a => a.status === 'in_progress').length,
       done,
-      blocked:     scoped.filter(a => a.myStatus === 'blocked').length,
-      skipped:     scoped.filter(a => a.myStatus === 'skipped').length,
+      blocked:     scoped.filter(a => a.status === 'blocked').length,
+      skipped:     scoped.filter(a => a.status === 'skipped').length,
     }
 
     // Completion trend — done count per day across the selected window.
@@ -227,14 +222,14 @@ export default function StatsPage() {
     const today = new Date()
     const days = Array.from({ length: len }, (_, i) => format(subDays(today, len - 1 - i), 'yyyy-MM-dd'))
     const doneByDate: Record<string, number> = {}
-    for (const a of scoped) if (a.myStatus === 'done') doneByDate[a.date] = (doneByDate[a.date] || 0) + 1
+    for (const a of scoped) if (a.status === 'done') doneByDate[a.date] = (doneByDate[a.date] || 0) + 1
     const trend = days.map(d => ({ date: d, done: doneByDate[d] || 0 }))
 
     let streak = 0
     let d = new Date()
     while (streak <= 365) {
       const key = format(d, 'yyyy-MM-dd')
-      const hasActivity = scoped.some(a => a.date === key && a.myStatus === 'done')
+      const hasActivity = scoped.some(a => a.date === key && a.status === 'done')
       if (!hasActivity) break
       streak++
       d = subDays(d, 1)
@@ -282,9 +277,9 @@ export default function StatsPage() {
   // Open the drill-in modal with the activities in a given status.
   const drillStatus = (s: ActivityStatus) => {
     const items: DrillItem[] = scoped
-      .filter(a => a.myStatus === s)
+      .filter(a => a.status === s)
       .map(a => ({
-        id: a.id, title: a.title, date: a.date, status: a.myStatus,
+        id: a.id, title: a.title, date: a.date, status: a.status,
         category: a.category, isShared: a.isShared,
         ownerName: a.isShared ? (a.profile?.full_name || a.profile?.email || undefined) : undefined,
       }))
@@ -294,10 +289,7 @@ export default function StatsPage() {
 
   // ── CSV export ─────────────────────────────────────────────────────────────
   const allActivitiesForRange = useMemo(() => {
-    return [...scoped]
-      // Export the user's effective status so the file matches what's on screen.
-      .map(a => ({ ...a, status: a.myStatus }) as Activity)
-      .sort((a, b) => a.date.localeCompare(b.date))
+    return [...scoped].sort((a, b) => a.date.localeCompare(b.date)) as Activity[]
   }, [scoped])
 
   const handleExport = async () => {

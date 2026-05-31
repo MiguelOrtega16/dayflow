@@ -2,6 +2,7 @@ package com.chanclastudio.dayflow;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.webkit.CookieManager;
 import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
@@ -35,6 +36,19 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleDeepLink(intent);
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        // Persist WebView cookies — including the long-lived Supabase auth/session
+        // cookie — to disk whenever the app goes to the background. Android's
+        // WebView holds cookies in memory and only flushes them lazily, so if the
+        // OS kills the process before a flush, the session is lost and the user is
+        // forced to log in again on the next cold start. Flushing here guarantees
+        // the (already 400-day) auth cookie survives app restarts. flush() is
+        // cheap and idempotent.
+        CookieManager.getInstance().flush();
     }
 
     /**
