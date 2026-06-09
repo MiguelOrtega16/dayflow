@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { CalendarView } from '@/components/calendar/calendar-view'
 import { AdBanner } from '@/components/ads/ad-banner'
+import { ProUpgradeNudge } from '@/components/paywall/pro-upgrade-nudge'
 import { StarterPackPicker } from '@/components/onboarding/starter-pack-picker'
 import { SetupChecklist } from '@/components/onboarding/setup-checklist'
 import { redirect } from 'next/navigation'
@@ -74,6 +75,11 @@ export default async function DashboardPage() {
   // exclusive avoids piling overlays on a brand-new user.
   const showSetupChecklist = !!profile && !checklistDismissed && !showStarterPicker
 
+  // The upgrade nudge only competes for the top banner slot once onboarding is
+  // out of the way — never pitch Pro to someone still being onboarded. The
+  // engagement/age/cooldown/entitlement gating lives inside the component.
+  const showProNudge = !!profile && !showSetupChecklist && !showStarterPicker
+
   return (
     // Flex column so the optional setup-checklist banner stacks on top of
     // the calendar instead of overlaying it. The calendar's outer container
@@ -84,6 +90,13 @@ export default async function DashboardPage() {
           userId={profile.id}
           hasActivities={activityCount > 0}
           hasPushSubscription={hasPushSubscription}
+        />
+      )}
+      {showProNudge && profile && (
+        <ProUpgradeNudge
+          userId={profile.id}
+          createdAt={profile.created_at}
+          activityCount={activityCount}
         />
       )}
       <div className="flex-1 min-h-0">

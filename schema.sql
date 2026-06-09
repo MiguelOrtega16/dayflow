@@ -47,6 +47,8 @@ alter table public.profiles add column if not exists web_push_subscription jsonb
 --     "dismissed_discovery_people_at":  ISO timestamp string,
 --     "dismissed_discovery_settings":   boolean,                    -- first-run red dot on the Settings sidebar entry
 --     "dismissed_discovery_settings_at":ISO timestamp string,
+--     "pro_nudge":                      { "count": number, "lastShownAt": ISO timestamp string },
+--                                                                    -- upgrade-to-Pro banner cadence (cooldown + lifetime cap)
 --   }
 -- Stored as jsonb so adding future settings doesn't require a migration; the
 -- client and cron each read just the keys they understand.

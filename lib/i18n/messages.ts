@@ -1005,6 +1005,12 @@ export const messages = {
           purchaseHint: 'DayFlow Pro se compra dentro de la app para Android. Instálala desde Google Play para suscribirte.',
           manageHint: 'Gestiona o cancela tu suscripción desde la app de Android o en Google Play.',
         },
+        nudge: {
+          title: '¿Disfrutando DayFlow?',
+          subtitle: 'Llévalo más lejos con Pro: colaboración ilimitada, recurrencia avanzada y sin anuncios.',
+          cta: 'Ver Pro',
+          dismissAria: 'Ahora no',
+        },
         cancelled: 'Compra cancelada. Puedes intentarlo de nuevo cuando quieras.',
         errors: {
           signIn: 'Inicia sesión primero',
@@ -1032,6 +1038,10 @@ export const messages = {
           generic: {
             title: 'Desbloquea DayFlow Pro',
             subtitle: 'Todo lo del plan gratis, más colaboración ilimitada y herramientas avanzadas.',
+          },
+          usage_nudge: {
+            title: 'Saca más provecho de DayFlow',
+            subtitle: 'Has estado usándolo bastante — desbloquea colaboración ilimitada, herramientas avanzadas y cero anuncios.',
           },
           sharing_limit: {
             title: 'Comparte con todos',
@@ -2185,6 +2195,12 @@ export const messages = {
           purchaseHint: 'DayFlow Pro is purchased inside the Android app. Install it from Google Play to subscribe.',
           manageHint: 'Manage or cancel your subscription from the Android app or on Google Play.',
         },
+        nudge: {
+          title: 'Enjoying DayFlow?',
+          subtitle: 'Take it further with Pro — unlimited collaboration, advanced recurrence, and no ads.',
+          cta: 'See Pro',
+          dismissAria: 'Not now',
+        },
         cancelled: 'Purchase cancelled. You can try again whenever you like.',
         errors: {
           signIn: 'Please sign in first',
@@ -2212,6 +2228,10 @@ export const messages = {
           generic: {
             title: 'Unlock DayFlow Pro',
             subtitle: 'Everything in Free, plus unlimited collaboration and depth.',
+          },
+          usage_nudge: {
+            title: 'Get more out of DayFlow',
+            subtitle: "You've been getting a lot done — unlock unlimited collaboration, advanced tools, and zero ads.",
           },
           sharing_limit: {
             title: 'Share with everyone',

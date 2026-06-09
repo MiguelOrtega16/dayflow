@@ -37,6 +37,7 @@ export type PaywallTrigger =
   | 'evidence_limit'
   | 'attachments'
   | 'stats_export'
+  | 'usage_nudge'
   | 'generic'
 
 const FEATURE_KEYS = ['sharing', 'power', 'widgetsThemes', 'statsExport', 'noAds'] as const
