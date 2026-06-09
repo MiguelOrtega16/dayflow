@@ -16,7 +16,7 @@ import {
   ListChecks, Users, Settings,
   LogOut, ChevronLeft, ChevronRight,
   BarChart2, CalendarDays, LayoutPanelTop, ClipboardList,
-  LifeBuoy,
+  LifeBuoy, Crown,
 } from 'lucide-react'
 
 const SUPPORT_EMAIL = 'support@day-flow.co'
@@ -130,6 +130,24 @@ export function AppSidebar({ profile, onNavClick }: { profile: Profile | null; o
 
       {/* Bottom actions */}
       <div className="p-2 border-t border-border space-y-0.5">
+        {/* Plans — shortcut to the Free vs Pro comparison + manage/upgrade
+            page (same destination as Settings → Plan & Billing). Indigo Crown
+            to match the Pro/paywall visual language and stand out as the
+            monetization surface. Shown to everyone — the page renders the
+            current-plan hero for Pro users and the upgrade CTA for free ones. */}
+        <Link
+          href="/dashboard/settings/billing"
+          onClick={() => onNavClick?.()}
+          className={cn(
+            'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
+            collapsed && 'justify-center px-0'
+          )}
+          title={collapsed ? t('nav.plans') : undefined}
+        >
+          <Crown className="w-4 h-4 shrink-0 text-indigo-500" />
+          {!collapsed && <span>{t('nav.plans')}</span>}
+        </Link>
+
         {/* Settings */}
         <Link
           href="/dashboard/settings"
