@@ -13,6 +13,7 @@ export const config = {
     // Also exclude root static text files (txt|xml) — e.g. /app-ads.txt, which
     // AdMob's crawler fetches unauthenticated. Without this the auth redirect
     // below sends the crawler to /auth/login and AdMob can't verify the app.
+    // Finally, exclude all static assets (e.g. .svg, .png, .jpg, .jpeg, .gif, .webp) to avoid unnecessary session updates for those requests.
     '/((?!_next/static|_next/image|favicon.ico|ingest/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|txt|xml)$).*)',
   ],
 }
