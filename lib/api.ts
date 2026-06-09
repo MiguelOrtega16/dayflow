@@ -237,10 +237,17 @@ export async function updateActivity(id: string, updates: Partial<Activity>, upd
 }
 
 export async function updateActivityStatus(id: string, status: ActivityStatus, updaterId?: string) {
-  return updateActivity(id, {
+  const result = await updateActivity(id, {
     status,
     completion_percentage: status === 'done' ? 100 : status === 'skipped' ? 0 : undefined,
   }, updaterId)
+  // Marking something done is a natural "happy moment" — let the in-app review
+  // helper decide (milestone + cooldown gated, Android-only) whether to ask.
+  // Lazy import so the Play plugin never lands in non-native bundles.
+  if (status === 'done') {
+    import('./in-app-review').then(m => m.reviewOnActivityCompleted()).catch(() => {})
+  }
+  return result
 }
 
 async function notifyActivityParticipants(
