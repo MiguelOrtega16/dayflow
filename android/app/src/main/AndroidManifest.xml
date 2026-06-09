@@ -34,7 +34,7 @@
              See https://developers.google.com/admob/android/quick-start. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3058570787981966~5234559112"
+            android:value="ca-app-pub-3058570787981966/6330046141"
         />
 
         <activity
