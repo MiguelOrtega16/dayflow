@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import { useI18n, dateFnsLocale } from '@/lib/i18n'
 import { useEntitlement } from '@/lib/billing/use-entitlement'
+import { WEB_BILLING_ENABLED, PLAY_SUBSCRIPTIONS_URL } from '@/lib/billing/products'
 import { usePaywall } from '@/components/paywall/paywall-provider'
 import { useBackButtonRoute } from '@/lib/back-button'
 import { useSwipeBack } from '@/lib/swipe-back'
@@ -60,6 +61,10 @@ export default function BillingSettingsPage() {
   const { entitlement, loading: entLoading } = useEntitlement(userId)
   const { open: openPaywall } = usePaywall()
   const native = Capacitor.isNativePlatform()
+  // Web Stripe portal is gated off with checkout (see WEB_BILLING_ENABLED).
+  // When disabled, web Pro users manage via Google Play like native users —
+  // they bought through Play, so the Stripe portal would have no customer.
+  const webBillingDisabled = !native && !WEB_BILLING_ENABLED
 
   useBackButtonRoute(() => router.push('/dashboard/settings'))
   const swipeRef = useSwipeBack(() => router.push('/dashboard/settings'))
@@ -75,8 +80,8 @@ export default function BillingSettingsPage() {
     setBusy(true)
     setPortalError(null)
     try {
-      if (native) {
-        window.open('https://play.google.com/store/account/subscriptions', '_blank')
+      if (native || webBillingDisabled) {
+        window.open(PLAY_SUBSCRIPTIONS_URL, '_blank')
       } else {
         const r = await fetch('/api/billing/portal', { method: 'POST' })
         const data = await r.json()
@@ -168,7 +173,7 @@ export default function BillingSettingsPage() {
                 >
                   {busy ? '…' : (
                     <>
-                      {native ? t('billing.page.manageAndroid') : t('billing.page.manageWeb')}
+                      {(native || webBillingDisabled) ? t('billing.page.manageAndroid') : t('billing.page.manageWeb')}
                       <ExternalLink className="w-3.5 h-3.5" />
                     </>
                   )}

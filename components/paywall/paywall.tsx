@@ -6,7 +6,12 @@ import { Check, X, Crown, ExternalLink } from 'lucide-react'
 import { format } from 'date-fns'
 import { useBackButtonClose } from '@/lib/back-button'
 import { useI18n, dateFnsLocale } from '@/lib/i18n'
-import { ANCHOR_PRICE_USD } from '@/lib/billing/products'
+import {
+  ANCHOR_PRICE_USD,
+  WEB_BILLING_ENABLED,
+  PLAY_STORE_URL,
+  PLAY_SUBSCRIPTIONS_URL,
+} from '@/lib/billing/products'
 import {
   getOfferingPrices,
   isPurchaseCancelled,
@@ -50,6 +55,10 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
   const [info, setInfo] = useState<string | null>(null)
   const [prices, setPrices] = useState<OfferingPriceMap | null>(null)
   const native = Capacitor.isNativePlatform()
+  // Web Stripe checkout/portal is gated off (see WEB_BILLING_ENABLED). When
+  // disabled, web users buy/manage via the Android app on Google Play instead
+  // of seeing the Stripe plan picker. Native is always RevenueCat, unaffected.
+  const webBillingDisabled = !native && !WEB_BILLING_ENABLED
   useBackButtonClose(true, onClose)
   // Pull current entitlement so a Pro user opening the paywall (manually,
   // via debug, or via a stale gate) sees a "you're already Pro" manage
@@ -163,7 +172,7 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
     setError(null)
     setInfo(null)
     try {
-      if (native) {
+      if (native || webBillingDisabled) {
         // Open the user's Play Store subscriptions list. We don't deep-link
         // to the specific SKU on purpose — the generic list is robust to
         // package-name changes and shows the user every active sub.
@@ -171,7 +180,9 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
         // changes from this screen. SKU upgrades (monthly → annual) and
         // adding lifetime have to happen via purchaseProduct() in-app —
         // see the upgrade buttons in the Pro view below.
-        window.open('https://play.google.com/store/account/subscriptions', '_blank')
+        // Web users land here too when Stripe is gated off — anyone who is
+        // Pro on web bought through Play, so Play is where they manage it.
+        window.open(PLAY_SUBSCRIPTIONS_URL, '_blank')
         onClose()
       } else {
         const r = await fetch('/api/billing/portal', { method: 'POST' })
@@ -306,13 +317,19 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
               >
                 {busy ? '…' : (
                   <>
-                    {native
+                    {(native || webBillingDisabled)
                       ? t('billing.paywall.active.manageAndroid')
                       : t('billing.paywall.active.manageWeb')}
                     <ExternalLink className="w-3.5 h-3.5" />
                   </>
                 )}
               </button>
+            )}
+
+            {webBillingDisabled && ent.plan !== 'pro_lifetime' && (
+              <p className="text-[11px] text-muted-foreground text-center leading-snug px-2">
+                {t('billing.paywall.web.manageHint')}
+              </p>
             )}
 
             {/* Upgrade options — native only. The Play Store subscriptions
@@ -413,6 +430,31 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
           ))}
         </div>
 
+        {webBillingDisabled ? (
+          <div className="px-6 pb-6 pt-1 space-y-3">
+            <p className="text-sm text-muted-foreground text-center leading-relaxed">
+              {t('billing.paywall.web.purchaseHint')}
+            </p>
+            {/* Official Google Play badge (Google brand guidelines: use as-is,
+                no extra background/border, preserve the baked-in clear space).
+                Localized to match the app language. */}
+            <a
+              href={PLAY_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track('paywall_google_play_clicked', { trigger })}
+              className="flex justify-center py-1 transition-opacity hover:opacity-90 active:opacity-80"
+              aria-label={t('billing.paywall.web.getOnGooglePlay')}
+            >
+              <img
+                src={locale === 'es' ? '/badges/google-play-es.png' : '/badges/google-play-en.png'}
+                alt={t('billing.paywall.web.getOnGooglePlay')}
+                className="h-16 w-auto"
+              />
+            </a>
+          </div>
+        ) : (
+        <>
         <div className="px-6 pb-4 space-y-2">
           <PlanCard
             id="pro_annual"
@@ -477,6 +519,8 @@ export function Paywall({ userId, trigger, onClose }: PaywallProps) {
             {t('billing.paywall.fineprint')}
           </p>
         </div>
+        </>
+        )}
       </div>
     </div>
   )

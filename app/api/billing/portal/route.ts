@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { WEB_BILLING_ENABLED } from '@/lib/billing/products'
 import { env } from '@/lib/env'
 
 export const runtime = 'nodejs'
@@ -11,6 +12,12 @@ interface RawEvent {
 }
 
 export async function POST() {
+  // Web Stripe billing is gated off — guard the route alongside the UI.
+  // Flip NEXT_PUBLIC_ENABLE_WEB_BILLING=1 to re-enable. See docs/prod-launch.md §2.
+  if (!WEB_BILLING_ENABLED) {
+    return NextResponse.json({ error: 'web billing disabled' }, { status: 403 })
+  }
+
   const stripeKey = process.env.STRIPE_SECRET_KEY
   if (!stripeKey) {
     return NextResponse.json({ error: 'billing not configured' }, { status: 500 })

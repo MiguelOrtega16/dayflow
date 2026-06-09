@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
-import { STRIPE_PRICE_IDS } from '@/lib/billing/products'
+import { STRIPE_PRICE_IDS, WEB_BILLING_ENABLED } from '@/lib/billing/products'
 import { env } from '@/lib/env'
 import type { BillingProductId } from '@/types'
 
@@ -11,6 +11,13 @@ export const dynamic = 'force-dynamic'
 const VALID_PRODUCTS: BillingProductId[] = ['pro_monthly', 'pro_annual', 'pro_lifetime']
 
 export async function POST(request: Request) {
+  // Web Stripe billing is gated off — the UI hides the checkout button, but
+  // guard the route too so it can't be hit directly. Flip
+  // NEXT_PUBLIC_ENABLE_WEB_BILLING=1 to re-enable. See docs/prod-launch.md §2.
+  if (!WEB_BILLING_ENABLED) {
+    return NextResponse.json({ error: 'web billing disabled' }, { status: 403 })
+  }
+
   const stripeKey = process.env.STRIPE_SECRET_KEY
   if (!stripeKey) {
     return NextResponse.json({ error: 'billing not configured' }, { status: 500 })

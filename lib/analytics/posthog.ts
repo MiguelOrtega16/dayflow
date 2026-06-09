@@ -11,6 +11,7 @@ type AnalyticsEvent =
   | 'goal_created'
   | 'paywall_viewed'
   | 'paywall_plan_selected'
+  | 'paywall_google_play_clicked'
   | 'paywall_dismissed'
   | 'subscription_started'
   | 'subscription_cancelled'

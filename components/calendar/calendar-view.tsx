@@ -568,7 +568,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
         <button
           onClick={() => setShowAddModal(true)}
           className="fixed right-4 z-30 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform animate-attention"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4rem)' }}
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4rem + var(--ad-bottom-padding, 0px))' }}
           aria-label={t('calendar.newActivity')}
         >
           <Plus className="w-6 h-6" />
@@ -663,7 +663,7 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           <button
             onClick={() => setShowAddModal(true)}
             className="fixed right-4 z-30 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform animate-attention"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4rem)' }}
+            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 4rem + var(--ad-bottom-padding, 0px))' }}
             aria-label={t('calendar.newActivity')}
           >
             <Plus className="w-6 h-6" />

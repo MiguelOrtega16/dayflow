@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { CalendarView } from '@/components/calendar/calendar-view'
+import { AdBanner } from '@/components/ads/ad-banner'
 import { StarterPackPicker } from '@/components/onboarding/starter-pack-picker'
 import { SetupChecklist } from '@/components/onboarding/setup-checklist'
 import { redirect } from 'next/navigation'
@@ -94,6 +95,7 @@ export default async function DashboardPage() {
       {showStarterPicker && profile && (
         <StarterPackPicker userId={profile.id} />
       )}
+      <AdBanner />
     </div>
   )
 }

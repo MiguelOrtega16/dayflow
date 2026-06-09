@@ -1000,6 +1000,11 @@ export const messages = {
         },
         restore: 'Restaurar compras',
         fineprint: 'Los precios locales se muestran al pagar. Cancela cuando quieras.',
+        web: {
+          getOnGooglePlay: 'Descárgala en Google Play',
+          purchaseHint: 'DayFlow Pro se compra dentro de la app para Android. Instálala desde Google Play para suscribirte.',
+          manageHint: 'Gestiona o cancela tu suscripción desde la app de Android o en Google Play.',
+        },
         cancelled: 'Compra cancelada. Puedes intentarlo de nuevo cuando quieras.',
         errors: {
           signIn: 'Inicia sesión primero',
@@ -2175,6 +2180,11 @@ export const messages = {
         },
         restore: 'Restore purchases',
         fineprint: 'Local prices shown at checkout. Cancel anytime.',
+        web: {
+          getOnGooglePlay: 'Get it on Google Play',
+          purchaseHint: 'DayFlow Pro is purchased inside the Android app. Install it from Google Play to subscribe.',
+          manageHint: 'Manage or cancel your subscription from the Android app or on Google Play.',
+        },
         cancelled: 'Purchase cancelled. You can try again whenever you like.',
         errors: {
           signIn: 'Please sign in first',

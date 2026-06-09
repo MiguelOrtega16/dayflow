@@ -40,8 +40,15 @@ Companion to [billing-setup.md](billing-setup.md), which covers initial Stripe /
 
 ## 2. Stripe (web subscriptions)
 
+> **⚠️ Currently OFF — Stripe isn't available to Colombian individuals.** Stripe doesn't support Colombia for account creation, and individual/sole-trader accounts require residency in a supported country. A live web Stripe account needs a US (or other supported-country) entity — in practice a **US LLC** via [Stripe Atlas](https://stripe.com/atlas) (~$500 + $100/yr) or doola/Firstbase, which also adds US + Colombian (DIAN) tax obligations. **Until that exists, web billing is gated off** and the whole of §2 is parked.
+>
+> **Android is unaffected** — Play Billing/RevenueCat (§3) supports Colombian sellers (USD wire payouts), so the app monetizes Android-first with no entity needed.
+>
+> **The gate:** `NEXT_PUBLIC_ENABLE_WEB_BILLING` ([products.ts](../lib/billing/products.ts), `WEB_BILLING_ENABLED`). Unset/`0` → web hides the Stripe plan picker + Customer-Portal buttons and shows a **"Get it on Google Play"** CTA instead ([paywall.tsx](../components/paywall/paywall.tsx), [billing/page.tsx](../app/dashboard/settings/billing/page.tsx)); the `/api/billing/checkout` + `/api/billing/portal` routes also hard-return `403`. Web Pro users (who bought on Android) get routed to Play to manage. **To re-enable once a Stripe entity exists:** set `NEXT_PUBLIC_ENABLE_WEB_BILLING=1` in Vercel + redeploy, then complete the rest of §2 below.
+
 | Var | Surface | Test → Prod |
 |---|---|---|
+| `NEXT_PUBLIC_ENABLE_WEB_BILLING` | Client + server guard — [products.ts](../lib/billing/products.ts), [checkout](../app/api/billing/checkout/route.ts), [portal](../app/api/billing/portal/route.ts) | unset/`0` (web billing off, Google Play CTA) → `1` once a live Stripe entity exists |
 | `STRIPE_SECRET_KEY` | Server — [`/api/billing/checkout`](../app/api/billing/checkout/route.ts#L14), [`/api/billing/portal`](../app/api/billing/portal/route.ts#L14) | `sk_test_...` → `sk_live_...` |
 | `STRIPE_WEBHOOK_SECRET` | Server — [`/api/webhooks/stripe`](../app/api/webhooks/stripe/route.ts#L76) | `whsec_...` test-endpoint → `whsec_...` from a **live-mode** endpoint (different value!) |
 | `NEXT_PUBLIC_STRIPE_PRICE_MONTHLY` | Client — [products.ts:24](../lib/billing/products.ts#L24) | Test `price_...` → live `price_...` (different IDs per mode) |
@@ -88,7 +95,7 @@ Companion to [billing-setup.md](billing-setup.md), which covers initial Stripe /
 
 ## 4. AdMob
 
-The wiring lives in [lib/admob.ts](../lib/admob.ts) and [components/ads/ad-banner.tsx](../components/ads/ad-banner.tsx), mounted on 7 pages (overview, stats, people, settings root, appearance, datetime, notifications). Gated by `NEXT_PUBLIC_ENABLE_ADS`.
+The wiring lives in [lib/admob.ts](../lib/admob.ts) and [components/ads/ad-banner.tsx](../components/ads/ad-banner.tsx), mounted on 9 pages (overview, stats, people, settings root, appearance, datetime, notifications, **calendar/dashboard root, templates**). Gated by `NEXT_PUBLIC_ENABLE_ADS`.
 
 | Var | Surface | Test → Prod |
 |---|---|---|
@@ -213,10 +220,10 @@ Not env vars, but should ship together:
 ## Recommended switch order on launch day
 
 1. **Supabase prod project ready** — schema run, OAuth configured, email templates updated.
-2. **Stripe live mode** — products, webhook, portal, prices, adaptive pricing.
-3. **RevenueCat** — webhook URL on `day-flow.co`, entitlement `pro`, offering `default` Current.
-4. **Vercel env vars** — paste all the above. Set `NEXT_PUBLIC_ENV=production`. **Do NOT** set `NEXT_PUBLIC_ENABLE_ADS=1` yet.
-5. **Deploy** Vercel. Smoke-test web: auth + real Stripe checkout + Customer Portal in incognito.
+2. **Stripe live mode** — ⏭️ **skipped for the Colombia launch** (web billing gated off, see §2). Leave `NEXT_PUBLIC_ENABLE_WEB_BILLING` unset. Revisit once a US-LLC Stripe entity exists.
+3. **RevenueCat** — webhook URL on `day-flow.co`, entitlement `pro`, offering `default` Current. **This is the live revenue path.**
+4. **Vercel env vars** — paste all the above. Set `NEXT_PUBLIC_ENV=production`. **Do NOT** set `NEXT_PUBLIC_ENABLE_ADS=1` or `NEXT_PUBLIC_ENABLE_WEB_BILLING=1` yet.
+5. **Deploy** Vercel. Smoke-test web: auth works, and the paywall/billing pages show the **"Get it on Google Play"** CTA (no Stripe checkout). Real-purchase testing happens on Android via the Play internal-testing track.
 6. **Bump `versionCode`** in build.gradle. AAB build with prod `google-services.json`, real AdMob `APPLICATION_ID` in manifest. Upload to Play **Production** track.
 7. **Play production review** — hours to days. While waiting, finish updating Play Console **data-safety form** + **privacy policy** to disclose AdMob.
 8. **Once Play approves + the build is rolling out:** flip `NEXT_PUBLIC_ENABLE_ADS=1` in Vercel, redeploy. Ads light up on the already-live builds (no new AAB needed — the toggle is read from Vercel's served bundle).

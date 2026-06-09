@@ -28,6 +28,24 @@ export const STRIPE_PRICE_IDS: Record<BillingProductId, string> = {
 
 export const TRIAL_DAYS_ANNUAL = 3
 
+// Web (Stripe) billing kill-switch. Off by default. While off, the web
+// surfaces hide every Stripe checkout/portal call and instead point users to
+// install / manage the app on Google Play, where Play Billing handles
+// purchases. Kept off until a Stripe-supported billing entity exists — see
+// docs/prod-launch.md §2 (Stripe isn't available to Colombian individuals;
+// needs a US LLC). Flipping to '1' on Vercel + redeploy re-enables the full
+// web Stripe flow with no code change. Mirrors the NEXT_PUBLIC_ENABLE_ADS gate.
+export const WEB_BILLING_ENABLED = process.env.NEXT_PUBLIC_ENABLE_WEB_BILLING === '1'
+
+// Public Play Store listing — web "Get it on Google Play" CTA target.
+export const PLAY_STORE_URL =
+  'https://play.google.com/store/apps/details?id=com.chanclastudio.dayflow'
+
+// Play account subscriptions screen — where existing subscribers manage /
+// cancel. Deep-links on device; opens the account page in a browser otherwise.
+export const PLAY_SUBSCRIPTIONS_URL =
+  'https://play.google.com/store/account/subscriptions'
+
 export function productIdFromStripePrice(priceId: string): BillingProductId | null {
   const entry = (Object.entries(STRIPE_PRICE_IDS) as [BillingProductId, string][])
     .find(([, id]) => id === priceId)

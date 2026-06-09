@@ -8,6 +8,7 @@ import {
   TEMPLATE_CATEGORIES, templatesByCategory,
   type TemplateCategory,
 } from '@/lib/activity-templates'
+import { AdBanner } from '@/components/ads/ad-banner'
 
 export default function TemplatesPage() {
   const { t } = useI18n()
@@ -17,7 +18,10 @@ export default function TemplatesPage() {
   useBackButtonRoute(() => router.push('/dashboard'))
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-background">
+    <div
+      className="flex flex-col h-full overflow-y-auto bg-background"
+      style={{ paddingBottom: 'var(--ad-bottom-padding, 0px)' }}
+    >
       <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border px-4 h-14 flex items-center gap-3 shrink-0">
         <button
           onClick={() => router.push('/dashboard')}
@@ -34,6 +38,8 @@ export default function TemplatesPage() {
           <CategorySection key={cat} category={cat} />
         ))}
       </div>
+
+      <AdBanner />
     </div>
   )
 }
