@@ -27,14 +27,16 @@
         />
 
         <!-- Google AdMob — required for the SDK to initialize without crashing
-             the app on launch. The value below is Google's official sample
-             "test app" ID; REPLACE it with the real AdMob App ID from
-             https://apps.admob.com/ before the next Play Store release. The
-             corresponding banner ad-unit id lives in NEXT_PUBLIC_ADMOB_BANNER_AD_ID.
+             the app on launch. This MUST be the AdMob App ID (the "~" form,
+             from apps.admob.com → App settings → App ID), NOT a banner ad-unit
+             id (the "/" form). Putting an ad-unit id here makes the SDK's init
+             provider crash the app at launch for every user, regardless of the
+             NEXT_PUBLIC_ENABLE_ADS kill-switch. The banner ad-unit id ("/" form)
+             lives in NEXT_PUBLIC_ADMOB_BANNER_AD_ID, not here.
              See https://developers.google.com/admob/android/quick-start. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3058570787981966/6330046141"
+            android:value="ca-app-pub-3058570787981966~5234559112"
         />
 
         <activity
