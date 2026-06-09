@@ -3,9 +3,9 @@ import type { BillingProductId } from '@/types'
 // Anchor prices (USD). Regional pricing is set in Play Console / Stripe — never hardcoded here.
 // These are the fallback strings shown only if the store SDK / API hasn't returned localized prices yet.
 export const ANCHOR_PRICE_USD: Record<BillingProductId, string> = {
-  pro_monthly: '$1.99',
-  pro_annual: '$12.99',
-  pro_lifetime: '$20.00',
+  pro_monthly: '$2.99',
+  pro_annual: '$19.99',
+  pro_lifetime: '$49.99',
 }
 
 // Play Console product IDs (set these to the exact SKUs you create on Play Console).

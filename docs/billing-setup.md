@@ -20,9 +20,9 @@ Code references: SKU IDs live in [lib/billing/products.ts](../lib/billing/produc
 
 | Name | Pricing model | Price | Billing | Notes |
 |---|---|---|---|---|
-| DayFlow Pro Monthly | Recurring | $1.99 | Monthly | — |
-| DayFlow Pro Annual | Recurring | $12.99 | Yearly | Enable **Free trial → 3 days** |
-| DayFlow Pro Lifetime | One-time | $27.99 | — | — |
+| DayFlow Pro Monthly | Recurring | $2.99 | Monthly | — |
+| DayFlow Pro Annual | Recurring | $19.99 | Yearly | Enable **Free trial → 3 days** |
+| DayFlow Pro Lifetime | One-time | $49.99 | — | — |
 
 Open each product → click its price → copy the **Price ID** (`price_...`) into `.env.local`:
 - `NEXT_PUBLIC_STRIPE_PRICE_MONTHLY`
@@ -82,12 +82,12 @@ The app's manifest must declare `com.android.vending.BILLING` — already added 
   - ID: `monthly`
   - Period: **1 month**
   - Renewal: **Auto-renewing**
-  - Price: **$1.99 USD** → set MX$39, COP $7,900; auto-convert the rest
+  - Price: **$2.99 USD** → set MX$39, COP $7,900; auto-convert the rest
 - **Activate** the base plan
 
 **Subscription #2 — `dayflow_pro_annual`**
 - Product ID: `dayflow_pro_annual`
-- Base plan: period **1 year**, price **$12.99 USD** (MX$249, COP $49,900)
+- Base plan: period **1 year**, price **$19.99 USD** (MX$249, COP $49,900)
 - **Offers → + Add offer:**
   - Offer ID: `freetrial`
   - Eligibility: **New customer acquisition**
@@ -98,7 +98,7 @@ The app's manifest must declare `com.android.vending.BILLING` — already added 
 **Monetize → Products → One-time products → + Create product:**
 - Product ID: `dayflow_pro_lifetime`
 - Name: DayFlow Pro Lifetime
-- Price: **$27.99** (MX$549, COP $109,900)
+- Price: **$49.99** (MX$549, COP $109,900)
 - **Activate**
 
 ### B5. Service account for RevenueCat
