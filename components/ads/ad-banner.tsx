@@ -6,11 +6,22 @@ import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { initAdMob, showBottomBanner, hideBottomBanner } from '@/lib/admob'
 import { getAdSuppressed, subscribeAdSuppress } from '@/lib/ad-suppress'
 
-// Height in CSS pixels of the mobile bottom nav (.h-14 in mobile-bottom-nav.tsx).
-// AdMob banner is rendered as a native view at the bottom of the screen and
-// needs this offset so it sits above the nav instead of covering it. The
-// safe-area inset is absorbed by the nav itself, so we don't double-count it.
-const BOTTOM_NAV_HEIGHT_PX = 56
+// The AdMob banner is a native view floating `margin` dp above the *physical*
+// screen bottom (the plugin multiplies our value by display density, and on
+// Android < 15 it does NOT subtract the system gesture inset). To sit above the
+// in-WebView bottom nav — which is h-14 (56) PLUS pb-[safe-area-inset-bottom]
+// on gesture-nav devices — we must offset by the nav's FULL rendered height,
+// not a fixed 56. Hardcoding 56 left the banner overlapping the nav (blocking
+// the section tabs) on any device with a gesture inset. So we measure the nav
+// at show-time; this falls back to 56 only if the nav isn't mounted yet.
+const BOTTOM_NAV_FALLBACK_PX = 56
+
+function getBottomNavOffsetPx(): number {
+  if (typeof document === 'undefined') return BOTTOM_NAV_FALLBACK_PX
+  const nav = document.querySelector('[data-bottom-nav]') as HTMLElement | null
+  const h = nav?.getBoundingClientRect().height ?? 0
+  return h > 0 ? Math.ceil(h) : BOTTOM_NAV_FALLBACK_PX
+}
 
 // Vertical room (above the bottom nav) the banner occupies. Exposed as a
 // CSS variable so scroll containers can pad their content out of the
@@ -77,7 +88,9 @@ function AdBannerInner() {
     ;(async () => {
       await initAdMob()
       if (cancelled) return
-      await showBottomBanner(BOTTOM_NAV_HEIGHT_PX)
+      // Measure the nav now (post-mount) so the banner clears its full height
+      // including the gesture-nav safe-area inset.
+      await showBottomBanner(getBottomNavOffsetPx())
     })()
 
     return () => {
