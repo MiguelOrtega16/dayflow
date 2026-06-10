@@ -42,7 +42,7 @@ export function MobileBottomNav({ userId, onMenuClick, showMenuDot = false }: Mo
 
   return (
     <nav data-bottom-nav className="xl:hidden shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
-      <div data-bottom-nav-content className="flex items-stretch h-14">
+      <div className="flex items-stretch h-14">
         <button
           onClick={onMenuClick}
           className="flex-1 flex flex-col items-center justify-center gap-0.5 text-muted-foreground hover:text-foreground transition-colors"

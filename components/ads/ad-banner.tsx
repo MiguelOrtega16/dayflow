@@ -6,25 +6,23 @@ import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { initAdMob, showBottomBanner, hideBottomBanner } from '@/lib/admob'
 import { getAdSuppressed, subscribeAdSuppress } from '@/lib/ad-suppress'
 
-// The AdMob banner is a native view that the plugin floats `margin` dp above
-// the bottom. We pass the in-WebView bottom nav's CONTENT height so the banner
-// sits directly above the nav rather than overlapping it.
-//
-// IMPORTANT — pass the nav's *content* height (the h-14 row = 56), NOT its full
-// rendered height. The full nav box also includes pb-[safe-area-inset-bottom]
-// (the system gesture/nav-bar inset). On Android 15+ the system bar is edge-to-
-// edge and our patched AdMob plugin already adds that system inset to the
-// banner's bottom margin natively (see patches/@capacitor-community+admob+
-// 8.0.0.patch). So if we ALSO included the inset here it would be counted twice
-// and the banner would float a gap above the nav. Measuring the inner content
-// row keeps us inset-free on every Android version. Falls back to 56 if the nav
-// isn't mounted yet.
+// The AdMob banner is a native view the plugin floats `margin` dp above the
+// bottom of the SAME view the WebView lives in. So the correct offset is simply
+// the bottom nav's FULL rendered height as the WebView measures it — the h-14
+// row PLUS pb-[safe-area-inset-bottom]. That single number is right on every
+// device: on edge-to-edge devices env() reports the gesture inset (so the nav,
+// and thus our offset, grows by it); on non-edge-to-edge devices env() is 0 and
+// the system bar is already outside the banner's coordinate space. We deliberately
+// do NOT add the system inset separately — the patched plugin honors this margin
+// verbatim on Android 15+ (upstream otherwise discards it and substitutes the raw
+// inset, which overlapped the nav). See patches/@capacitor-community+admob+8.0.0.patch.
+// Falls back to 56 only if the nav isn't mounted yet.
 const BOTTOM_NAV_FALLBACK_PX = 56
 
 function getBottomNavOffsetPx(): number {
   if (typeof document === 'undefined') return BOTTOM_NAV_FALLBACK_PX
-  const content = document.querySelector('[data-bottom-nav-content]') as HTMLElement | null
-  const h = content?.getBoundingClientRect().height ?? 0
+  const nav = document.querySelector('[data-bottom-nav]') as HTMLElement | null
+  const h = nav?.getBoundingClientRect().height ?? 0
   return h > 0 ? Math.ceil(h) : BOTTOM_NAV_FALLBACK_PX
 }
 
