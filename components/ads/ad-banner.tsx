@@ -6,20 +6,25 @@ import { useEntitlement } from '@/lib/billing/use-entitlement'
 import { initAdMob, showBottomBanner, hideBottomBanner } from '@/lib/admob'
 import { getAdSuppressed, subscribeAdSuppress } from '@/lib/ad-suppress'
 
-// The AdMob banner is a native view floating `margin` dp above the *physical*
-// screen bottom (the plugin multiplies our value by display density, and on
-// Android < 15 it does NOT subtract the system gesture inset). To sit above the
-// in-WebView bottom nav — which is h-14 (56) PLUS pb-[safe-area-inset-bottom]
-// on gesture-nav devices — we must offset by the nav's FULL rendered height,
-// not a fixed 56. Hardcoding 56 left the banner overlapping the nav (blocking
-// the section tabs) on any device with a gesture inset. So we measure the nav
-// at show-time; this falls back to 56 only if the nav isn't mounted yet.
+// The AdMob banner is a native view that the plugin floats `margin` dp above
+// the bottom. We pass the in-WebView bottom nav's CONTENT height so the banner
+// sits directly above the nav rather than overlapping it.
+//
+// IMPORTANT — pass the nav's *content* height (the h-14 row = 56), NOT its full
+// rendered height. The full nav box also includes pb-[safe-area-inset-bottom]
+// (the system gesture/nav-bar inset). On Android 15+ the system bar is edge-to-
+// edge and our patched AdMob plugin already adds that system inset to the
+// banner's bottom margin natively (see patches/@capacitor-community+admob+
+// 8.0.0.patch). So if we ALSO included the inset here it would be counted twice
+// and the banner would float a gap above the nav. Measuring the inner content
+// row keeps us inset-free on every Android version. Falls back to 56 if the nav
+// isn't mounted yet.
 const BOTTOM_NAV_FALLBACK_PX = 56
 
 function getBottomNavOffsetPx(): number {
   if (typeof document === 'undefined') return BOTTOM_NAV_FALLBACK_PX
-  const nav = document.querySelector('[data-bottom-nav]') as HTMLElement | null
-  const h = nav?.getBoundingClientRect().height ?? 0
+  const content = document.querySelector('[data-bottom-nav-content]') as HTMLElement | null
+  const h = content?.getBoundingClientRect().height ?? 0
   return h > 0 ? Math.ceil(h) : BOTTOM_NAV_FALLBACK_PX
 }
 

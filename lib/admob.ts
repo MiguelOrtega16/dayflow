@@ -78,6 +78,12 @@ export function initAdMob(): Promise<void> {
  * banner above any fixed bottom UI (e.g. the mobile bottom nav, which is
  * ~56px tall on this app). The plugin renders the banner as a native view
  * *outside* the WebView, so it doesn't disturb React state.
+ *
+ * `marginPx` must be the bottom UI's CONTENT height only (no system-bar inset).
+ * On Android 15+ the upstream plugin pins the banner to just the system inset
+ * and ignores this margin; our patch (patches/@capacitor-community+admob+
+ * 8.0.0.patch) restores it by adding `marginPx` ON TOP of the system inset, so
+ * the banner clears both the system bar and the nav on every Android version.
  */
 export async function showBottomBanner(marginPx: number = 0): Promise<void> {
   if (!adsEnabled()) return

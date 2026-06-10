@@ -11,3 +11,28 @@ index 1056a18..13d21f7 100644
          }
      }
      lintOptions {
+diff --git a/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/banner/BannerExecutor.java b/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/banner/BannerExecutor.java
+index c629139..60b911e 100644
+--- a/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/banner/BannerExecutor.java
++++ b/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/banner/BannerExecutor.java
+@@ -110,10 +110,18 @@ public class BannerExecutor extends Executor {
+                     int bottomInset = insets.getSystemWindowInsetBottom();
+                     int topInset = insets.getSystemWindowInsetTop();
+ 
++                    // PATCH (dayflow): upstream pins the banner to ONLY the system
++                    // inset on Android 15+, discarding the app-supplied `margin` (our
++                    // bottom-nav offset). On edge-to-edge devices that leaves the banner
++                    // overlapping the in-app bottom nav. Re-add the app margin on top of
++                    // the system inset so the banner clears BOTH the system bar and our
++                    // nav. `density` and `adOptions` are captured from the enclosing
++                    // showBanner() scope. See lib/admob.ts / components/ads/ad-banner.tsx.
++                    int appMargin = (int) (adOptions.margin * density);
+                     if ("TOP_CENTER".equals(adOptions.position)) {
+-                        mAdViewLayoutParams.setMargins(0, topInset, 0, 0);
++                        mAdViewLayoutParams.setMargins(0, topInset + appMargin, 0, 0);
+                     } else {
+-                        mAdViewLayoutParams.setMargins(0, 0, 0, bottomInset);
++                        mAdViewLayoutParams.setMargins(0, 0, 0, bottomInset + appMargin);
+                     }
+ 
+                     mAdViewLayout.setLayoutParams(mAdViewLayoutParams);
