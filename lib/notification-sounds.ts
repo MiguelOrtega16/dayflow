@@ -28,6 +28,10 @@ export const DEFAULT_SOUND_ID = 'default'
  *  in AndroidManifest as the FCM fallback channel and created on app launch. */
 export const DEFAULT_REMINDER_CHANNEL = 'activity-reminders'
 
+/** The pre-existing alarm-type channel: urgent triple-pulse vibration + system
+ *  default sound. Used when an alarm-type reminder has the 'default' sound. */
+export const DEFAULT_ALARM_CHANNEL = 'activity-alarms-v2'
+
 export interface NotificationSoundDef {
   /** Stored in preferences.notification_sound; also the web file basename. */
   id: string
@@ -79,10 +83,21 @@ export function channelIdForSound(id: string): string {
   return `reminders-snd-${id}`
 }
 
+/**
+ * The alarm-type counterpart of channelIdForSound: the channel carrying both
+ * the urgent triple-pulse vibration AND the user's selected sound. Used when
+ * reminder_type is 'alarm'. 'default' sound reuses the pre-existing
+ * 'activity-alarms-v2' channel (urgent vibration + system default sound).
+ */
+export function alarmChannelIdForSound(id: string): string {
+  if (!isValidSoundId(id) || id === DEFAULT_SOUND_ID) return DEFAULT_ALARM_CHANNEL
+  return `alarms-snd-${id}`
+}
+
 /** Every non-default sound channel id — used by the native side to clean up
  *  stale per-sound channels so the user's Android settings list stays tidy. */
 export function allSoundChannelIds(): string[] {
   return NOTIFICATION_SOUNDS
     .filter(s => s.id !== DEFAULT_SOUND_ID)
-    .map(s => channelIdForSound(s.id))
+    .flatMap(s => [channelIdForSound(s.id), alarmChannelIdForSound(s.id)])
 }

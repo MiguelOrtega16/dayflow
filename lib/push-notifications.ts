@@ -4,7 +4,8 @@ import { initLocalNotificationListeners } from '@/lib/activity-reminders'
 import { SystemSettings } from '@/lib/system-settings'
 import { getUserPreferences } from '@/lib/user-preferences'
 import {
-  NOTIFICATION_SOUNDS, getSoundDef, channelIdForSound, DEFAULT_SOUND_ID,
+  NOTIFICATION_SOUNDS, getSoundDef, channelIdForSound, alarmChannelIdForSound,
+  DEFAULT_SOUND_ID,
 } from '@/lib/notification-sounds'
 
 export async function initPushNotifications(userId: string) {
@@ -128,19 +129,28 @@ async function ensureReminderChannels() {
   }
 }
 
-// Per-sound reminder channels reuse the same Spanish name/description as the
-// base 'activity-reminders' channel, so the user sees one familiar entry in
-// Android's per-app notification settings (we delete the inactive sound
-// channels in applyNotificationSound to keep that list to a single row).
+// Per-sound channels reuse the same Spanish name/description as the base
+// 'activity-reminders' / 'activity-alarms-v2' channels, so the user sees one
+// familiar entry per type in Android's per-app notification settings (we delete
+// the inactive sound channels in applyNotificationSound to keep the list tidy).
 const SOUND_CHANNEL_NAME = 'Recordatorios de actividades'
 const SOUND_CHANNEL_DESC = 'Notificaciones estándar para tus recordatorios'
+const ALARM_CHANNEL_NAME = 'Alarmas de actividades'
+const ALARM_CHANNEL_DESC = 'Alertas con vibración insistente para recordatorios tipo alarma'
 
 /**
- * Make the notification channel for the user's selected sound exist on this
- * device, and remove the channels for the other sounds so Android's per-app
- * settings list stays to a single reminder row. 'default' uses the pre-
- * existing 'activity-reminders' channel, so there's nothing to create there —
- * we only clean up the per-sound channels. No-op off Android.
+ * Make the channels for the user's selected sound exist on this device, and
+ * remove the channels for the other sounds so Android's per-app settings list
+ * stays tidy. The sound applies to BOTH reminder modes:
+ *   - 'notification' type → standard reminder channel (reminders-snd-<id>)
+ *   - 'alarm' type        → alarm channel with urgent vibration (alarms-snd-<id>)
+ * so the chosen sound is honored whichever mode the user is in. We create both
+ * regardless of the current reminder_type, since switching modes later doesn't
+ * re-run this and the server may route to either channel.
+ *
+ * The 'default' sound reuses the pre-existing 'activity-reminders' /
+ * 'activity-alarms-v2' channels, so there's nothing to create for it — we only
+ * clean up the per-sound channels. No-op off Android.
  *
  * Called on app launch (init) and again whenever the user changes the sound in
  * settings, so the channel the server will route to is always present before
@@ -151,16 +161,22 @@ export async function applyNotificationSound(soundId: string) {
   if (!Capacitor.isNativePlatform()) return
   const def = getSoundDef(soundId)
   const activeChannel = channelIdForSound(def.id)
+  const activeAlarmChannel = alarmChannelIdForSound(def.id)
   try {
     if (def.id !== DEFAULT_SOUND_ID && def.rawRes) {
       await SystemSettings.createReminderChannel(
         activeChannel, SOUND_CHANNEL_NAME, SOUND_CHANNEL_DESC, def.rawRes,
       )
+      await SystemSettings.createAlarmChannel(
+        activeAlarmChannel, ALARM_CHANNEL_NAME, ALARM_CHANNEL_DESC, def.rawRes,
+      )
     }
     for (const s of NOTIFICATION_SOUNDS) {
       if (s.id === DEFAULT_SOUND_ID) continue
-      const ch = channelIdForSound(s.id)
-      if (ch !== activeChannel) await SystemSettings.deleteChannel(ch)
+      const ch  = channelIdForSound(s.id)
+      const ach = alarmChannelIdForSound(s.id)
+      if (ch  !== activeChannel)      await SystemSettings.deleteChannel(ch)
+      if (ach !== activeAlarmChannel) await SystemSettings.deleteChannel(ach)
     }
   } catch (err) {
     console.error('[Push] applyNotificationSound failed', err)
