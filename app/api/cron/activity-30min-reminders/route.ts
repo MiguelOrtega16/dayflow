@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendFCM, sendWebPush } from '@/lib/firebase-admin'
 import { localToUTC, localDateStr } from '@/lib/tz-utils'
+import { channelIdForSound, DEFAULT_SOUND_ID } from '@/lib/notification-sounds'
 
 const MOTIVATIONAL = [
   '¡Tú puedes! 💪',
@@ -192,12 +193,19 @@ export async function GET(request: Request) {
   // the new-user state in lib/user-preferences.ts.
   const reminderTypeMap: Record<string, 'notification' | 'alarm'> = {}
   const screenlockMap:   Record<string, boolean> = {}
+  // Per-user notification sound → Android channel id. Only applies to the
+  // standard 'notification' reminder type; alarm-type uses its own dedicated
+  // channel below. Invalid/missing values resolve to the default channel.
+  const soundChannelMap: Record<string, string> = {}
   for (const p of profiles ?? []) {
     if (p.fcm_token)             tokenMap[p.id]   = p.fcm_token
     if (p.web_push_subscription) webPushMap[p.id] = p.web_push_subscription as WebPushSub
     const prefs = (p.preferences ?? {}) as Record<string, unknown>
     reminderTypeMap[p.id] = prefs.reminder_type === 'alarm' ? 'alarm' : 'notification'
     screenlockMap[p.id]   = prefs.screenlock_reminders === true
+    soundChannelMap[p.id] = channelIdForSound(
+      typeof prefs.notification_sound === 'string' ? prefs.notification_sound : DEFAULT_SOUND_ID,
+    )
   }
 
   let sent = 0
@@ -243,11 +251,14 @@ export async function GET(request: Request) {
       // urgency still comes through on older devices and as defense-in-
       // depth if the activity-alarms channel never made it onto the device.
       const fcmOptions = {
-        // v2 = the channel with the long triple-pulse vibration pattern set
-        // up natively in SystemSettingsPlugin.createAlarmChannel. v1
-        // ('activity-alarms') is deleted on app init so this won't fall
-        // through to it.
-        ...(isAlarm ? { androidChannelId: 'activity-alarms-v2' as const, alarm: true } : {}),
+        // Alarm-type routes to the dedicated high-urgency channel (long
+        // triple-pulse vibration, set up natively in createAlarmChannel; v1
+        // 'activity-alarms' is deleted on app init so this won't fall through
+        // to it). Standard 'notification' type routes to the channel carrying
+        // the user's selected sound (channelIdForSound → 'activity-reminders'
+        // for the default sound, i.e. unchanged behavior).
+        androidChannelId: isAlarm ? ('activity-alarms-v2' as const) : soundChannelMap[uid],
+        ...(isAlarm ? { alarm: true } : {}),
         androidVisibility: (screenlockMap[uid] ? 'public' : 'private') as 'public' | 'private',
       }
       if (token)  { await sendFCM(token, pushTitle, body, data, fcmOptions); sent++ }

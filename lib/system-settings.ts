@@ -14,6 +14,8 @@ interface SystemSettingsPlugin {
   checkBatteryOptimization(): Promise<{ ignoring: boolean }>
   checkNotificationsEnabled(): Promise<{ enabled: boolean }>
   createAlarmChannel(opts: { id: string; name: string; description?: string }): Promise<void>
+  createReminderChannel(opts: { id: string; name: string; description?: string; sound?: string }): Promise<void>
+  previewSound(opts: { sound?: string }): Promise<void>
   deleteChannel(opts: { id: string }): Promise<void>
 }
 
@@ -47,6 +49,19 @@ export const SystemSettings = {
     isSystemSettingsSupported()
       ? native.createAlarmChannel({ id, name, description })
       : Promise.resolve(),
+
+  /** Create a standard reminder channel whose sound is the given res/raw
+   *  resource (no extension), e.g. 'notif_ding'. Omit `sound` for the system
+   *  default. No-op off Android. */
+  createReminderChannel: (id: string, name: string, description?: string, sound?: string) =>
+    isSystemSettingsSupported()
+      ? native.createReminderChannel({ id, name, description, sound })
+      : Promise.resolve(),
+
+  /** Preview a res/raw sound (no extension) through the notification audio
+   *  stream so it matches real notification loudness. No-op off Android. */
+  previewSound: (sound?: string) =>
+    isSystemSettingsSupported() ? native.previewSound({ sound }) : Promise.resolve(),
 
   deleteChannel: (id: string) =>
     isSystemSettingsSupported()

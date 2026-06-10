@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
@@ -32,6 +33,10 @@ import com.getcapacitor.annotation.CapacitorPlugin
  */
 @CapacitorPlugin(name = "SystemSettings")
 class SystemSettingsPlugin : Plugin() {
+
+    /** Currently-playing settings-screen sound preview, kept so a new preview
+     *  can stop the previous one. */
+    private var previewRingtone: Ringtone? = null
 
     @PluginMethod
     fun openAppNotificationSettings(call: PluginCall) {
@@ -208,6 +213,93 @@ class SystemSettingsPlugin : Plugin() {
             call.resolve()
         } catch (e: Throwable) {
             call.reject("createAlarmChannel failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Creates a standard reminder channel that plays a bundled custom sound
+     * from res/raw. Used by the "Notification sound" setting: each selectable
+     * sound gets its own channel (a channel's sound is immutable once created,
+     * so the only way to switch sounds is to switch channels). The FCM server
+     * routes a push to the right channel via channel_id — see
+     * lib/notification-sounds.ts which owns the id↔sound mapping.
+     *
+     * `sound` is a raw resource name WITHOUT extension (e.g. "notif_ding").
+     * If it's null/blank, we fall back to the system default notification
+     * sound. Importance + vibration mirror the 'activity-reminders' channel so
+     * a custom-sound reminder behaves identically apart from the audio.
+     * Idempotent — re-calling with the same id is a no-op on Android.
+     */
+    @PluginMethod
+    fun createReminderChannel(call: PluginCall) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) { call.resolve(); return }
+        val id          = call.getString("id")          ?: run { call.reject("Missing id"); return }
+        val name        = call.getString("name")        ?: id
+        val description = call.getString("description") ?: ""
+        val sound       = call.getString("sound")
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        if (nm == null) { call.reject("No NotificationManager"); return }
+
+        val soundUri: Uri = if (!sound.isNullOrBlank()) {
+            val resId = context.resources.getIdentifier(sound, "raw", context.packageName)
+            if (resId != 0) Uri.parse("android.resource://${context.packageName}/$resId")
+            else RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        } else {
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        }
+
+        try {
+            val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH).apply {
+                this.description = description
+                enableVibration(true)
+                enableLights(true)
+                setSound(
+                    soundUri,
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+            }
+            nm.createNotificationChannel(channel)
+            call.resolve()
+        } catch (e: Throwable) {
+            call.reject("createReminderChannel failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Plays a one-off preview of a bundled sound through the NOTIFICATION audio
+     * stream/usage (not the media stream), so the settings preview matches the
+     * loudness the user will actually hear for a notification. `sound` is a
+     * res/raw resource name without extension (e.g. "notif_ding"); null/blank
+     * previews the system default notification tone. A new call stops any
+     * still-playing preview.
+     */
+    @PluginMethod
+    fun previewSound(call: PluginCall) {
+        val sound = call.getString("sound")
+        val uri: Uri = if (!sound.isNullOrBlank()) {
+            val resId = context.resources.getIdentifier(sound, "raw", context.packageName)
+            if (resId != 0) Uri.parse("android.resource://${context.packageName}/$resId")
+            else RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        } else {
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        }
+        try {
+            previewRingtone?.stop()
+            val rt = RingtoneManager.getRingtone(context, uri)
+                ?: run { call.reject("No ringtone for uri"); return }
+            rt.audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            rt.play()
+            previewRingtone = rt
+            call.resolve()
+        } catch (e: Throwable) {
+            call.reject("previewSound failed: ${e.message}")
         }
     }
 

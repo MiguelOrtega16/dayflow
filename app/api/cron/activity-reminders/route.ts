@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendFCM, sendWebPush, type WebPushAction } from '@/lib/firebase-admin'
 import { localDateStr, localHour } from '@/lib/tz-utils'
+import { channelIdForSound, DEFAULT_SOUND_ID } from '@/lib/notification-sounds'
 
 function isAuthorized(request: Request) {
   const auth = request.headers.get('authorization')
@@ -32,9 +33,18 @@ async function notify(
   body: string,
   data: Record<string, string>,
   actions?: WebPushAction[],
+  androidChannelId?: string,
 ) {
-  if (token)  await sendFCM(token, title, body, data)
+  if (token)  await sendFCM(token, title, body, data, androidChannelId ? { androidChannelId } : undefined)
   if (webSub) await sendWebPush(webSub, title, body, data, actions)
+}
+
+/** Resolve a profile's selected notification sound to its Android channel id. */
+function channelForProfile(p: { preferences?: unknown }): string {
+  const prefs = (p.preferences ?? {}) as Record<string, unknown>
+  return channelIdForSound(
+    typeof prefs.notification_sound === 'string' ? prefs.notification_sound : DEFAULT_SOUND_ID,
+  )
 }
 
 export async function GET(request: Request) {
@@ -88,7 +98,8 @@ export async function GET(request: Request) {
     const todayStr = localDateStr(now, tz)
     await notify(p.fcm_token, (p as any).web_push_subscription,
       '🌙 DayFlow', randomEvening(),
-      { type: 'activity_reminder', date: todayStr })
+      { type: 'activity_reminder', date: todayStr },
+      undefined, channelForProfile(p))
     sent++
   }))
 
@@ -153,11 +164,12 @@ export async function GET(request: Request) {
       { action: 'create', title: '➕ Nueva actividad' },
     ]
 
+    const channelId = channelForProfile(p)
     if (count === 0) {
       await notify(p.fcm_token, webSub, '☀️ Buenos días',
         'No tienes actividades programadas para hoy.',
         { type: 'activity_reminder', date: todayStr },
-        morningActions)
+        morningActions, channelId)
     } else {
       const title = `📅 Tienes ${count} actividad${count > 1 ? 'es' : ''} hoy`
       const lines = acts.slice(0, 4).map(a =>
@@ -166,7 +178,7 @@ export async function GET(request: Request) {
       if (count > 4) lines.push(`…y ${count - 4} más`)
       await notify(p.fcm_token, webSub, title, lines.join('\n'),
         { type: 'activity_reminder', date: todayStr },
-        morningActions)
+        morningActions, channelId)
     }
     sent++
   }))

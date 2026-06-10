@@ -10,6 +10,7 @@
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { THEMES, DEFAULT_THEME_ID } from '@/lib/themes'
+import { isValidSoundId, DEFAULT_SOUND_ID } from '@/lib/notification-sounds'
 import type { ActivityCategory } from '@/types'
 
 export type ReminderType   = 'notification' | 'alarm'
@@ -39,6 +40,11 @@ export interface UserPreferences {
   snooze_enabled:       boolean
   /** How long a snooze defers the reminder. */
   snooze_minutes:       SnoozeMinutes
+  /** Sound played for standard push notifications. An id from
+   *  lib/notification-sounds.ts; 'default' = the system notification sound.
+   *  Effective on Android (each sound maps to its own notification channel);
+   *  web push can't set a custom sound, so it's a no-op there. */
+  notification_sound:   string
   /** Morning planning push (default 7 AM local). */
   morning_reminder:     DailySlot
   /** Evening review push (default 8 PM local). */
@@ -80,6 +86,7 @@ const DEFAULTS: UserPreferences = {
   screenlock_reminders: false,
   snooze_enabled:       true,
   snooze_minutes:       15,
+  notification_sound:   DEFAULT_SOUND_ID,
   morning_reminder:     'default',
   evening_review:       'default',
   theme:                DEFAULT_THEME_ID,
@@ -150,6 +157,7 @@ export function normalizePreferences(raw: unknown): UserPreferences {
     screenlock_reminders: typeof r.screenlock_reminders === 'boolean' ? r.screenlock_reminders : DEFAULTS.screenlock_reminders,
     snooze_enabled:       typeof r.snooze_enabled       === 'boolean' ? r.snooze_enabled       : DEFAULTS.snooze_enabled,
     snooze_minutes:       normalizeSnoozeMinutes(r.snooze_minutes),
+    notification_sound:   isValidSoundId(r.notification_sound) ? r.notification_sound : DEFAULTS.notification_sound,
     morning_reminder:     normalizeDailySlot(r.morning_reminder),
     evening_review:       normalizeDailySlot(r.evening_review),
     theme:                normalizeTheme(r.theme),

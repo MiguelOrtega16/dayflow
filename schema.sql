@@ -34,7 +34,9 @@ alter table public.profiles add column if not exists web_push_subscription jsonb
 -- User-level preferences blob. Shape (all fields optional, treat null as default):
 --   {
 --     "reminder_type":                  "notification" | "alarm",   -- routes FCM channel
---     "ringtone":                       "system" | "gentle" | ...,  -- selected ringtone preset
+--     "notification_sound":             "default" | "marimba" | "pop" | "bell" | "ding" | "chime" | "alert",
+--                                                                    -- Android notification-sound preset; each maps to its
+--                                                                    -- own channel (see lib/notification-sounds.ts)
 --     "dismissed_starter_picker":       boolean,                    -- onboarding pack overlay shown / skipped
 --     "dismissed_starter_picker_at":    ISO timestamp string,
 --     "dismissed_setup_checklist":      boolean,                    -- setup-checklist card dismissed / completed
