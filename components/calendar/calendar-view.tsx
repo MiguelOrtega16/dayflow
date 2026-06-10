@@ -128,8 +128,13 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   // set to Large/Largest; without this distinction, rotating to landscape
   // kept the mobile portrait layout and left the activity list with no
   // vertical room to render.
-  const isMobilePortrait = isMobile && !isLandscape
-  const useBottomPanel   = isTablet && !isLandscape
+  const isMobilePortrait  = isMobile && !isLandscape
+  // Phone rotated to landscape (e.g. S24 Ultra ~882×412). The full DayCell
+  // grid can't fit its per-day activity lists on such a short viewport, so we
+  // show the compact day-dots grid (as in portrait) on the LEFT and let the
+  // day-detail panel take the RIGHT — same right-side layout the desktop uses.
+  const isMobileLandscape = isMobile && isLandscape
+  const useBottomPanel    = isTablet && !isLandscape
 
   // Refresh shared calendars from the DB (called on realtime events & dayflow:refresh)
   const refreshSharedCalendars = useCallback(async () => {
@@ -732,8 +737,30 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
           </div>
         )}
 
-        {/* Calendar grid — month / week */}
-        {mode !== 'day' && <div
+        {/* Mobile landscape month / week — compact day-dots grid (no per-day
+            activity lists); the day's activities live in the right-side panel. */}
+        {mode !== 'day' && isMobileLandscape && (
+          <div
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            className="flex-1 overflow-hidden">
+            <div key={swipeAnimKey} className={cn('h-full', swipeAnimClass)}>
+              <CompactMonthGrid
+                currentDate={mode === 'week' ? (isMobileWeek ? selectedDate : currentDate) : currentDate}
+                selectedDate={selectedDate}
+                days={mode === 'week' ? weekStripDays : undefined}
+                activities={activities}
+                holidays={holidays}
+                allUsers={allUsers}
+                activeUserIds={activeUserIds}
+                onDateSelect={d => { setSelectedDate(d); setCurrentDate(d) }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Calendar grid — month / week (full DayCell grid) */}
+        {mode !== 'day' && !isMobileLandscape && <div
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           className="flex-1 overflow-auto p-1.5 sm:p-4">

@@ -2,7 +2,7 @@
 
 import { format, isToday } from 'date-fns'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2, ChevronDown, Loader2, Pencil } from 'lucide-react'
+import { Plus, Clock, MoreHorizontal, CheckCircle2, Circle, Play, Ban, SkipForward, MessageCircle, Send, Trash2, ChevronDown, Loader2, Pencil, Lock, Eye } from 'lucide-react'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, PRIORITY_CONFIG, getInitials, formatRelativeTime, statusLabel, categoryLabel, priorityLabel, activityColor } from '@/lib/utils'
 import { useDateTimePrefs } from '@/lib/datetime-prefs'
 import { useProfile } from '@/lib/profile-context'
@@ -434,6 +434,19 @@ export function DayDetailPanel({
                 </p>
               )}
             </div>
+            {/* Visibility indicator — own reminders only. Icon-only to fit the
+                compact card; amber lock = private, muted eye = visible. */}
+            {isOwnActivity && (
+              <span
+                className="shrink-0"
+                title={activity.is_public ? t('activityForm.visible') : t('activityForm.private')}
+                aria-label={activity.is_public ? t('activityForm.visible') : t('activityForm.private')}
+              >
+                {activity.is_public
+                  ? <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                  : <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />}
+              </span>
+            )}
             {isOwnActivity && (
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
@@ -548,6 +561,22 @@ export function DayDetailPanel({
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-background/60 text-muted-foreground font-medium">
                   {CATEGORY_CONFIG[activity.category].emoji} {categoryLabel(activity.category, locale)}
                 </span>
+
+                {/* Visibility — only on the user's own activities, so they can
+                    tell at a glance whether others can see it. Private gets an
+                    amber lock (the state worth double-checking); visible is a
+                    muted eye. */}
+                {isOwnActivity && (
+                  activity.is_public ? (
+                    <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-background/60 text-muted-foreground font-medium">
+                      <Eye className="w-2.5 h-2.5" /> {t('activityForm.visible')}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-medium">
+                      <Lock className="w-2.5 h-2.5" /> {t('activityForm.private')}
+                    </span>
+                  )
+                )}
 
                 {activity.goal && (
                   <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
