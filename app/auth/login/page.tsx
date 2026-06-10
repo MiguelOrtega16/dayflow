@@ -54,7 +54,7 @@ export default function LoginPage() {
         localStorage.removeItem(REMEMBERED_EMAIL_KEY)
         localStorage.setItem('dayflow_remember_me', '0')
       }
-      if (data.user?.id) identify(data.user.id, { email })
+      if (data.user?.id) identify(data.user.id)
       track('user_logged_in', { method: 'email' })
       router.push('/dashboard')
       router.refresh()

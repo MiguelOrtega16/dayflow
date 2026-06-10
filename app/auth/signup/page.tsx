@@ -38,12 +38,12 @@ export default function SignupPage() {
       setError(translateAuthError(error.message, locale))
       setLoading(false)
     } else if (data.session) {
-      if (data.user?.id) identify(data.user.id, { email, full_name: fullName })
+      if (data.user?.id) identify(data.user.id)
       track('user_signed_up', { method: 'email', confirmation_required: false })
       router.push('/dashboard')
       router.refresh()
     } else {
-      if (data.user?.id) identify(data.user.id, { email, full_name: fullName })
+      if (data.user?.id) identify(data.user.id)
       track('user_signed_up', { method: 'email', confirmation_required: true })
       setNeedsConfirmation(true)
       setLoading(false)

@@ -71,10 +71,13 @@ export function track(event: AnalyticsEvent, props?: EventProps) {
   posthog.capture(event, props)
 }
 
-export function identify(userId: string, traits?: EventProps) {
+export function identify(userId: string) {
   if (!KEY || typeof window === 'undefined') return
   if (!initialized) initAnalytics()
-  posthog.identify(userId, traits)
+  // Identify by opaque user id only — we deliberately do NOT send email/name as
+  // person properties, to keep PII out of analytics and shrink our Play
+  // data-safety footprint (no "personal info" collected for Analytics).
+  posthog.identify(userId)
 }
 
 export function resetIdentity() {

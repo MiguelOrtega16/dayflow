@@ -24,14 +24,14 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   // Keeps PostHog's distinct_id linked to the current Supabase user across
-  // returning visits. Signup/login pages still call identify() directly with
-  // richer traits — this handler is the safety net for already-signed-in
-  // users hitting the app on a fresh browser.
+  // returning visits. We identify by opaque user id only (no email/name) — see
+  // the note in lib/analytics/posthog.ts. This handler is the safety net for
+  // already-signed-in users hitting the app on a fresh browser.
   useEffect(() => {
     const supabase = createClient()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-        if (session?.user?.id) identify(session.user.id, { email: session.user.email ?? undefined })
+        if (session?.user?.id) identify(session.user.id)
       } else if (event === 'SIGNED_OUT') {
         resetIdentity()
       }
