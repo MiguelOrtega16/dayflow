@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Crown } from 'lucide-react'
+import { ArrowLeft, Info, Crown, Play, Volume2 } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { useI18n } from '@/lib/i18n'
@@ -17,6 +17,10 @@ import {
   type UserPreferences, type ReminderType, type SnoozeMinutes, type DailySlot,
 } from '@/lib/user-preferences'
 import { DailySummary, isDailySummarySupported } from '@/lib/daily-summary'
+import { SystemSettings } from '@/lib/system-settings'
+import { applyNotificationSound } from '@/lib/push-notifications'
+import { NOTIFICATION_SOUNDS, type NotificationSoundDef } from '@/lib/notification-sounds'
+import { PageTour } from '@/components/onboarding/page-tour'
 import { AdBanner } from '@/components/ads/ad-banner'
 
 const SNOOZE_OPTIONS: SnoozeMinutes[] = [5, 15, 30]
@@ -61,6 +65,24 @@ export default function NotificationsSettingsPage() {
       .then(setPrefs)
       .catch(err => console.error('[notif-settings] load prefs failed', err))
   }, [userId])
+
+  // One-shot "new feature" banner for the notification-sound picker. The
+  // dismissed_tour_* flags live in the raw preferences jsonb, which the typed
+  // getUserPreferences view drops, so read the flag directly. Native-only,
+  // matching where the feature actually takes effect.
+  const [showSoundTour, setShowSoundTour] = useState(false)
+  useEffect(() => {
+    if (!userId || !isNative) return
+    createClient()
+      .from('profiles')
+      .select('preferences')
+      .eq('id', userId)
+      .single()
+      .then(({ data }) => {
+        const p = (data?.preferences as Record<string, unknown> | null) ?? {}
+        setShowSoundTour(p.dismissed_tour_notification_sound !== true)
+      })
+  }, [userId, isNative])
 
   // Translate Supabase / Postgres errors into something users can act on.
   const errorMessage = (err: unknown): string => {
@@ -217,6 +239,46 @@ export default function NotificationsSettingsPage() {
               </div>
             )}
 
+            {/* Notification sound — mobile only. Each sound maps to its own
+                Android notification channel (channel sounds are immutable once
+                created), so changing it both saves the pref and reconciles the
+                channels natively via applyNotificationSound. Web push can't set
+                a custom sound, so the section is native-only. */}
+            {isNative && (
+              <>
+              {showSoundTour && userId && (
+                <PageTour
+                  tourId="notification_sound"
+                  userId={userId}
+                  title={t('onboarding.pageTour.notificationSound.title')}
+                  bullets={[
+                    t('onboarding.pageTour.notificationSound.bullets.preview'),
+                    t('onboarding.pageTour.notificationSound.bullets.apply'),
+                  ]}
+                />
+              )}
+              <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+                <div>
+                  <h2 className="text-sm font-semibold">{t('notifSettings.sound.sectionHeading')}</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">{t('notifSettings.sound.sub')}</p>
+                </div>
+                <SoundPicker
+                  value={prefs.notification_sound}
+                  onChange={id => {
+                    updatePref('notification_sound', id)
+                    // Create the channel for the new sound (and prune the old
+                    // ones) right away so the next push uses it. Best-effort.
+                    applyNotificationSound(id).catch(() => {})
+                  }}
+                  t={t}
+                />
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  {t('notifSettings.sound.note')}
+                </p>
+              </div>
+              </>
+            )}
+
             {/* Always-pinned tray entry — Android-only. Wraps the standard
                 ToggleRow so flipping the switch also calls the native plugin
                 to post / cancel the tray entry immediately. */}
@@ -310,6 +372,109 @@ function ToggleRow({
           )}
         />
       </button>
+    </div>
+  )
+}
+
+// ─── Notification sound picker ──────────────────────────────────────────────
+function SoundPicker({
+  value, onChange, t,
+}: {
+  value: string
+  onChange: (id: string) => void
+  t: (key: string, params?: Record<string, any>) => string
+}) {
+  // One shared <audio> element for the web preview — starting a new preview
+  // stops the previous one. Created lazily so SSR doesn't touch the Audio
+  // constructor. On native we instead play through the notification audio
+  // stream (SystemSettings.previewSound) so the preview loudness matches a
+  // real notification rather than the media volume.
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [playing, setPlaying] = useState<string | null>(null)
+
+  // Stop any preview / timer when leaving the page.
+  useEffect(() => () => {
+    audioRef.current?.pause()
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [])
+
+  const preview = (s: NotificationSoundDef, e: React.MouseEvent) => {
+    e.stopPropagation() // tapping play shouldn't also re-select the row
+    if (timerRef.current) clearTimeout(timerRef.current)
+
+    if (Capacitor.isNativePlatform()) {
+      // Native plays through the notification stream; there's no end event, so
+      // clear the "playing" indicator after the sound's rough duration.
+      setPlaying(s.id)
+      SystemSettings.previewSound(s.rawRes).catch(() => setPlaying(null))
+      timerRef.current = setTimeout(() => setPlaying(null), 1600)
+      return
+    }
+
+    if (!s.file) return
+    try {
+      if (!audioRef.current) audioRef.current = new Audio()
+      const a = audioRef.current
+      a.pause()
+      a.src = s.file
+      a.currentTime = 0
+      a.onended = () => setPlaying(null)
+      setPlaying(s.id)
+      a.play().catch(() => setPlaying(null))
+    } catch {
+      setPlaying(null)
+    }
+  }
+
+  return (
+    <div className="space-y-2" role="radiogroup">
+      {NOTIFICATION_SOUNDS.map(s => {
+        const sel = value === s.id
+        return (
+          <div
+            key={s.id}
+            role="radio"
+            aria-checked={sel}
+            tabIndex={0}
+            onClick={() => onChange(s.id)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(s.id) } }}
+            className={cn(
+              'flex items-center gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors',
+              sel ? 'border-primary bg-primary/10' : 'border-border hover:border-foreground/30',
+            )}
+          >
+            <span
+              className={cn(
+                'shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center',
+                sel ? 'border-primary' : 'border-muted-foreground/40',
+              )}
+            >
+              {sel && <span className="w-2 h-2 rounded-full bg-primary" />}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className={cn('block text-sm', sel && 'font-medium text-primary')}>
+                {t(`notifSettings.sound.options.${s.id}`)}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {t(`notifSettings.sound.intensity.${s.intensity}`)}
+              </span>
+            </span>
+            {s.file && (
+              <button
+                type="button"
+                onClick={e => preview(s, e)}
+                aria-label={t('notifSettings.sound.previewAria')}
+                className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {playing === s.id
+                  ? <Volume2 className="w-4 h-4 text-primary" />
+                  : <Play className="w-4 h-4" />}
+              </button>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

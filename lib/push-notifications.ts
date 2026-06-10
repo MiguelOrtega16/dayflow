@@ -2,6 +2,10 @@ import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { initLocalNotificationListeners } from '@/lib/activity-reminders'
 import { SystemSettings } from '@/lib/system-settings'
+import { getUserPreferences } from '@/lib/user-preferences'
+import {
+  NOTIFICATION_SOUNDS, getSoundDef, channelIdForSound, DEFAULT_SOUND_ID,
+} from '@/lib/notification-sounds'
 
 export async function initPushNotifications(userId: string) {
   // Start local-notification tap listener in parallel (independent of FCM)
@@ -124,6 +128,45 @@ async function ensureReminderChannels() {
   }
 }
 
+// Per-sound reminder channels reuse the same Spanish name/description as the
+// base 'activity-reminders' channel, so the user sees one familiar entry in
+// Android's per-app notification settings (we delete the inactive sound
+// channels in applyNotificationSound to keep that list to a single row).
+const SOUND_CHANNEL_NAME = 'Recordatorios de actividades'
+const SOUND_CHANNEL_DESC = 'Notificaciones estándar para tus recordatorios'
+
+/**
+ * Make the notification channel for the user's selected sound exist on this
+ * device, and remove the channels for the other sounds so Android's per-app
+ * settings list stays to a single reminder row. 'default' uses the pre-
+ * existing 'activity-reminders' channel, so there's nothing to create there —
+ * we only clean up the per-sound channels. No-op off Android.
+ *
+ * Called on app launch (init) and again whenever the user changes the sound in
+ * settings, so the channel the server will route to is always present before
+ * the next push arrives. (If it ever isn't, FCM falls back to the manifest
+ * default channel = system default sound — a safe degradation.)
+ */
+export async function applyNotificationSound(soundId: string) {
+  if (!Capacitor.isNativePlatform()) return
+  const def = getSoundDef(soundId)
+  const activeChannel = channelIdForSound(def.id)
+  try {
+    if (def.id !== DEFAULT_SOUND_ID && def.rawRes) {
+      await SystemSettings.createReminderChannel(
+        activeChannel, SOUND_CHANNEL_NAME, SOUND_CHANNEL_DESC, def.rawRes,
+      )
+    }
+    for (const s of NOTIFICATION_SOUNDS) {
+      if (s.id === DEFAULT_SOUND_ID) continue
+      const ch = channelIdForSound(s.id)
+      if (ch !== activeChannel) await SystemSettings.deleteChannel(ch)
+    }
+  } catch (err) {
+    console.error('[Push] applyNotificationSound failed', err)
+  }
+}
+
 async function initNativePush(userId: string) {
   // Only runs inside the native Android/iOS app — no-op in browser
   if (!Capacitor.isNativePlatform()) return
@@ -132,6 +175,16 @@ async function initNativePush(userId: string) {
     const { PushNotifications } = await import('@capacitor/push-notifications')
 
     await ensureReminderChannels()
+
+    // Bring the user's chosen notification-sound channel into existence (and
+    // prune the others). Best-effort: a failure here just means the user keeps
+    // the default sound until next launch.
+    try {
+      const prefs = await getUserPreferences(userId)
+      await applyNotificationSound(prefs.notification_sound)
+    } catch (err) {
+      console.error('[Push] sound channel init failed', err)
+    }
 
     const permission = await PushNotifications.requestPermissions()
     if (permission.receive !== 'granted') return

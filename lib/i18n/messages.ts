@@ -527,6 +527,26 @@ export const messages = {
         snoozeNote: 'El botón de posponer aparecerá en las próximas actualizaciones de la app.',
         snoozeMin: { 5: '5 minutos', 15: '15 minutos', 30: '30 minutos' },
       },
+      sound: {
+        sectionHeading: 'Sonido de notificación',
+        sub: 'Elige el sonido que se reproduce cuando llega una notificación.',
+        previewAria: 'Escuchar sonido',
+        note: 'Se aplica a las notificaciones de actividades y recordatorios. El sonido «Predeterminado del sistema» usa el tono de notificación de tu teléfono. Si cambiaste el sonido manualmente en los ajustes de Android, esa elección tiene prioridad.',
+        intensity: {
+          soft: 'Suave',
+          balanced: 'Equilibrado',
+          noticeable: 'Más llamativo',
+        },
+        options: {
+          default: 'Predeterminado del sistema',
+          marimba: 'Marimba',
+          pop: 'Burbuja',
+          bell: 'Campana',
+          ding: 'Tritono',
+          chime: 'Carillón',
+          alert: 'Alerta',
+        },
+      },
       daily: {
         sectionHeading: 'Recordatorios diarios',
         morningLabel: 'Plan de la mañana',
@@ -1169,6 +1189,13 @@ export const messages = {
             notifications: 'Toca el icono de campana en un calendario visible para silenciar comentarios, cambios de estado o nuevas actividades de esa persona.',
           },
         },
+        notificationSound: {
+          title: 'Nuevo: elige el sonido de tus notificaciones',
+          bullets: {
+            preview: 'Toca ▶ junto a cada sonido para escucharlo antes de elegirlo.',
+            apply:   'Tu elección se aplica a los avisos de actividades y recordatorios en este teléfono.',
+          },
+        },
       },
       chipTour: {
         skip: 'Saltar',
@@ -1724,6 +1751,26 @@ export const messages = {
         snoozeDurationLabel: 'Snooze for',
         snoozeNote: 'The snooze button will appear in upcoming app updates.',
         snoozeMin: { 5: '5 minutes', 15: '15 minutes', 30: '30 minutes' },
+      },
+      sound: {
+        sectionHeading: 'Notification sound',
+        sub: 'Choose the sound that plays when a notification arrives.',
+        previewAria: 'Play sound',
+        note: 'Applies to activity and reminder notifications. The “System default” sound uses your phone’s notification tone. If you changed the sound manually in Android settings, that choice takes priority.',
+        intensity: {
+          soft: 'Soft',
+          balanced: 'Balanced',
+          noticeable: 'More noticeable',
+        },
+        options: {
+          default: 'System default',
+          marimba: 'Marimba',
+          pop: 'Bubble',
+          bell: 'Bell',
+          ding: 'Tri-tone',
+          chime: 'Chime',
+          alert: 'Alert',
+        },
       },
       daily: {
         sectionHeading: 'Daily reminders',
@@ -2362,6 +2409,13 @@ export const messages = {
             sharedWith:'"Shared with" are the people you invited — you can revoke access anytime. Pending invites are waiting on them to accept.',
             visible:   '"Calendars visible to me" are calendars others shared with you. Use "Stop viewing" to remove them from your views without affecting their list.',
             notifications: 'Tap the bell icon on a visible calendar to mute comments, status changes or new activities from that person.',
+          },
+        },
+        notificationSound: {
+          title: 'New: choose your notification sound',
+          bullets: {
+            preview: 'Tap ▶ next to any sound to hear it before you pick it.',
+            apply:   'Your choice applies to activity and reminder alerts on this phone.',
           },
         },
       },
