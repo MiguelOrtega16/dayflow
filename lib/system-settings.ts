@@ -13,7 +13,7 @@ interface SystemSettingsPlugin {
   openAutoStartSettings(): Promise<void>
   checkBatteryOptimization(): Promise<{ ignoring: boolean }>
   checkNotificationsEnabled(): Promise<{ enabled: boolean }>
-  createAlarmChannel(opts: { id: string; name: string; description?: string }): Promise<void>
+  createAlarmChannel(opts: { id: string; name: string; description?: string; sound?: string }): Promise<void>
   createReminderChannel(opts: { id: string; name: string; description?: string; sound?: string }): Promise<void>
   previewSound(opts: { sound?: string }): Promise<void>
   deleteChannel(opts: { id: string }): Promise<void>
@@ -45,9 +45,9 @@ export const SystemSettings = {
       ? native.checkNotificationsEnabled()
       : Promise.resolve({ enabled: true }),
 
-  createAlarmChannel: (id: string, name: string, description?: string) =>
+  createAlarmChannel: (id: string, name: string, description?: string, sound?: string) =>
     isSystemSettingsSupported()
-      ? native.createAlarmChannel({ id, name, description })
+      ? native.createAlarmChannel({ id, name, description, sound })
       : Promise.resolve(),
 
   /** Create a standard reminder channel whose sound is the given res/raw

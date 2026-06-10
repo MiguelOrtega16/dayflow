@@ -188,9 +188,20 @@ class SystemSettingsPlugin : Plugin() {
         val id          = call.getString("id")          ?: run { call.reject("Missing id"); return }
         val name        = call.getString("name")        ?: id
         val description = call.getString("description") ?: ""
+        // Optional res/raw sound (no extension). Blank/null = system default
+        // notification sound, preserving the original alarm-channel behavior.
+        val sound       = call.getString("sound")
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         if (nm == null) { call.reject("No NotificationManager"); return }
+
+        val soundUri: Uri = if (!sound.isNullOrBlank()) {
+            val resId = context.resources.getIdentifier(sound, "raw", context.packageName)
+            if (resId != 0) Uri.parse("android.resource://${context.packageName}/$resId")
+            else RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        } else {
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        }
 
         try {
             val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH).apply {
@@ -202,7 +213,7 @@ class SystemSettingsPlugin : Plugin() {
                 vibrationPattern = longArrayOf(0, 700, 250, 700, 250, 700, 250, 1200)
                 enableLights(true)
                 setSound(
-                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                    soundUri,
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
