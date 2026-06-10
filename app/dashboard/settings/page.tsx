@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette, Clock, Crown, Eye, Lock, Sun, Moon } from 'lucide-react'
+import { ChevronRight, LayoutPanelTop, Bell, LogOut, Languages, Palette, Clock, Crown, Eye, Lock, Sun, Moon, ShieldCheck } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -13,6 +13,7 @@ import { useProfile } from '@/lib/profile-context'
 import { markDiscoverySeen } from '@/lib/onboarding/discovery-dots'
 import { useTheme } from '@/components/layout/theme-provider'
 import { AdBanner } from '@/components/ads/ad-banner'
+import { isPrivacyOptionsRequired, showPrivacyOptions } from '@/lib/admob'
 import { useRouter } from 'next/navigation'
 import { track } from '@/lib/analytics/posthog'
 
@@ -30,12 +31,20 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [isNative, setIsNative] = useState(false)
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
+  // Only EEA/UK/CH users who've been through the ad-consent flow get the
+  // "Manage consent" entry point (GDPR requires a way to change/withdraw it).
+  // Off everywhere else — the check no-ops when ads are disabled or non-native.
+  const [privacyConsentAvailable, setPrivacyConsentAvailable] = useState(false)
   // Read directly off the cached profile.preferences jsonb — no extra fetch.
   const defaultPublic = normalizePreferences(profile?.preferences ?? null).default_activity_public
   const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => { setIsNative(Capacitor.isNativePlatform()) }, [])
+
+  useEffect(() => {
+    isPrivacyOptionsRequired().then(setPrivacyConsentAvailable).catch(() => {})
+  }, [])
 
   // First-run discovery: visiting Settings clears its sidebar dot.
   useEffect(() => {
@@ -304,6 +313,26 @@ export default function SettingsPage() {
           {saving ? t('settings.saving') : saved ? t('settings.saved') : t('settings.save')}
         </button>
       </form>
+
+      {/* Manage ad-consent — UMP privacy-options entry point. Only rendered for
+          users in a region that requires it (EEA/UK/CH) once ads are live; the
+          isPrivacyOptionsRequired() check keeps it hidden everywhere else. */}
+      {privacyConsentAvailable && (
+        <div className="mt-8 bg-card border border-border rounded-2xl overflow-hidden">
+          <button
+            type="button"
+            onClick={() => { void showPrivacyOptions() }}
+            className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-muted/40 transition-colors"
+          >
+            <span className="shrink-0"><ShieldCheck className="w-5 h-5 text-primary" /></span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-medium">{t('settings.privacyConsent.label')}</span>
+              <span className="block text-xs text-muted-foreground truncate">{t('settings.privacyConsent.sub')}</span>
+            </span>
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+          </button>
+        </div>
+      )}
 
       {/* Account section — sign-out lives here in its own clearly-labeled
           card with destructive styling + inline confirmation, so it's hard

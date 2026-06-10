@@ -429,6 +429,10 @@ export const messages = {
         label: 'Plan y facturación',
         sub: 'Ver tu plan, comparar funciones y gestionar la suscripción',
       },
+      privacyConsent: {
+        label: 'Privacidad y consentimiento',
+        sub: 'Gestiona cómo se usan tus datos para los anuncios',
+      },
       activityDefaultsSection: 'Valores por defecto de actividades',
       activityDefaultsHelp: 'Cómo se preconfiguran las actividades nuevas que creas.',
       defaultVisibility: {
@@ -1622,6 +1626,10 @@ export const messages = {
       billingRow: {
         label: 'Plan & Billing',
         sub: 'View your plan, compare features, and manage your subscription',
+      },
+      privacyConsent: {
+        label: 'Privacy & consent',
+        sub: 'Manage how your data is used for ads',
       },
       activityDefaultsSection: 'Activity defaults',
       activityDefaultsHelp: 'How new activities you create are pre-configured.',

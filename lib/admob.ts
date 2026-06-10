@@ -98,6 +98,43 @@ export async function showBottomBanner(marginPx: number = 0): Promise<void> {
   }
 }
 
+/**
+ * Whether the UMP "privacy options" entry point should be offered to this user
+ * — i.e. they're in a region (EEA / UK / Switzerland) where they must be able
+ * to change or withdraw ad-consent later. Drives the visibility of the in-app
+ * "Manage consent" control. Returns false off native Android or when ads are
+ * disabled (no consent was ever gathered).
+ */
+export async function isPrivacyOptionsRequired(): Promise<boolean> {
+  if (!adsEnabled() || !isAndroidNative()) return false
+  try {
+    const { AdMob } = await import('@capacitor-community/admob')
+    const info = await AdMob.requestConsentInfo()
+    // The plugin doesn't re-export the PrivacyOptionsRequirementStatus enum from
+    // its root, but it's a string enum whose REQUIRED value is the literal
+    // 'REQUIRED'. Compare via String() to stay type-safe.
+    return String(info.privacyOptionsRequirementStatus) === 'REQUIRED'
+  } catch (err) {
+    console.error('[admob] privacy-options check failed', err)
+    return false
+  }
+}
+
+/**
+ * Re-open the UMP privacy-options form so the user can change or withdraw their
+ * ad-consent choices — the in-app equivalent of a consent "revocation link",
+ * required for GDPR once we serve ads in the EEA. No-op off native Android.
+ */
+export async function showPrivacyOptions(): Promise<void> {
+  if (!isAndroidNative()) return
+  try {
+    const { AdMob } = await import('@capacitor-community/admob')
+    await AdMob.showPrivacyOptionsForm()
+  } catch (err) {
+    console.error('[admob] showPrivacyOptionsForm failed', err)
+  }
+}
+
 export async function hideBottomBanner(): Promise<void> {
   if (!isAndroidNative()) return
   try {
