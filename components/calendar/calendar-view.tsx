@@ -34,9 +34,10 @@ const EMPTY_ACTIVITIES: Activity[] = []
 interface CalendarViewProps {
   currentUser: Profile | null
   sharedCalendars: any[]
+  inviters: Profile[]
 }
 
-export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps) {
+export function CalendarView({ currentUser, sharedCalendars, inviters }: CalendarViewProps) {
   const { t, locale } = useI18n()
   // The user's preference, resolved against the i18n locale ('system' →
   // Mon for ES, Sun for EN). Drives both the week-grid layout and the
@@ -93,6 +94,10 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   const [composing, setComposing] = useState(false)
   // Live copy of shared calendars — the server prop is static; this refreshes in real-time
   const [liveSharedCalendars, setLiveSharedCalendars] = useState(sharedCalendars)
+  // People who've invited the current user to an activity they accepted.
+  // These grant calendar visibility independent of shared_calendars, so they
+  // need their own live-refreshed list to feed the "visible people" chips.
+  const [liveInviters, setLiveInviters] = useState<Profile[]>(inviters)
   const supabase = createClient()
 
   useEffect(() => {
@@ -158,6 +163,36 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
     return () => { supabase.removeChannel(channel) }
   }, [currentUser?.id, refreshSharedCalendars])
 
+  // Refresh accepted invitations' inviters (called on realtime events & dayflow:refresh)
+  const refreshInviters = useCallback(async () => {
+    if (!currentUser) return
+    const { data } = await supabase
+      .from('activity_invitations')
+      .select('inviter:profiles!activity_invitations_inviter_id_fkey(*)')
+      .eq('invitee_id', currentUser.id)
+      .eq('status', 'accepted')
+    if (!data) return
+    const seen = new Set<string>()
+    const list: Profile[] = []
+    for (const row of data as any[]) {
+      const p = row.inviter as Profile | null
+      if (p && !seen.has(p.id)) { seen.add(p.id); list.push(p) }
+    }
+    setLiveInviters(list)
+  }, [currentUser?.id])
+
+  useEffect(() => {
+    if (!currentUser) return
+    const channel = supabase
+      .channel(`activity-invites-${currentUser.id}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'activity_invitations',
+        filter: `invitee_id=eq.${currentUser.id}`,
+      }, () => refreshInviters())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [currentUser?.id, refreshInviters])
+
   // Build list of all visible users from the live snapshot
   const allUsers: { profile: Profile; isOwn: boolean }[] = []
   const seenUserIds = new Set<string>()
@@ -171,6 +206,17 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   liveSharedCalendars.forEach((sc: any) => {
     if (sc.shared_with_id !== currentUser?.id || !sc.owner) return
     const profile: Profile = sc.owner
+    if (!seenUserIds.has(profile.id)) {
+      allUsers.push({ profile, isOwn: false })
+      seenUserIds.add(profile.id)
+    }
+  })
+  // Accepted activity invitations grant visibility into the inviter's
+  // calendar too, independent of shared_calendars — without this, an invited
+  // activity from someone with no mutual calendar-share would have no chip
+  // to pass the "visible people" filter in getActivitiesForRange, and would
+  // never show up on the invitee's calendar.
+  liveInviters.forEach((profile) => {
     if (!seenUserIds.has(profile.id)) {
       allUsers.push({ profile, isOwn: false })
       seenUserIds.add(profile.id)
@@ -248,10 +294,10 @@ export function CalendarView({ currentUser, sharedCalendars }: CalendarViewProps
   // Listen for global signals dispatched after accepting an activity invitation
   // from the notification bell (which has no direct access to this component).
   useEffect(() => {
-    const onRefresh = () => { fetchActivities(); refreshSharedCalendars() }
+    const onRefresh = () => { fetchActivities(); refreshSharedCalendars(); refreshInviters() }
     window.addEventListener('dayflow:refresh', onRefresh)
     return () => window.removeEventListener('dayflow:refresh', onRefresh)
-  }, [fetchActivities, refreshSharedCalendars])
+  }, [fetchActivities, refreshSharedCalendars, refreshInviters])
 
   useEffect(() => {
     const onNavigate = (e: Event) => {

@@ -45,6 +45,26 @@ export default async function DashboardPage() {
     .or(`owner_id.eq.${user.id},shared_with_id.eq.${user.id}`)
     .eq('status', 'accepted')
 
+  // Accepted activity invitations must also grant visibility into the
+  // inviter's calendar — otherwise an invited activity from someone the
+  // user hasn't mutually shared calendars with has no "visible people" chip
+  // to pass the calendar view's user filter, and silently never shows up.
+  const { data: acceptedInvitations } = await supabase
+    .from('activity_invitations')
+    .select('inviter:profiles!activity_invitations_inviter_id_fkey(*)')
+    .eq('invitee_id', user.id)
+    .eq('status', 'accepted')
+
+  const seenInviterIds = new Set<string>()
+  const inviters: any[] = []
+  for (const row of (acceptedInvitations || []) as any[]) {
+    const p = row.inviter
+    if (p && !seenInviterIds.has(p.id)) {
+      seenInviterIds.add(p.id)
+      inviters.push(p)
+    }
+  }
+
   // Onboarding gate: show the starter-pack picker to anyone with an empty
   // calendar who hasn't already dismissed it. Catches both brand-new signups
   // and returning users who created an account but never added an activity.
@@ -103,6 +123,7 @@ export default async function DashboardPage() {
         <CalendarView
           currentUser={profile}
           sharedCalendars={sharedCalendars || []}
+          inviters={inviters}
         />
       </div>
       {showStarterPicker && profile && (
