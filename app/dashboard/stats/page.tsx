@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllInChunks, fetchAllPages } from '@/lib/supabase/fetch-all'
 import { format, subDays } from 'date-fns'
 import { cn, STATUS_CONFIG, CATEGORY_CONFIG, statusLabel, categoryLabel, getInitials } from '@/lib/utils'
 import type { Activity, ActivityStatus, ActivityCategory, Profile } from '@/types'
@@ -93,28 +94,36 @@ export default function StatsPage() {
   // Fetch the user's own + shared-with-me activities for a window, tagged with
   // `isShared`. The owned-activities and accepted-invitations queries are
   // independent, so they run in parallel; only the invited-activities fetch
-  // depends on the invitations result.
+  // depends on the invitations result. All of them are paged: Supabase caps
+  // each response at 1000 rows, which used to freeze the totals at 1000 and
+  // drop the newest activities (the query is sorted by date).
   const fetchScoped = async (uid: string, start: string, end: string): Promise<ScopedActivity[]> => {
     const [ownRes, invRes] = await Promise.all([
-      supabase.from('activities').select('*')
+      fetchAllPages<Activity>((from, to) => supabase.from('activities').select('*')
         .eq('user_id', uid).gte('date', start).lte('date', end)
-        .order('date', { ascending: true }),
-      supabase.from('activity_invitations').select('activity_id')
-        .eq('invitee_id', uid).eq('status', 'accepted'),
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)),
+      fetchAllPages<{ activity_id: string }>((from, to) => supabase.from('activity_invitations').select('activity_id')
+        .eq('invitee_id', uid).eq('status', 'accepted')
+        .order('id', { ascending: true })
+        .range(from, to)),
     ])
-    const own: ScopedActivity[] = (ownRes.data || []).map(a => ({ ...(a as Activity), isShared: false }))
+    const own: ScopedActivity[] = (ownRes.data || []).map(a => ({ ...a, isShared: false }))
 
     let shared: ScopedActivity[] = []
     const invitations = invRes.data
     if (invitations && invitations.length > 0) {
       const ids = invitations.map(i => i.activity_id)
-      const { data: invited } = await supabase
+      const { data: invited } = await fetchAllInChunks<Activity, string>(ids, (chunk, from, to) => supabase
         .from('activities')
         .select(`*, profile:profiles(${PROFILE_COLS})`)
-        .in('id', ids)
+        .in('id', chunk)
         .gte('date', start)
         .lte('date', end)
-      shared = (invited || []).map(a => ({ ...(a as Activity), isShared: true }))
+        .order('id', { ascending: true })
+        .range(from, to))
+      shared = (invited || []).map(a => ({ ...a, isShared: true }))
     }
 
     // Dedup by id (an owned record should never also appear as shared, but guard).
@@ -156,13 +165,13 @@ export default function StatsPage() {
     const cur = await curPromise
 
     const ownIds = cur.filter(a => !a.isShared).map(a => a.id)
-    const outgoingPromise = ownIds.length > 0
-      ? supabase
-          .from('activity_invitations')
-          .select(`activity_id, invitee:profiles!activity_invitations_invitee_id_fkey(${PROFILE_COLS})`)
-          .in('activity_id', ownIds)
-          .eq('status', 'accepted')
-      : Promise.resolve({ data: [] as any[] })
+    const outgoingPromise = fetchAllInChunks<any, string>(ownIds, (chunk, from, to) => supabase
+      .from('activity_invitations')
+      .select(`activity_id, invitee:profiles!activity_invitations_invitee_id_fkey(${PROFILE_COLS})`)
+      .in('activity_id', chunk)
+      .eq('status', 'accepted')
+      .order('id', { ascending: true })
+      .range(from, to))
 
     const [prev, outRowsRes] = await Promise.all([prevPromise, outgoingPromise])
 
@@ -333,13 +342,13 @@ export default function StatsPage() {
       // of acceptance — the user's intent of sharing is what matters here.
       const sharedActivityIds = new Set<string>()
       const allIds = allActivitiesForRange.map(a => a.id)
-      if (allIds.length > 0) {
-        const { data: invs } = await supabase
-          .from('activity_invitations')
-          .select('activity_id')
-          .in('activity_id', allIds)
-        for (const row of invs ?? []) sharedActivityIds.add(row.activity_id)
-      }
+      const { data: invs } = await fetchAllInChunks<{ activity_id: string }, string>(allIds, (chunk, from, to) => supabase
+        .from('activity_invitations')
+        .select('activity_id')
+        .in('activity_id', chunk)
+        .order('id', { ascending: true })
+        .range(from, to))
+      for (const row of invs ?? []) sharedActivityIds.add(row.activity_id)
 
       const categoryLabels = (Object.keys(CATEGORY_CONFIG) as ActivityCategory[])
         .reduce((acc, c) => { acc[c] = categoryLabel(c, locale); return acc }, {} as Record<ActivityCategory, string>)
