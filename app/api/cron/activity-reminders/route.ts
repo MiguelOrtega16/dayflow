@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { sendFCM, sendWebPush, type WebPushAction } from '@/lib/firebase-admin'
 import { localDateStr, localHour } from '@/lib/tz-utils'
 import { channelIdForSound, DEFAULT_SOUND_ID } from '@/lib/notification-sounds'
+import { fetchAllInChunks, fetchAllPages } from '@/lib/supabase/fetch-all'
 
 function isAuthorized(request: Request) {
   const auth = request.headers.get('authorization')
@@ -60,10 +61,16 @@ export async function GET(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
+  // Every query in this route spans ALL users, so each one is paged
+  // (fetchAllPages / fetchAllInChunks): Supabase silently caps a response at
+  // 1000 rows — users past the first 1000 profiles never got their digests.
+
   // Fetch all users that have at least one push channel
-  const { data: profiles } = await supabase
+  const { data: profiles } = await fetchAllPages<any>((from, to) => supabase
     .from('profiles')
     .select('id, fcm_token, web_push_subscription, timezone, preferences')
+    .order('id', { ascending: true })
+    .range(from, to))
 
   if (!profiles?.length) return NextResponse.json({ sent: 0 })
 
@@ -120,24 +127,30 @@ export async function GET(request: Request) {
 
   const localDates = Array.from(new Set(dateByTz.values()))
 
-  const { data: activities, error } = await supabase
+  // Chunked by user (the id list travels in the URL). Per-user lists are
+  // re-sorted by start_time below, so cross-chunk order doesn't matter.
+  const { data: activities, error } = await fetchAllInChunks<any, string>(morningIds, (chunk, from, to) => supabase
     .from('activities')
     .select('id, title, emoji, description, user_id, start_time, date')
-    .in('user_id', morningIds)
+    .in('user_id', chunk)
     .in('date', localDates)
     .not('start_time', 'is', null)
     .order('start_time', { ascending: true })
+    .order('id', { ascending: true })
+    .range(from, to))
 
   if (error) {
     console.error('[activity-reminders] query error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const { data: invitedActivities } = await supabase
+  const { data: invitedActivities } = await fetchAllInChunks<any, string>(morningIds, (chunk, from, to) => supabase
     .from('activity_invitations')
     .select('activity_id, invitee_id, activities(id, title, emoji, user_id, start_time, date)')
-    .in('invitee_id', morningIds)
+    .in('invitee_id', chunk)
     .eq('status', 'accepted')
+    .order('id', { ascending: true })
+    .range(from, to))
 
   const byUser: Record<string, Array<{ id: string; title: string; emoji: string | null; start_time: string; date: string }>> = {}
   for (const uid of morningIds) byUser[uid] = []

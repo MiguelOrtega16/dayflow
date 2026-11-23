@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { sendFCM, sendWebPush } from '@/lib/firebase-admin'
 import { localToUTC, localDateStr } from '@/lib/tz-utils'
 import { channelIdForSound, alarmChannelIdForSound, DEFAULT_SOUND_ID } from '@/lib/notification-sounds'
+import { chunkForInFilter, fetchAllInChunks, fetchAllPages } from '@/lib/supabase/fetch-all'
 
 const MOTIVATIONAL = [
   '¡Tú puedes! 💪',
@@ -62,14 +63,21 @@ export async function GET(request: Request) {
 
   // ── Auto-mark past reminders as done ────────────────────────────────────────
   // Reminders are point-in-time; once their time has passed they should be done.
+  // Every query in this route spans ALL users, so each one is paged
+  // (fetchAllPages / fetchAllInChunks): Supabase silently caps a response at
+  // 1000 rows, and anything past that used to be dropped without an error.
   const todayLocalForCleanup = localDateStr(now, appTz)
-  const { data: pendingReminders } = await supabase
-    .from('activities')
-    .select('id, date, start_time')
-    .eq('category', 'reminder')
-    .eq('status', 'todo')
-    .not('start_time', 'is', null)
-    .lte('date', todayLocalForCleanup)
+  const { data: pendingReminders } = await fetchAllPages<{ id: string; date: string; start_time: string | null }>(
+    (from, to) => supabase
+      .from('activities')
+      .select('id, date, start_time')
+      .eq('category', 'reminder')
+      .eq('status', 'todo')
+      .not('start_time', 'is', null)
+      .lte('date', todayLocalForCleanup)
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
 
   if (pendingReminders && pendingReminders.length > 0) {
     const pastIds = pendingReminders
@@ -79,12 +87,11 @@ export async function GET(request: Request) {
       })
       .map(r => r.id)
 
-    if (pastIds.length > 0) {
-      await supabase
-        .from('activities')
-        .update({ status: 'done', completion_percentage: 100 })
-        .in('id', pastIds)
-    }
+    // Chunked: the id list travels in the URL.
+    await Promise.all(chunkForInFilter(pastIds).map(ids => supabase
+      .from('activities')
+      .update({ status: 'done', completion_percentage: 100 })
+      .in('id', ids)))
   }
 
   // ── Multi-offset reminder dispatch ──────────────────────────────────────────
@@ -97,11 +104,13 @@ export async function GET(request: Request) {
     if (!dates.includes(d)) dates.push(d)
   }
 
-  const { data: activities, error } = await supabase
+  const { data: activities, error } = await fetchAllPages<any>((from, to) => supabase
     .from('activities')
     .select('id, title, emoji, user_id, start_time, date, category, reminder_offsets, reminder_phrase')
     .in('date', dates)
     .not('start_time', 'is', null)
+    .order('id', { ascending: true })
+    .range(from, to))
 
   if (error) {
     console.error('[activity-30min-reminders] query error:', error)
@@ -163,11 +172,16 @@ export async function GET(request: Request) {
 
   // Collect recipients (owner + accepted invitees) for the activities we'll fire.
   const firingActivityIds = Array.from(new Set(fires.map(f => f.activityId)))
-  const { data: invitations } = await supabase
-    .from('activity_invitations')
-    .select('activity_id, invitee_id')
-    .in('activity_id', firingActivityIds)
-    .eq('status', 'accepted')
+  const { data: invitations } = await fetchAllInChunks<{ activity_id: string; invitee_id: string }, string>(
+    firingActivityIds,
+    (chunk, from, to) => supabase
+      .from('activity_invitations')
+      .select('activity_id, invitee_id')
+      .in('activity_id', chunk)
+      .eq('status', 'accepted')
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
 
   const inviteesByActivity: Record<string, string[]> = {}
   for (const inv of invitations ?? []) {
@@ -181,10 +195,15 @@ export async function GET(request: Request) {
     for (const id of inviteesByActivity[f.activityId] ?? []) allRecipients.add(id)
   }
 
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, fcm_token, web_push_subscription, preferences')
-    .in('id', Array.from(allRecipients))
+  const { data: profiles } = await fetchAllInChunks<any, string>(
+    Array.from(allRecipients),
+    (chunk, from, to) => supabase
+      .from('profiles')
+      .select('id, fcm_token, web_push_subscription, preferences')
+      .in('id', chunk)
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
 
   type WebPushSub = { endpoint: string; keys: { p256dh: string; auth: string } }
   const tokenMap: Record<string, string> = {}

@@ -1,5 +1,6 @@
 import { format, addDays, subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllPages } from '@/lib/supabase/fetch-all'
 import { WidgetBridge, isWidgetSupported } from '@/lib/widget-bridge'
 import { DailySummary } from '@/lib/daily-summary'
 
@@ -38,12 +39,16 @@ export async function syncWidgetSnapshot(currentUserId: string) {
   // customization screen (color / opacity); the widget data itself is
   // always available so users have something useful to look at out of
   // the box.
-  const { data: rowsRaw, error } = await supabase
+  // Paged: a 90-day window easily passes Supabase's 1000-row response cap.
+  const { data: rowsRaw, error } = await fetchAllPages<any>((from, to) => supabase
     .from('activities')
     .select('id, title, emoji, date, start_time, end_time, status, category, user_id')
     .eq('user_id', currentUserId)
     .gte('date', sinceStr)
     .lte('date', untilStr)
+    .order('date', { ascending: true })
+    .order('id', { ascending: true })
+    .range(from, to))
 
   if (error) {
     console.warn('[widget-sync] fetch failed:', error)

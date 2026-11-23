@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllInChunks, fetchAllPages } from '@/lib/supabase/fetch-all'
 import type { Activity, ActivityInvitation, ActivityStatus, Goal, Notification, RecurrenceConfig, RecurrenceType } from '@/types'
 import { format } from 'date-fns'
 import { sendNotificationEmail } from '@/lib/email'
@@ -41,64 +42,73 @@ export async function getActivitiesForRange(
 ) {
   const supabase = createClient()
 
+  // Every query below is paged (fetchAllPages / fetchAllInChunks): Supabase
+  // silently caps responses at 1000 rows, and since the owned query is sorted
+  // by date, a busy month used to lose its last days in the calendar.
+
   // ── Layer 1 (parallel): owned activities + the current user's accepted
   // invitations. These two are independent, so fire them together instead of
   // awaiting one before the other.
-  let ownedQuery = supabase
-    .from('activities')
-    .select(`*, profile:profiles(${ACTIVITY_PROFILE_COLS}), goal:goals(id, title, emoji, color)`)
-    .gte('date', startDate)
-    .lte('date', endDate)
-    .order('date', { ascending: true })
-    .order('start_time', { ascending: true, nullsFirst: false })
-  if (userIds && userIds.length > 0) ownedQuery = ownedQuery.in('user_id', userIds)
+  const ownedPromise = fetchAllPages<any>((from, to) => {
+    let q = supabase
+      .from('activities')
+      .select(`*, profile:profiles(${ACTIVITY_PROFILE_COLS}), goal:goals(id, title, emoji, color)`)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true }) // unique tiebreaker → stable pages
+    if (userIds && userIds.length > 0) q = q.in('user_id', userIds)
+    return q.range(from, to)
+  })
 
-  const invitationsQuery = currentUserId
-    ? supabase
+  const invitationsPromise = currentUserId
+    ? fetchAllPages<{ id: string; activity_id: string }>((from, to) => supabase
         .from('activity_invitations')
         .select('id, activity_id')
         .eq('invitee_id', currentUserId)
         .eq('status', 'accepted')
-    : null
+        .order('id', { ascending: true })
+        .range(from, to))
+    : Promise.resolve({ data: [] as { id: string; activity_id: string }[], error: null })
 
-  const [ownedRes, invitationsRes] = await Promise.all([
-    ownedQuery,
-    invitationsQuery ?? Promise.resolve({ data: [] as { id: string; activity_id: string }[], error: null }),
-  ])
+  const [ownedRes, invitationsRes] = await Promise.all([ownedPromise, invitationsPromise])
   if (ownedRes.error) throw ownedRes.error
   const ownedData = ownedRes.data || []
-  const invitations = ((invitationsRes as { data: { id: string; activity_id: string }[] | null }).data) || []
+  const invitations = invitationsRes.data || []
 
   // ── Layer 2 (parallel): participant statuses for owned activities (depends
   // on the owned ids) and the invited activities (depends on the invitations).
   // These two are independent of each other, so fire them together too.
-  const ownedIds = ownedData.map((a: any) => a.id)
-  const participantsQuery = (currentUserId && ownedIds.length > 0)
-    ? supabase
+  // Both filter on a list of ids, which is sent in chunks to keep URLs short.
+  const ownedIds: string[] = ownedData.map((a: any) => a.id)
+  const participantsPromise = currentUserId
+    ? fetchAllInChunks<any, string>(ownedIds, (chunk, from, to) => supabase
         .from('activity_invitations')
         .select('activity_id, invitee_id, profile:profiles!activity_invitations_invitee_id_fkey(id, full_name, email, color, avatar_url)')
-        .in('activity_id', ownedIds)
+        .in('activity_id', chunk)
         .eq('status', 'accepted')
-    : null
+        .order('id', { ascending: true })
+        .range(from, to))
+    : Promise.resolve({ data: [] as any[], error: null })
 
   const invitedIds = invitations.map(i => i.activity_id)
   // Respect the people-filter chips: only surface invited activities whose
   // OWNER is in the active set (otherwise deselecting a user who invited you
   // would leave their activities visible).
-  let invitedQuery = invitedIds.length > 0
-    ? supabase
-        .from('activities')
-        .select(`*, profile:profiles(${ACTIVITY_PROFILE_COLS}), goal:goals(id, title, emoji, color)`)
-        .in('id', invitedIds)
-        .gte('date', startDate)
-        .lte('date', endDate)
-    : null
-  if (invitedQuery && userIds && userIds.length > 0) invitedQuery = invitedQuery.in('user_id', userIds)
+  const invitedPromise = fetchAllInChunks<any, string>(invitedIds, (chunk, from, to) => {
+    let q = supabase
+      .from('activities')
+      .select(`*, profile:profiles(${ACTIVITY_PROFILE_COLS}), goal:goals(id, title, emoji, color)`)
+      .in('id', chunk)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('id', { ascending: true })
+    if (userIds && userIds.length > 0) q = q.in('user_id', userIds)
+    return q.range(from, to)
+  })
 
-  const [participantsRes, invitedRes] = await Promise.all([
-    participantsQuery ?? Promise.resolve({ data: [] as any[] }),
-    invitedQuery ?? Promise.resolve({ data: [] as any[] }),
-  ])
+  const [participantsRes, invitedRes] = await Promise.all([participantsPromise, invitedPromise])
 
   // Participant statuses → map keyed by activity id
   const participantsByActivity: Record<string, Activity['participants']> = {}
